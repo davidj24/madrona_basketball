@@ -34,8 +34,8 @@ except ImportError as e:
     sys.exit(1)
 
 # Simple visualization constants
-WINDOW_WIDTH = 800
-WINDOW_HEIGHT = 600
+WINDOW_WIDTH = 2000
+WINDOW_HEIGHT = 1500
 BACKGROUND_COLOR = (50, 50, 50)  # Dark gray
 TEXT_COLOR = (255, 255, 255)     # White
 
@@ -53,8 +53,8 @@ class MadronaPipeline:
         self.font = pygame.font.Font(None, 24)
         
         # Configure world size (make it bigger!)
-        self.world_width = 10   # Changed from 5 to 10
-        self.world_height = 8   # Changed from 5 to 8
+        self.world_width = 20   # Changed from 5 to 10
+        self.world_height = 20   # Changed from 5 to 8
         self.cell_size = 40     # Size of each cell in pixels
         self.grid_offset_x = 50 # Offset from screen edge
         self.grid_offset_y = 100
@@ -174,26 +174,45 @@ class MadronaPipeline:
                 self.screen.blit(surface, (20, y_offset))
             y_offset += 20
 
+
         # Draw basketball positions
         if 'basketball_pos' in data:
-            positions = data['basketball_pos']
-            for pos in positions:
+            raw_positions = data['basketball_pos']  # Shape: (1, num_basketballs, 2)
+            positions = raw_positions[0]  # Get first world, shape: (num_basketballs, 2)
+
+            # Draw basketball positions with different colors
+            colors = [(255, 100, 0), (255, 200, 0), (100, 255, 0)]  # Orange, Yellow, Green
+            
+            for i, pos in enumerate(positions):
                 if len(pos) >= 2:
                     screen_x, screen_y = self.grid_to_screen(pos[0], pos[1])
-                    pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), 12)
+                    color = colors[i % len(colors)]
+                    pygame.draw.circle(self.screen, color, (screen_x, screen_y), 12)
                     # Add basketball pattern
                     pygame.draw.circle(self.screen, (200, 50, 0), (screen_x, screen_y), 12, 2)
+                    
+                    # Add a number to identify each basketball
+                    font_small = pygame.font.Font(None, 16)
+                    text_surface = font_small.render(str(i + 1), True, (255, 255, 255))
+                    self.screen.blit(text_surface, (screen_x - 5, screen_y - 5))
 
         # Draw agent positions  
         if 'observations' in data:
-            positions = data['observations']
-            for pos in positions:
+            raw_positions = data['observations']  # Shape: (1, num_basketballs, 2)
+            positions = raw_positions[0]  # Get first world, shape: (num_basketballs, 2)
+
+            # Draw basketball positions with different colors
+            colors = [(255, 100, 0), (255, 200, 0), (100, 255, 0)]  # Orange, Yellow, Green
+            
+            for i, pos in enumerate(positions):
                 if len(pos) >= 2:
                     screen_x, screen_y = self.grid_to_screen(pos[0], pos[1])
-                    # Draw agent as a blue square
-                    agent_rect = pygame.Rect(screen_x - 15, screen_y - 15, 30, 30)
-                    pygame.draw.rect(self.screen, (0, 100, 255), agent_rect)
-                    pygame.draw.rect(self.screen, (0, 150, 255), agent_rect, 3)
+                    color = colors[i % len(colors)]
+                    pygame.draw.rect(self.screen, color, (screen_x, screen_y, 12, 12))
+                    pygame.draw.rect(self.screen, (200, 50, 0), (screen_x, screen_y, 12, 12), 2)
+                    font_small = pygame.font.Font(None, 16)
+                    text_surface = font_small.render(str(i + 1), True, (255, 255, 255))
+                    self.screen.blit(text_surface, (screen_x - 5, screen_y - 5))
 
     
     def step_simulation(self):
@@ -215,21 +234,31 @@ class MadronaPipeline:
         """Handle keyboard input and inject actions into simulation"""
         keys = pygame.key.get_pressed()
         
-        # Map keyboard input to actions using proper input injection
-        action = 4  # Default to Action::None (see types.hpp enum)
+        # Agent 0 actions (WASD keys)
+        agent0_action = 4  # Default to Action::None
+        if keys[pygame.K_w]:
+            agent0_action = 0  # Action::Up
+        elif keys[pygame.K_s]:
+            agent0_action = 1  # Action::Down
+        elif keys[pygame.K_a]:
+            agent0_action = 2  # Action::Left
+        elif keys[pygame.K_d]:
+            agent0_action = 3  # Action::Right
         
+        # Agent 1 actions (Arrow keys)
+        agent1_action = 4
+        if keys[pygame.K_UP]:
+            agent1_action = 0  # Action::Up
+        elif keys[pygame.K_DOWN]:
+            agent1_action = 1  # Action::Down
+        elif keys[pygame.K_LEFT]:
+            agent1_action = 2  # Action::Left
+        elif keys[pygame.K_RIGHT]:
+            agent1_action = 3  # Action::Right
         
-        if keys[pygame.K_s] or keys[pygame.K_DOWN]:
-            action = 0  # Action::Down
-        elif keys[pygame.K_w] or keys[pygame.K_UP]:
-            action = 1  # Action::Up
-        elif keys[pygame.K_a] or keys[pygame.K_LEFT]:
-            action = 2  # Action::Left
-        elif keys[pygame.K_d] or keys[pygame.K_RIGHT]:
-            action = 3  # Action::Right
-        
-        # Inject the action into the simulation (world 0, agent 0)
-        self.sim.set_action(0, 0, action)
+        # Inject actions for both agents
+        self.sim.set_action(0, 0, agent0_action)  # World 0, Agent 0
+        self.sim.set_action(0, 1, agent1_action)  # World 0, Agent 1
     
     def run(self):
         """Main pipeline loop"""

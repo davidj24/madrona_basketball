@@ -15,7 +15,9 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include "types.hpp"
 
+// ============================== Config Constants ==============================
 using namespace madrona;
 using namespace madrona::py;
 
@@ -237,10 +239,16 @@ void Manager::setAction(int32_t world_idx, int32_t agent_idx, int32_t action)
     // Get the action tensor and set the action for the specified world/agent
     Tensor action_tensor = actionTensor();
     int32_t *action_data = static_cast<int32_t *>(action_tensor.devicePtr());
+
     
-    // For now, assuming 1 agent per world, so world_idx is the array index
-    if (world_idx >= 0 && world_idx < impl_->cfg.numWorlds) {
-        action_data[world_idx] = action;
+    if (world_idx >= 0 && world_idx < impl_->cfg.numWorlds && 
+        agent_idx >= 0 && agent_idx < NUM_AGENTS) {
+        int32_t index = world_idx * NUM_AGENTS + agent_idx;
+        action_data[index] = action;
+        
+    } else {
+        printf("ERROR: Invalid indices! world=%d (max=%d), agent=%d (max=%d)\n",
+               world_idx, impl_->cfg.numWorlds-1, agent_idx, NUM_AGENTS-1);
     }
 }
 
@@ -255,6 +263,10 @@ void Manager::triggerReset(int32_t world_idx)
     }
 }
 
+
+
+// ============================== Exported Tensors ==============================
+
 Tensor Manager::resetTensor() const
 {
     return impl_->exportTensor(ExportID::Reset, TensorElementType::Int32,
@@ -264,13 +276,13 @@ Tensor Manager::resetTensor() const
 Tensor Manager::actionTensor() const
 {
     return impl_->exportTensor(ExportID::Action, TensorElementType::Int32,
-        {impl_->cfg.numWorlds, 1});
+        {impl_->cfg.numWorlds, NUM_AGENTS});
 }
 
 Tensor Manager::observationTensor() const
 {
     return impl_->exportTensor(ExportID::AgentPos, TensorElementType::Int32,
-        {impl_->cfg.numWorlds, 2});
+        {impl_->cfg.numWorlds, NUM_AGENTS, 3});
 }
 
 Tensor Manager::rewardTensor() const
@@ -288,7 +300,7 @@ Tensor Manager::doneTensor() const
 Tensor Manager::basketballPosTensor() const
 {
     return impl_->exportTensor(ExportID::BasketballPos, TensorElementType::Int32,
-        {impl_->cfg.numWorlds, 2});
+        {impl_->cfg.numWorlds, NUM_BASKETBALLS, 3});
 
 }
 }

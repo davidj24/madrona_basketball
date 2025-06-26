@@ -4,14 +4,18 @@
 
 namespace madsimple {
 
-enum class ExportID : uint32_t {
-    Reset,
-    Action,
-    AgentPos,
-    BasketballPos,
-    Reward,
-    Done,
-    NumExports,
+// ================================================ Config Constants ================================================
+    constexpr int32_t NUM_AGENTS = 2;
+    constexpr int32_t NUM_BASKETBALLS = 2;
+
+    enum class ExportID : uint32_t {
+        Reset,
+        Action,
+        AgentPos,
+        BasketballPos,
+        Reward,
+        Done,
+        NumExports,
 };
 
 struct Reset {
@@ -19,8 +23,8 @@ struct Reset {
 };
 
 enum class Action : int32_t {
-    Up    = 0,
-    Down  = 1,
+    Down  = 0,
+    Up    = 1,
     Left  = 2,
     Right = 3,
     None,
@@ -38,6 +42,11 @@ struct Reward {
 
 struct Done {
     float episodeDone;
+};
+
+struct RandomMovement {
+    float moveTimer;
+    float moveInterval;
 };
 
 
@@ -61,6 +70,7 @@ struct Agent : public madrona::Archetype<
 struct Basketball : public madrona::Archetype<
     Reset,
     GridPos,
+    RandomMovement,
     Done,
     CurStep
 > {};
