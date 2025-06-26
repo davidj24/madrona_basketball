@@ -70,7 +70,7 @@ struct Agent : public madrona::Archetype<
 struct Basketball : public madrona::Archetype<
     Reset,
     GridPos,
-    RandomMovement,
+    // RandomMovement,
     Done,
     CurStep
 > {};

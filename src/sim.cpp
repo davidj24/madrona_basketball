@@ -128,9 +128,9 @@ inline void tick(Engine &ctx,
         episode_done = true;
     }
 
-    if ((cur_cell.flags & CellFlag::End)) {
-        episode_done = true;
-    }
+    // if ((cur_cell.flags & CellFlag::End)) {
+    //     episode_done = true;
+    // }
 
     uint32_t cur_step = episode_step.step;
 
@@ -142,8 +142,8 @@ inline void tick(Engine &ctx,
         done.episodeDone = 1.f;
 
         new_pos = GridPos {
-            grid->startY,
             grid->startX,
+            grid->startY,
             0
         };
 
@@ -188,8 +188,8 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
     Entity agent = ctx.makeEntity<Agent>();
     ctx.get<Action>(agent) = Action::None;
     ctx.get<GridPos>(agent) = GridPos {
+        (grid->startX - 5),
         grid->startY,
-        grid->startX,
         0
     };
     ctx.get<Reward>(agent).r = 0.f;
@@ -200,8 +200,8 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
     Entity agent2 = ctx.makeEntity<Agent>();
     ctx.get<Action>(agent2) = Action::None;
     ctx.get<GridPos>(agent2) = GridPos {
+        (grid->startX + 5),
         grid->startY,
-        grid->startX,
         0
     };
     ctx.get<Reward>(agent2).r = 0.f;
@@ -212,14 +212,14 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
     for (int i = 0; i < NUM_BASKETBALLS; i++) {
         Entity basketball = ctx.makeEntity<Basketball>();
         ctx.get<GridPos>(basketball) = GridPos {
-            grid->startY + 2 + i,  // Spread basketballs vertically
-            grid->startX + 2 + i,  // Spread basketballs horizontally  
+            grid->startX,  // Spread basketballs horizontally  
+            grid->startY,  // Spread basketballs vertically
             0
         };
-        ctx.get<RandomMovement>(basketball) = RandomMovement {
-            0.f,
-            1.f + i * 2.f  // Different movement intervals: 1s, 3s, 5s...
-        };
+        // ctx.get<RandomMovement>(basketball) = RandomMovement {
+        //     0.f,
+        //     1.f + i * 2.f  // Different movement intervals: 1s, 3s, 5s...
+        // };
     }
 }
 

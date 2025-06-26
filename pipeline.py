@@ -9,6 +9,23 @@ import sys
 import numpy as np
 import os
 
+
+
+# ================================ Config Constants ================================
+WINDOW_WIDTH = 3000
+WINDOW_HEIGHT = 1750
+BACKGROUND_COLOR = (50, 50, 50)  # Dark gray
+TEXT_COLOR = (255, 255, 255)     # White
+
+WORLD_WIDTH = 51 
+WORLD_HEIGHT = 35  
+CELL_SIZE = 45     # Size of each cell in pixels
+GRID_OFFSET_X = 250 # Offset from screen edge
+GRID_OFFSET_Y = 100 # Offset from screen edge
+
+
+
+
 # Disable CUDA before importing anything else to avoid version conflicts
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -33,11 +50,6 @@ except ImportError as e:
     print("Make sure you've built the project first with 'cmake --build build'")
     sys.exit(1)
 
-# Simple visualization constants
-WINDOW_WIDTH = 2000
-WINDOW_HEIGHT = 1500
-BACKGROUND_COLOR = (50, 50, 50)  # Dark gray
-TEXT_COLOR = (255, 255, 255)     # White
 
 class MadronaPipeline:
     """
@@ -53,25 +65,23 @@ class MadronaPipeline:
         self.font = pygame.font.Font(None, 24)
         
         # Configure world size (make it bigger!)
-        self.world_width = 20   # Changed from 5 to 10
-        self.world_height = 20   # Changed from 5 to 8
-        self.cell_size = 40     # Size of each cell in pixels
-        self.grid_offset_x = 50 # Offset from screen edge
-        self.grid_offset_y = 100
-        
+        self.world_width = WORLD_WIDTH
+        self.world_height = WORLD_HEIGHT
+        self.cell_size = CELL_SIZE
+        self.grid_offset_x = GRID_OFFSET_X
+        self.grid_offset_y = GRID_OFFSET_Y
+
         print("Initializing Madrona simulation...")
         
         # Create a larger grid
         walls = np.zeros((self.world_height, self.world_width), dtype=bool)
         rewards = np.zeros((self.world_height, self.world_width), dtype=float)
-        end_cells = np.array([[self.world_height-1, self.world_width-1]], dtype=np.int32)  # Goal at bottom-right
         
         self.sim = madrona_sim.SimpleGridworldSimulator(
             walls=walls,
             rewards=rewards, 
-            end_cells=end_cells,
-            start_x=0,
-            start_y=0,
+            start_x=self.world_width // 2,
+            start_y=self.world_height // 2,
             max_episode_length=1000,
             exec_mode=ExecMode.CPU,
             num_worlds=1,
@@ -148,6 +158,81 @@ class MadronaPipeline:
         screen_y = self.grid_offset_y + (grid_y * self.cell_size) + (self.cell_size // 2)
         return int(screen_x), int(screen_y)
     
+    
+    def draw_basketball_court(self):
+        """Draws a basketball court that dynamically fits the grid."""
+        # Define court colors
+        COURT_ORANGE = (205, 133, 63)
+        COURT_BLUE = (20, 40, 80)
+        LINE_WHITE = (255, 255, 255)
+        KEY_RED = (139, 0, 0)
+        LINE_THICKNESS = 3
+
+        # --- Dynamic Court Dimensions ---
+        margin_cells = 1
+        court_start_x = self.grid_offset_x + margin_cells * self.cell_size
+        court_start_y = self.grid_offset_y + margin_cells * self.cell_size
+        court_width = (self.world_width - 2 * margin_cells) * self.cell_size
+        court_height = (self.world_height - 2 * margin_cells) * self.cell_size
+
+        if court_width <= 0 or court_height <= 0: return
+
+        court_rect = pygame.Rect(court_start_x, court_start_y, court_width, court_height)
+
+        # --- Draw Court Background ---
+        pygame.draw.rect(self.screen, COURT_ORANGE, court_rect)
+        playable_rect = court_rect.inflate(-LINE_THICKNESS * 2, -LINE_THICKNESS * 2)
+        pygame.draw.rect(self.screen, COURT_BLUE, playable_rect)
+
+        # --- Draw Court Markings ---
+        center_x, center_y = court_rect.centerx, court_rect.centery
+
+        # Center line
+        pygame.draw.line(self.screen, LINE_WHITE, (center_x, court_rect.top), (center_x, court_rect.bottom), LINE_THICKNESS)
+
+        # Center circle
+        center_circle_radius = int(court_height * 0.15)
+        pygame.draw.circle(self.screen, LINE_WHITE, (center_x, center_y), center_circle_radius, LINE_THICKNESS)
+        pygame.draw.circle(self.screen, KEY_RED, (center_x, center_y), center_circle_radius - LINE_THICKNESS)
+
+        # --- Draw Features for Both Halves ---
+        for side in [-1, 1]:  # -1 for left side, 1 for right side
+            # Key (the "paint") - Adjusted height and restored width
+            key_width = int(court_width * 0.25) # Restored from 0.20
+            key_height = int(court_height * 0.25) # Changed from 0.4 to make it shorter
+            key_x = court_rect.left if side == -1 else court_rect.right - key_width
+            key_y = center_y - key_height / 2
+            key_rect = pygame.Rect(key_x, key_y, key_width, key_height)
+            pygame.draw.rect(self.screen, KEY_RED, key_rect)
+
+            # Free-throw circle (semi-circle)
+            ft_circle_radius = int(key_height / 2)
+            ft_center_x = court_rect.left + key_width if side == -1 else court_rect.right - key_width
+            arc_rect = pygame.Rect(ft_center_x - ft_circle_radius, center_y - ft_circle_radius, ft_circle_radius * 2, ft_circle_radius * 2)
+            
+            start_angle = -np.pi / 2 if side == -1 else np.pi / 2
+            end_angle = np.pi / 2 if side == -1 else 3 * np.pi / 2
+            pygame.draw.arc(self.screen, LINE_WHITE, arc_rect, start_angle, end_angle, LINE_THICKNESS)
+
+            # Three-point line (recalculated to align with the key)
+            hoop_offset_x = int(self.cell_size * 1.5)
+            hoop_center_x = court_rect.left + hoop_offset_x if side == -1 else court_rect.right - hoop_offset_x
+            
+            # New radius calculation: distance from hoop to the top of the free-throw circle, plus a small gap.
+            dist_hoop_to_ft_line = abs(ft_center_x - hoop_center_x)
+            three_pt_radius = dist_hoop_to_ft_line + ft_circle_radius + int(self.cell_size * 0.5)
+
+            three_pt_arc_rect = pygame.Rect(hoop_center_x - three_pt_radius, center_y - three_pt_radius, three_pt_radius * 2, three_pt_radius * 2)
+            pygame.draw.arc(self.screen, LINE_WHITE, three_pt_arc_rect, start_angle, end_angle, LINE_THICKNESS)
+
+            # Backboard and Hoop
+            backboard_x = court_rect.left + hoop_offset_x if side == -1 else court_rect.right - hoop_offset_x
+            pygame.draw.line(self.screen, LINE_WHITE, (backboard_x, center_y - 30), (backboard_x, center_y + 30), LINE_THICKNESS + 2)
+            pygame.draw.circle(self.screen, COURT_ORANGE, (backboard_x, center_y), 8, 0) # The hoop
+            pygame.draw.circle(self.screen, LINE_WHITE, (backboard_x, center_y), 8, 2) # Hoop rim
+    
+
+
     def draw_simulation_data(self, data):
         """Draw whatever data your simulation produces"""
         if data is None:
@@ -155,6 +240,8 @@ class MadronaPipeline:
             
         # Clear screen
         self.screen.fill(BACKGROUND_COLOR)
+
+        self.draw_basketball_court()
         
         # Draw the grid boundaries first
         self.draw_grid_boundaries()

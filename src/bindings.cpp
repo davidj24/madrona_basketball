@@ -34,32 +34,11 @@ static void tagWalls(Cell *cells,
     }
 }
 
-static void tagEnd(Cell *cells,
-                   const int32_t *end_cells,
-                   int64_t num_end_cells,
-                   int64_t grid_x,
-                   int64_t grid_y)
-{
-    for (int64_t c = 0; c < num_end_cells; c++) {
-        int64_t idx = c * 2;
-        int64_t y = (int32_t)end_cells[idx];
-        int64_t x = (int32_t)end_cells[idx + 1];
-
-        if (x >= grid_x || y >= grid_y) {
-            throw std::runtime_error("Out of range end cells");
-        }
-
-        cells[y * grid_x + x].flags |= CellFlag::End;
-    }
-}
-
 static Cell * setupCellData(
     const nb::ndarray<bool, nb::shape<-1, -1>,
         nb::c_contig, nb::device::cpu> &walls,
     const nb::ndarray<float, nb::shape<-1, -1>,
         nb::c_contig, nb::device::cpu> &rewards,
-    const nb::ndarray<int32_t, nb::shape<-1, 2>,
-        nb::c_contig, nb::device::cpu> &end_cells,
     int64_t grid_x,
     int64_t grid_y)
 
@@ -68,8 +47,6 @@ static Cell * setupCellData(
 
     setRewards(cells, rewards.data(), grid_x, grid_y);
     tagWalls(cells, walls.data(), grid_x, grid_y);
-    tagEnd(cells, end_cells.data(),
-        (int64_t)end_cells.shape(0), grid_x, grid_y);
     
     return cells;
 }
@@ -83,8 +60,6 @@ NB_MODULE(_madrona_simple_example_cpp, m) {
                                 nb::c_contig, nb::device::cpu> walls,
                             nb::ndarray<float, nb::shape<-1, -1>,
                                 nb::c_contig, nb::device::cpu> rewards,
-                            nb::ndarray<int32_t, nb::shape<-1, 2>,
-                                nb::c_contig, nb::device::cpu> end_cells,
                             int64_t start_x,
                             int64_t start_y,
                             int64_t max_episode_length,
@@ -100,7 +75,7 @@ NB_MODULE(_madrona_simple_example_cpp, m) {
             }
 
             Cell *cells =
-                setupCellData(walls, rewards, end_cells, grid_x, grid_y);
+                setupCellData(walls, rewards, grid_x, grid_y); 
 
             new (self) Manager(Manager::Config {
                 .maxEpisodeLength = (uint32_t)max_episode_length,
@@ -118,7 +93,6 @@ NB_MODULE(_madrona_simple_example_cpp, m) {
             delete[] cells;
         }, nb::arg("walls"),
            nb::arg("rewards"),
-           nb::arg("end_cells"),
            nb::arg("start_x"),
            nb::arg("start_y"),
            nb::arg("max_episode_length"),
