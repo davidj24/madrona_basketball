@@ -6,7 +6,7 @@ namespace madsimple {
 
 // ================================================ Config Constants ================================================
     constexpr int32_t NUM_AGENTS = 2;
-    constexpr int32_t NUM_BASKETBALLS = 2;
+    constexpr int32_t NUM_BASKETBALLS = 1;
 
     enum class ExportID : uint32_t {
         Reset,
@@ -27,6 +27,7 @@ enum class Action : int32_t {
     Up    = 1,
     Left  = 2,
     Right = 3,
+    Grab = 4,
     None,
 };
 
@@ -49,6 +50,16 @@ struct RandomMovement {
     float moveInterval;
 };
 
+struct InPossession {
+    bool hasBall;
+    uint32_t ballEntityID;
+};
+
+struct Grabbed {
+    bool isGrabbed;
+    uint32_t holderEntityID;
+};
+
 
 
 // ================================================ Archetypes ================================================
@@ -63,7 +74,8 @@ struct Agent : public madrona::Archetype<
     GridPos,
     Reward,
     Done,
-    CurStep
+    CurStep,
+    InPossession
 > {};
 
 
@@ -72,7 +84,8 @@ struct Basketball : public madrona::Archetype<
     GridPos,
     // RandomMovement,
     Done,
-    CurStep
+    CurStep,
+    Grabbed
 > {};
 
 }

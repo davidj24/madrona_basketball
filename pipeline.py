@@ -331,6 +331,8 @@ class MadronaPipeline:
             agent0_action = 2  # Action::Left
         elif keys[pygame.K_d]:
             agent0_action = 3  # Action::Right
+        elif keys[pygame.K_SPACE]:
+            agent0_action = 3  # Action::Right
         
         # Agent 1 actions (Arrow keys)
         agent1_action = 4
