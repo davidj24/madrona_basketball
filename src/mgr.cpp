@@ -246,7 +246,7 @@ Tensor Manager::actionTensor() const
 
 Tensor Manager::observationTensor() const
 {
-    return impl_->exportTensor(ExportID::GridPos, TensorElementType::Int32,
+    return impl_->exportTensor(ExportID::AgentPos, TensorElementType::Int32,
         {impl_->cfg.numWorlds, 2});
 }
 
@@ -262,4 +262,10 @@ Tensor Manager::doneTensor() const
         {impl_->cfg.numWorlds, 1});
 }
 
+Tensor Manager::basketballPosTensor() const
+{
+    return impl_->exportTensor(ExportID::BasketballPos, TensorElementType::Int32,
+        {impl_->cfg.numWorlds, 2});
+
+}
 }

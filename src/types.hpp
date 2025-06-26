@@ -7,7 +7,8 @@ namespace madsimple {
 enum class ExportID : uint32_t {
     Reset,
     Action,
-    GridPos,
+    AgentPos,
+    BasketballPos,
     Reward,
     Done,
     NumExports,
@@ -26,8 +27,9 @@ enum class Action : int32_t {
 };
 
 struct GridPos {
-    int32_t y;
     int32_t x;
+    int32_t y;
+    int32_t z;
 };
 
 struct Reward {
@@ -37,6 +39,10 @@ struct Reward {
 struct Done {
     float episodeDone;
 };
+
+
+
+// ================================================ Archetypes ================================================
 
 struct CurStep {
     uint32_t step;
@@ -51,4 +57,14 @@ struct Agent : public madrona::Archetype<
     CurStep
 > {};
 
+
+struct Basketball : public madrona::Archetype<
+    Reset,
+    GridPos,
+    Done,
+    CurStep
+> {};
+
 }
+
+

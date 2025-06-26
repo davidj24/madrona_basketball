@@ -17,14 +17,21 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.registerComponent<Done>();
     registry.registerComponent<CurStep>();
 
+
+
+    // ================================================= Archetypes ================================================= 
     registry.registerArchetype<Agent>();
+    registry.registerArchetype<Basketball>();
 
     // Export tensors for pytorch
     registry.exportColumn<Agent, Reset>((uint32_t)ExportID::Reset);
     registry.exportColumn<Agent, Action>((uint32_t)ExportID::Action);
-    registry.exportColumn<Agent, GridPos>((uint32_t)ExportID::GridPos);
+    registry.exportColumn<Agent, GridPos>((uint32_t)ExportID::AgentPos);
     registry.exportColumn<Agent, Reward>((uint32_t)ExportID::Reward);
     registry.exportColumn<Agent, Done>((uint32_t)ExportID::Done);
+
+    registry.exportColumn<Basketball, GridPos>((uint32_t)ExportID::BasketballPos);
+    
 }
 
 inline void tick(Engine &ctx,
@@ -106,6 +113,7 @@ inline void tick(Engine &ctx,
         new_pos = GridPos {
             grid->startY,
             grid->startX,
+            0
         };
 
         episode_step.step = 0;
@@ -138,10 +146,18 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
     ctx.get<GridPos>(agent) = GridPos {
         grid->startY,
         grid->startX,
+        0
     };
     ctx.get<Reward>(agent).r = 0.f;
     ctx.get<Done>(agent).episodeDone = 0.f;
     ctx.get<CurStep>(agent).step = 0;
+
+    Entity basketball = ctx.makeEntity<Basketball>();
+    ctx.get<GridPos>(basketball) = GridPos {
+        grid->startY,
+        grid->startX,
+        0
+    };
 }
 
 MADRONA_BUILD_MWGPU_ENTRY(Engine, Sim, Sim::Config, WorldInit);

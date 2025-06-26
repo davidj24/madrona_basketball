@@ -10,7 +10,8 @@
                 ".",
                 "-B",
                 "build",
-                "-DCMAKE_BUILD_TYPE=Debug"
+                "-DCMAKE_BUILD_TYPE=Debug",
+                "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
             ],
             "group": "build",
             "presentation": {
@@ -77,13 +78,17 @@
             "detail": "Clean the CMake build"
         },
         {
-            "label": "Python: Install Package",
+            "label": "CMake: Rebuild",
             "type": "shell",
-            "command": "pip",
+            "command": "cmake",
             "args": [
-                "install",
-                "-e",
-                "."
+                "--build",
+                "build",
+                "--config",
+                "Debug",
+                "--clean-first",
+                "-j",
+                "$(nproc)"
             ],
             "group": "build",
             "presentation": {
@@ -94,29 +99,11 @@
                 "showReuseMessage": true,
                 "clear": false
             },
-            "problemMatcher": [],
-            "detail": "Install the Python package in development mode"
-        },
-        {
-            "label": "Run: Test Simulation",
-            "type": "shell",
-            "command": "python",
-            "args": [
-                "scripts/run.py",
-                "4"
+            "problemMatcher": [
+                "$gcc"
             ],
-            "group": "test",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
-            },
-            "problemMatcher": [],
-            "dependsOn": ["CMake: Build", "Python: Install Package"],
-            "detail": "Run the simulation with 4 worlds"
+            "dependsOn": "CMake: Configure",
+            "detail": "Clean and rebuild the CMake project"
         }
     ]
 }

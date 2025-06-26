@@ -2,10 +2,31 @@
     "cmake.buildDirectory": "${workspaceFolder}/build",
     "cmake.configureOnOpen": true,
     "cmake.buildTask": true,
-    "files.associations": {
-        "*.hpp": "cpp",
-        "*.cpp": "cpp"
+    "cmake.defaultVariants": {
+        "buildType": {
+            "default": "debug",
+            "choices": {
+                "debug": {
+                    "short": "Debug",
+                    "long": "Debug build with debug symbols",
+                    "buildType": "Debug"
+                },
+                "release": {
+                    "short": "Release",
+                    "long": "Release build with optimizations",
+                    "buildType": "Release"
+                },
+                "relwithdebinfo": {
+                    "short": "RelWithDebInfo",
+                    "long": "Release with debug info",
+                    "buildType": "RelWithDebInfo"
+                }
+            }
+        }
     },
-    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
-    "python.defaultInterpreterPath": "python3"
+    "files.associations": {
+        "*.cmake": "cmake",
+        "CMakeLists.txt": "cmake"
+    },
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools"
 }
