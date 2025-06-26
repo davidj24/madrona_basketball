@@ -152,6 +152,19 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
     ctx.get<Done>(agent).episodeDone = 0.f;
     ctx.get<CurStep>(agent).step = 0;
 
+
+    Entity agent2 = ctx.makeEntity<Agent>();
+    ctx.get<Action>(agent2) = Action::None;
+    ctx.get<GridPos>(agent2) = GridPos {
+        grid->startY,
+        grid->startX,
+        0
+    };
+    ctx.get<Reward>(agent2).r = 0.f;
+    ctx.get<Done>(agent2).episodeDone = 0.f;
+    ctx.get<CurStep>(agent2).step = 0;
+    
+
     Entity basketball = ctx.makeEntity<Basketball>();
     ctx.get<GridPos>(basketball) = GridPos {
         grid->startY,

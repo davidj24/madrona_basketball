@@ -126,6 +126,8 @@ NB_MODULE(_madrona_simple_example_cpp, m) {
            nb::arg("num_worlds"),
            nb::arg("gpu_id") = -1)
         .def("step", &Manager::step)
+        .def("set_action", &Manager::setAction)
+        .def("trigger_reset", &Manager::triggerReset)
         .def("reset_tensor", &Manager::resetTensor)
         .def("action_tensor", &Manager::actionTensor)
         .def("observation_tensor", &Manager::observationTensor)

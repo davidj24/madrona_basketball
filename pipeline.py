@@ -52,14 +52,19 @@ class MadronaPipeline:
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 24)
         
-        # Initialize your Madrona simulation
-        # (This uses the existing gridworld setup - you can modify this as needed)
+        # Configure world size (make it bigger!)
+        self.world_width = 10   # Changed from 5 to 10
+        self.world_height = 8   # Changed from 5 to 8
+        self.cell_size = 40     # Size of each cell in pixels
+        self.grid_offset_x = 50 # Offset from screen edge
+        self.grid_offset_y = 100
+        
         print("Initializing Madrona simulation...")
         
-        # Create a simple 5x5 grid for the existing simulation
-        walls = np.zeros((5, 5), dtype=bool)
-        rewards = np.zeros((5, 5), dtype=float)
-        end_cells = np.array([[4, 4]], dtype=np.int32)  # Goal at bottom-right
+        # Create a larger grid
+        walls = np.zeros((self.world_height, self.world_width), dtype=bool)
+        rewards = np.zeros((self.world_height, self.world_width), dtype=float)
+        end_cells = np.array([[self.world_height-1, self.world_width-1]], dtype=np.int32)  # Goal at bottom-right
         
         self.sim = madrona_sim.SimpleGridworldSimulator(
             walls=walls,
@@ -67,13 +72,13 @@ class MadronaPipeline:
             end_cells=end_cells,
             start_x=0,
             start_y=0,
-            max_episode_length=100,
+            max_episode_length=1000,
             exec_mode=ExecMode.CPU,
             num_worlds=1,
             gpu_id=-1
         )
         
-        print("✓ Madrona simulation initialized!")
+        print(f"✓ Madrona simulation initialized! World size: {self.world_width}x{self.world_height}")
         self.step_count = 0
         
     def get_simulation_data(self):
@@ -86,7 +91,6 @@ class MadronaPipeline:
             done_tensor = self.sim.done_tensor()
             reset_tensor = self.sim.reset_tensor()
             basketballpos_tensor = self.sim.basketball_pos_tensor()
-
 
             
             # Convert to numpy arrays using torch backend (CPU only mode already set)
@@ -114,6 +118,36 @@ class MadronaPipeline:
 
 
     
+    def draw_grid_boundaries(self):
+        """Draw the world boundaries and grid"""
+        # Draw grid lines
+        for x in range(self.world_width + 1):
+            start_pos = (self.grid_offset_x + x * self.cell_size, self.grid_offset_y)
+            end_pos = (self.grid_offset_x + x * self.cell_size, 
+                      self.grid_offset_y + self.world_height * self.cell_size)
+            pygame.draw.line(self.screen, (100, 100, 100), start_pos, end_pos, 1)
+        
+        for y in range(self.world_height + 1):
+            start_pos = (self.grid_offset_x, self.grid_offset_y + y * self.cell_size)
+            end_pos = (self.grid_offset_x + self.world_width * self.cell_size, 
+                      self.grid_offset_y + y * self.cell_size)
+            pygame.draw.line(self.screen, (100, 100, 100), start_pos, end_pos, 1)
+        
+        # Draw boundary rectangle (thicker)
+        boundary_rect = pygame.Rect(
+            self.grid_offset_x, 
+            self.grid_offset_y, 
+            self.world_width * self.cell_size, 
+            self.world_height * self.cell_size
+        )
+        pygame.draw.rect(self.screen, (200, 200, 200), boundary_rect, 3)
+    
+    def grid_to_screen(self, grid_x, grid_y):
+        """Convert grid coordinates to screen pixels"""
+        screen_x = self.grid_offset_x + (grid_x * self.cell_size) + (self.cell_size // 2)
+        screen_y = self.grid_offset_y + (grid_y * self.cell_size) + (self.cell_size // 2)
+        return int(screen_x), int(screen_y)
+    
     def draw_simulation_data(self, data):
         """Draw whatever data your simulation produces"""
         if data is None:
@@ -122,49 +156,44 @@ class MadronaPipeline:
         # Clear screen
         self.screen.fill(BACKGROUND_COLOR)
         
-        # Display the raw data from your simulation
-        y_offset = 20
+        # Draw the grid boundaries first
+        self.draw_grid_boundaries()
         
-        texts = [
-            f"Madrona Simulation Pipeline - Step {self.step_count}",
+        # Display info text
+        y_offset = 20
+        info_texts = [
+            f"Madrona Basketball Simulation - Step {self.step_count}",
+            f"World Size: {self.world_width}x{self.world_height}",
             "",
-            f"Observations: {data['observations'].flatten()}",
-            f"Actions: {data['actions'].flatten()}",
-            f"Rewards: {data['rewards'].flatten()}",
-            f"Done: {data['done'].flatten()}",
-            f"Reset: {data['reset'].flatten()}",
-            "",
-            "This shows the raw data from your C++ simulation.",
-            "Modify the C++ code to see different values here!",
-            "",
-            "Controls:",
-            "SPACE - Step simulation manually",
-            "R - Reset simulation", 
-            "ESC - Quit"
+            "Controls: WASD/Arrow Keys, SPACE=manual step, R=reset, ESC=quit"
         ]
         
-        for text in texts:
-            if text:  # Skip empty lines
+        for text in info_texts:
+            if text:
                 surface = self.font.render(text, True, TEXT_COLOR)
                 self.screen.blit(surface, (20, y_offset))
-            y_offset += 25
+            y_offset += 20
 
-
-
+        # Draw basketball positions
         if 'basketball_pos' in data:
             positions = data['basketball_pos']
-            
             for pos in positions:
-                if len(pos) >= 2:  # Make sure we have x,y coordinates
-                    # Convert grid coordinates to screen pixels
-                    screen_x = pos[0] * 32 + 50  # Scale and offset
-                    screen_y = pos[1] * 32 + 50
-                    
-                    # Draw circle (or whatever shape you want)
-                    pygame.draw.circle(self.screen, (255, 0, 0), 
-                                    (int(screen_x), int(screen_y)), 10)
+                if len(pos) >= 2:
+                    screen_x, screen_y = self.grid_to_screen(pos[0], pos[1])
+                    pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), 12)
+                    # Add basketball pattern
+                    pygame.draw.circle(self.screen, (200, 50, 0), (screen_x, screen_y), 12, 2)
 
-
+        # Draw agent positions  
+        if 'observations' in data:
+            positions = data['observations']
+            for pos in positions:
+                if len(pos) >= 2:
+                    screen_x, screen_y = self.grid_to_screen(pos[0], pos[1])
+                    # Draw agent as a blue square
+                    agent_rect = pygame.Rect(screen_x - 15, screen_y - 15, 30, 30)
+                    pygame.draw.rect(self.screen, (0, 100, 255), agent_rect)
+                    pygame.draw.rect(self.screen, (0, 150, 255), agent_rect, 3)
 
     
     def step_simulation(self):
@@ -175,13 +204,32 @@ class MadronaPipeline:
     def reset_simulation(self):
         """Reset your Madrona simulation"""
         try:
-            reset_tensor = self.sim.reset_tensor()
-            reset_data = reset_tensor.to_torch().detach().cpu().numpy()
-            reset_data.fill(1)  # Trigger reset
+            # Use the proper input injection interface
+            self.sim.trigger_reset(0)  # Reset world 0
             print(f"Simulation reset at step {self.step_count}")
             self.step_count = 0
         except Exception as e:
             print(f"Error resetting simulation: {e}")
+    
+    def handle_input(self):
+        """Handle keyboard input and inject actions into simulation"""
+        keys = pygame.key.get_pressed()
+        
+        # Map keyboard input to actions using proper input injection
+        action = 4  # Default to Action::None (see types.hpp enum)
+        
+        
+        if keys[pygame.K_s] or keys[pygame.K_DOWN]:
+            action = 0  # Action::Down
+        elif keys[pygame.K_w] or keys[pygame.K_UP]:
+            action = 1  # Action::Up
+        elif keys[pygame.K_a] or keys[pygame.K_LEFT]:
+            action = 2  # Action::Left
+        elif keys[pygame.K_d] or keys[pygame.K_RIGHT]:
+            action = 3  # Action::Right
+        
+        # Inject the action into the simulation (world 0, agent 0)
+        self.sim.set_action(0, 0, action)
     
     def run(self):
         """Main pipeline loop"""
@@ -210,6 +258,9 @@ class MadronaPipeline:
                         print(f"Auto-stepping: {'ON' if auto_step else 'OFF'}")
                         if not auto_step:
                             self.step_simulation()  # Manual step
+            
+            # Handle continuous input (following Madrona viewer pattern)
+            self.handle_input()
             
             # Step simulation
             if auto_step:

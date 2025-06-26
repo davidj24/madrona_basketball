@@ -28,6 +28,11 @@ public:
 
     MGR_EXPORT void step();
 
+    // Input injection interface (following escape room pattern)
+    MGR_EXPORT void setAction(int32_t world_idx, int32_t agent_idx, int32_t action);
+    MGR_EXPORT void triggerReset(int32_t world_idx);
+
+    // State extraction interface (tensor outputs)
     MGR_EXPORT madrona::py::Tensor resetTensor() const;
     MGR_EXPORT madrona::py::Tensor actionTensor() const;
     MGR_EXPORT madrona::py::Tensor observationTensor() const;

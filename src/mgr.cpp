@@ -232,6 +232,29 @@ void Manager::step()
     impl_->run();
 }
 
+void Manager::setAction(int32_t world_idx, int32_t agent_idx, int32_t action)
+{
+    // Get the action tensor and set the action for the specified world/agent
+    Tensor action_tensor = actionTensor();
+    int32_t *action_data = static_cast<int32_t *>(action_tensor.devicePtr());
+    
+    // For now, assuming 1 agent per world, so world_idx is the array index
+    if (world_idx >= 0 && world_idx < impl_->cfg.numWorlds) {
+        action_data[world_idx] = action;
+    }
+}
+
+void Manager::triggerReset(int32_t world_idx)
+{
+    // Get the reset tensor and trigger reset for the specified world
+    Tensor reset_tensor = resetTensor();
+    int32_t *reset_data = static_cast<int32_t *>(reset_tensor.devicePtr());
+    
+    if (world_idx >= 0 && world_idx < impl_->cfg.numWorlds) {
+        reset_data[world_idx] = 1;  // Set reset flag
+    }
+}
+
 Tensor Manager::resetTensor() const
 {
     return impl_->exportTensor(ExportID::Reset, TensorElementType::Int32,
