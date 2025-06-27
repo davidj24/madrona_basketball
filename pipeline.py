@@ -19,7 +19,8 @@ TEXT_COLOR = (255, 255, 255)     # White
 
 WORLD_WIDTH = 51 
 WORLD_HEIGHT = 35  
-CELL_SIZE = 45     # Size of each cell in pixels
+# CELL_SIZE = 45     # Size of each cell in pixels
+CELL_SIZE = 30     # Size of each cell in pixels
 GRID_OFFSET_X = 250 # Offset from screen edge
 GRID_OFFSET_Y = 100 # Offset from screen edge
 
@@ -356,7 +357,7 @@ class MadronaPipeline:
         
         print("Madrona Pipeline Started!")
         print("- The simulation will step automatically")
-        print("- Press SPACE to toggle manual stepping")
+        print("- Press F to toggle manual stepping")
         print("- Press R to reset")
         print("- Press ESC to quit")
         print()
@@ -371,7 +372,7 @@ class MadronaPipeline:
                         running = False
                     elif event.key == pygame.K_r:
                         self.reset_simulation()
-                    elif event.key == pygame.K_SPACE:
+                    elif event.key == pygame.K_f:
                         auto_step = not auto_step
                         print(f"Auto-stepping: {'ON' if auto_step else 'OFF'}")
                         if not auto_step:
