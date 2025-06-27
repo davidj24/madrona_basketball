@@ -27,7 +27,7 @@ enum class Action : int32_t {
     Up    = 1,
     Left  = 2,
     Right = 3,
-    Grab = 4,
+    Grab  = 4,
     None,
 };
 

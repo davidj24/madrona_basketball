@@ -67,8 +67,59 @@ inline void moveBall(Engine &ctx,
 }
 
 
-// Removed complex grabBall and moveBallWithAgent systems
-// Grab functionality is now handled directly in the tick system
+inline void processGrab(Engine &ctx,
+                        Entity agent_entity,
+                        Action &action,
+                        GridPos &agent_pos,
+                        InPossession &in_possession)
+{
+    bool grabbing = (action == Action::Grab);
+
+    auto basketball_query = ctx.query<Entity, GridPos, Grabbed>();
+    ctx.iterateQuery(basketball_query, [&](Entity ball_entity, GridPos &basketball_pos, Grabbed &grabbed) 
+    {
+        bool agent_is_holding_this_ball = (in_possession.hasBall == true &&
+                                           grabbed.isGrabbed &&
+                                           grabbed.holderEntityID == (uint32_t)agent_entity.id);
+        if (agent_is_holding_this_ball)
+        {
+            basketball_pos = agent_pos;  // Move basketball to agent's new position
+        }
+
+        if (!grabbing) {return;}
+
+        // If agent already has a ball, drop it
+        if (agent_is_holding_this_ball) 
+        {
+            in_possession.ballEntityID = 0;
+            in_possession.hasBall = false;
+            grabbed.holderEntityID = 0;
+            grabbed.isGrabbed = false;
+            return;
+        }
+
+        // Otherwise, try to grab a ball at current position
+        if (basketball_pos.x == agent_pos.x && basketball_pos.y == agent_pos.y) 
+        {
+            auto agent_query = ctx.query<InPossession>();
+            ctx.iterateQuery(agent_query, [&] (InPossession &other_in_possession)
+            {
+                if (other_in_possession.ballEntityID == ball_entity.id) // if we're stealing from another agent
+                {
+                    other_in_possession.hasBall = false;
+                    other_in_possession.ballEntityID = 0;
+                }
+            });
+
+            in_possession.hasBall = true;
+            in_possession.ballEntityID = ball_entity.id;
+            grabbed.holderEntityID = (uint32_t)agent_entity.id;
+            grabbed.isGrabbed = true;
+        }
+    });
+
+    // if (grabbing) {action = Action::None;}
+}
 
 
 
@@ -95,41 +146,7 @@ inline void tick(Engine &ctx,
         case Action::Down: {new_pos.y -= 1;} break;
         case Action::Left: {new_pos.x -= 1;} break;
         case Action::Right: {new_pos.x += 1;} break;
-        case Action::Grab: {
-            // If agent already has a ball, drop it
-            if (in_possession.hasBall) {
-                auto basketball_query = ctx.query<GridPos, Grabbed>();
-                ctx.iterateQuery(basketball_query, [&](GridPos &basketball_pos, Grabbed &grabbed) 
-                {
-                    if (grabbed.isGrabbed && grabbed.holderEntityID == (uint32_t)agent_entity.id) 
-                    {
-                        // Let the ball go if I'm the one holding it
-                        in_possession.hasBall = false;
-                        grabbed.isGrabbed = false;
-                        grabbed.holderEntityID = 0;
-                        in_possession.ballEntityID = 0;
-                    }
-                });
-            }
-            // Otherwise, try to grab a ball at current position
-            else {
-                bool ball_grabbed = false;  // Flag to ensure only one ball is grabbed
-                auto basketball_query = ctx.query<GridPos, Grabbed>();
-                ctx.iterateQuery(basketball_query, [&](GridPos &basketball_pos, Grabbed &grabbed) {
-                    // Only grab if basketball is at same position as agent and not already grabbed
-                    if (!ball_grabbed && basketball_pos.x == grid_pos.x && basketball_pos.y == grid_pos.y && !grabbed.isGrabbed) 
-                    {
-                        
-                        in_possession.hasBall = true;
-                        grabbed.isGrabbed = true;
-                        grabbed.holderEntityID = (uint32_t)agent_entity.id;
-                        ball_grabbed = true;  // Prevent grabbing multiple balls
-                    }
-                });
-            }
-            // Clear the grab action immediately to prevent repeated execution
-            action = Action::None;
-        } break;
+        case Action::Grab: {} break;
         default: break;
     }
 
@@ -144,16 +161,6 @@ inline void tick(Engine &ctx,
         const Cell &new_cell = grid->cells[new_pos.y * grid->width + new_pos.x];
 
         if ((new_cell.flags & CellFlag::Wall)) {new_pos = grid_pos;}
-    }
-
-    // Move basketball with agent if holding one
-    if (in_possession.hasBall) {
-        auto basketball_query = ctx.query<GridPos, Grabbed>();
-        ctx.iterateQuery(basketball_query, [&](GridPos &basketball_pos, Grabbed &grabbed) {
-            if (grabbed.isGrabbed && grabbed.holderEntityID == (uint32_t)agent_entity.id) {
-                basketball_pos = new_pos;  // Move basketball to agent's new position
-            }
-        });
     }
 
     const Cell &cur_cell = grid->cells[new_pos.y * grid->width + new_pos.x];
@@ -182,12 +189,15 @@ inline void tick(Engine &ctx,
 
         // Reset all basketballs when episode ends
         auto basketball_query = ctx.query<GridPos, Grabbed>();
-        ctx.iterateQuery(basketball_query, [&](GridPos &basketball_pos, Grabbed &grabbed) {
-            if (grabbed.isGrabbed && grabbed.holderEntityID == (uint32_t)agent_entity.id) {
+        ctx.iterateQuery(basketball_query, [&](GridPos &basketball_pos, Grabbed &grabbed) 
+        {
+            if (grabbed.isGrabbed && grabbed.holderEntityID == (uint32_t)agent_entity.id) 
+            {
                 grabbed.isGrabbed = false;
                 grabbed.holderEntityID = 0;
                 // Reset basketball to start position
-                basketball_pos = GridPos {
+                basketball_pos = GridPos 
+                {
                     grid->startX,
                     grid->startY,
                     0
@@ -210,16 +220,9 @@ inline void tick(Engine &ctx,
     }
 
     grid_pos = new_pos;
-    
-    // Clear movement actions after processing (grab actions are cleared immediately)
-    if (action != Action::Grab) {
-        action = Action::None;
-    }
 
     reward.r = cur_cell.reward;
 }
-
-
 
 
 
@@ -232,18 +235,16 @@ void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
                      const Config &)
 {
     TaskGraphBuilder &builder = taskgraph_mgr.init(0);
+
     builder.addToGraph<ParallelForNode<Engine, tick,
         Entity, Action, Reset, GridPos, Reward, Done, CurStep, InPossession>>({});
     
-    // Keep ball movement commented out since RandomMovement is not in Basketball archetype
     // builder.addToGraph<ParallelForNode<Engine, moveBall,
     //     GridPos, RandomMovement>>({});
 
-    // Removed complex grab systems - grab logic is now in tick system
-    // builder.addToGraph<ParallelForNode<Engine, grabBall,
-    //     Entity, Action, GridPos, InPossession>>({});
-    // builder.addToGraph<ParallelForNode<Engine, moveBallWithAgent,
-    //     Entity, GridPos, Grabbed>>({});
+    builder.addToGraph<ParallelForNode<Engine, processGrab,
+        Entity, Action, GridPos, InPossession>>({});
+
 }
 
 

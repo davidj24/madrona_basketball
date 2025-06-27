@@ -19,8 +19,8 @@ TEXT_COLOR = (255, 255, 255)     # White
 
 WORLD_WIDTH = 51 
 WORLD_HEIGHT = 35  
-# CELL_SIZE = 45     # Size of each cell in pixels
-CELL_SIZE = 30     # Size of each cell in pixels
+CELL_SIZE = 45     # For lab computer
+# CELL_SIZE = 30     # For laptop
 GRID_OFFSET_X = 250 # Offset from screen edge
 GRID_OFFSET_Y = 100 # Offset from screen edge
 
@@ -239,12 +239,8 @@ class MadronaPipeline:
         if data is None:
             return
             
-        # Clear screen
         self.screen.fill(BACKGROUND_COLOR)
-
         self.draw_basketball_court()
-        
-        # Draw the grid boundaries first
         self.draw_grid_boundaries()
         
         # Display info text
@@ -255,6 +251,14 @@ class MadronaPipeline:
             "",
             "Controls: WASD/Arrow Keys, SPACE=manual step, R=reset, ESC=quit"
         ]
+
+        # Add action debugging
+        if 'actions' in data:
+            actions = data['actions'][0]  # Get first world
+            action_names = ['Up', 'Down', 'Left', 'Right', 'Grab', 'None']
+            for i, action_val in enumerate(actions):
+                action_name = action_names[int(action_val)] if int(action_val) < len(action_names) else 'Unknown'
+                info_texts.append(f"Agent {i} Action: {action_name} ({int(action_val)})")
         
         for text in info_texts:
             if text:
@@ -323,7 +327,7 @@ class MadronaPipeline:
         keys = pygame.key.get_pressed()
         
         # Agent 0 actions (WASD keys)
-        agent0_action = 4  # Default to Action::None
+        agent0_action = 5  # Default to Action::None
         if keys[pygame.K_w]:
             agent0_action = 0  # Action::Up
         elif keys[pygame.K_s]:
@@ -333,10 +337,10 @@ class MadronaPipeline:
         elif keys[pygame.K_d]:
             agent0_action = 3  # Action::Right
         elif keys[pygame.K_SPACE]:
-            agent0_action = 3  # Action::Right
+            agent0_action = 4  # Action::Right
         
         # Agent 1 actions (Arrow keys)
-        agent1_action = 4
+        agent1_action = 5
         if keys[pygame.K_UP]:
             agent1_action = 0  # Action::Up
         elif keys[pygame.K_DOWN]:
@@ -345,6 +349,8 @@ class MadronaPipeline:
             agent1_action = 2  # Action::Left
         elif keys[pygame.K_RIGHT]:
             agent1_action = 3  # Action::Right
+        elif keys[pygame.K_RSHIFT]:
+            agent1_action = 4
         
         # Inject actions for both agents
         self.sim.set_action(0, 0, agent0_action)  # World 0, Agent 0

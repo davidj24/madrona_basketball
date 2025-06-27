@@ -26,7 +26,8 @@
     },
     "files.associations": {
         "*.cmake": "cmake",
-        "CMakeLists.txt": "cmake"
+        "CMakeLists.txt": "cmake",
+        "cstdint": "cpp"
     },
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools"
 }
