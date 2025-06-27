@@ -275,39 +275,30 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
       grid(init.grid),
       maxEpisodeLength(cfg.maxEpisodeLength)
 {
-    Entity agent = ctx.makeEntity<Agent>();
-    ctx.get<Action>(agent) = Action{0, 0, 0, 0}; // Initialize with no action
-    ctx.get<GridPos>(agent) = GridPos {
-        (grid->startX - 5),
-        grid->startY,
-        0
+    for (int i = 0; i < NUM_AGENTS; i++) 
+    {
+        Entity agent = ctx.makeEntity<Agent>();
+        ctx.get<Action>(agent) = Action{0, 0, 0, 0}; // Initialize with no action
+        ctx.get<GridPos>(agent) = GridPos 
+        {
+            (grid->startX + i - 5),
+            grid->startY,
+            0
+        };
+        ctx.get<Reset>(agent) = Reset{0}; // Initialize reset component
+        ctx.get<Reward>(agent).r = 0.f;
+        ctx.get<Done>(agent).episodeDone = 0.f;
+        ctx.get<CurStep>(agent).step = 0;
+        ctx.get<InPossession>(agent) = {false, 0};
+        ctx.get<Orientation>(agent) = Orientation {Quat::id()};
     };
-    ctx.get<Reset>(agent) = Reset{0}; // Initialize reset component
-    ctx.get<Reward>(agent).r = 0.f;
-    ctx.get<Done>(agent).episodeDone = 0.f;
-    ctx.get<CurStep>(agent).step = 0;
-    ctx.get<InPossession>(agent) = {false, 0};
-    ctx.get<Orientation>(agent) = Orientation {Quat::id()};
 
-
-    Entity agent2 = ctx.makeEntity<Agent>();
-    ctx.get<Action>(agent2) = Action{0, 0, 0, 0}; // Initialize with no action
-    ctx.get<GridPos>(agent2) = GridPos {
-        (grid->startX + 5),
-        grid->startY,
-        0
-    };
-    ctx.get<Reset>(agent2) = Reset{0}; // Initialize reset component
-    ctx.get<Reward>(agent2).r = 0.f;
-    ctx.get<Done>(agent2).episodeDone = 0.f;
-    ctx.get<CurStep>(agent2).step = 0;
-    ctx.get<InPossession>(agent2) = {false, 0};
-    ctx.get<Orientation>(agent2) = Orientation {Quat::id()};
     
 
     for (int i = 0; i < NUM_BASKETBALLS; i++) {
         Entity basketball = ctx.makeEntity<Basketball>();
-        ctx.get<GridPos>(basketball) = GridPos {
+        ctx.get<GridPos>(basketball) = GridPos 
+        {
             grid->startX,   
             grid->startY,  
             0
@@ -316,6 +307,7 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
         ctx.get<Done>(basketball).episodeDone = 0.f;
         ctx.get<CurStep>(basketball).step = 0;
         ctx.get<Grabbed>(basketball) = Grabbed {false, 0};
+        
 
         // Keep random movement commented out as requested
         // ctx.get<RandomMovement>(basketball) = RandomMovement {

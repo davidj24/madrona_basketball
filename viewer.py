@@ -112,12 +112,6 @@ class MadronaPipeline:
             reset_data = reset_tensor.to_torch().detach().cpu().numpy()   # Reset flags
             basketball_pos_data = basketballpos_tensor.to_torch().detach().cpu().numpy()  # Basketball position
             
-            # Debug print shapes (only first few times)
-            if self.step_count < 3:
-                print(f"Debug - Step {self.step_count}:")
-                print(f"  obs_data shape: {obs_data.shape}, values: {obs_data}")
-                print(f"  action_data shape: {action_data.shape}, values: {action_data}")
-                print(f"  basketball_pos_data shape: {basketball_pos_data.shape}, values: {basketball_pos_data}")
             
             return {
                 'observations': obs_data,
@@ -399,23 +393,33 @@ class MadronaPipeline:
         grab1 = 0
         
         if keys[pygame.K_UP] or keys[pygame.K_DOWN] or keys[pygame.K_LEFT] or keys[pygame.K_RIGHT]:
-            move_speed1 = 1
+            move_speed1 = 1  # ← Fix: use move_speed1, not move_speed
             
-            if keys[pygame.K_UP]:
+            # 8-directional movement with corrected key mappings
+            if keys[pygame.K_UP] and keys[pygame.K_RIGHT]:          # NE
+                move_angle1 = 1
+            elif keys[pygame.K_RIGHT] and keys[pygame.K_DOWN]:      # SE  
+                move_angle1 = 3
+            elif keys[pygame.K_DOWN] and keys[pygame.K_LEFT]:       # SW ← Fix: DOWN + LEFT
+                move_angle1 = 5
+            elif keys[pygame.K_LEFT] and keys[pygame.K_UP]:         # NW ← Fix: LEFT + UP
+                move_angle1 = 7
+            elif keys[pygame.K_UP]:                                 # N
                 move_angle1 = 0
-            elif keys[pygame.K_RIGHT]:
+            elif keys[pygame.K_RIGHT]:                              # E
                 move_angle1 = 2
-            elif keys[pygame.K_DOWN]:
+            elif keys[pygame.K_DOWN]:                               # S
                 move_angle1 = 4
-            elif keys[pygame.K_LEFT]:
+            elif keys[pygame.K_LEFT]:                               # W ← Fix: LEFT key
                 move_angle1 = 6
         
-        if keys[pygame.K_COMMA]:  # '<' key
+        # Agent 1 rotation and grab (different keys to avoid conflicts)
+        if keys[pygame.K_COMMA]:      # ',' key for Agent 1 turn left
             rotate1 = -1
-        elif keys[pygame.K_PERIOD]:  # '>' key  
+        elif keys[pygame.K_PERIOD]:   # '.' key for Agent 1 turn right
             rotate1 = 1
         
-        if keys[pygame.K_RSHIFT]:
+        if keys[pygame.K_RSHIFT]:     # Right Shift for Agent 1 grab
             grab1 = 1
         
         # Send enhanced actions to simulation

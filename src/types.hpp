@@ -7,7 +7,7 @@ using namespace madrona::math;
 namespace madsimple {
 
 // ================================================ Config Constants ================================================
-    constexpr int32_t NUM_AGENTS = 2;
+    constexpr int32_t NUM_AGENTS = 6;
     constexpr int32_t NUM_BASKETBALLS = 1;
 
     enum class ExportID : uint32_t 
