@@ -112,6 +112,13 @@ class MadronaPipeline:
             reset_data = reset_tensor.to_torch().detach().cpu().numpy()   # Reset flags
             basketball_pos_data = basketballpos_tensor.to_torch().detach().cpu().numpy()  # Basketball position
             
+            # Debug print shapes (only first few times)
+            if self.step_count < 3:
+                print(f"Debug - Step {self.step_count}:")
+                print(f"  obs_data shape: {obs_data.shape}, values: {obs_data}")
+                print(f"  action_data shape: {action_data.shape}, values: {action_data}")
+                print(f"  basketball_pos_data shape: {basketball_pos_data.shape}, values: {basketball_pos_data}")
+            
             return {
                 'observations': obs_data,
                 'actions': action_data,
@@ -123,6 +130,8 @@ class MadronaPipeline:
             
         except Exception as e:
             print(f"Error getting simulation data: {e}")
+            import traceback
+            traceback.print_exc()
             return None
         
 
@@ -252,31 +261,47 @@ class MadronaPipeline:
             "Controls: WASD/Arrow Keys, SPACE=manual step, R=reset, ESC=quit"
         ]
 
-        # Add action debugging
+        # Add action debugging for enhanced actions
         if 'actions' in data:
-            actions = data['actions'][0]  # Get first world
-            action_names = ['Up', 'Down', 'Left', 'Right', 'Grab', 'None']
-            for i, action_val in enumerate(actions):
-                action_name = action_names[int(action_val)] if int(action_val) < len(action_names) else 'Unknown'
-                info_texts.append(f"Agent {i} Action: {action_name} ({int(action_val)})")
+            actions = data['actions'][0]  # Get first world, shape: (num_agents, 4)
+            for i, action_components in enumerate(actions):
+                if len(action_components) >= 4:
+                    move_speed, move_angle, rotate, grab = action_components
+                    info_texts.append(f"Agent {i}: Speed={int(move_speed)} Angle={int(move_angle)} Rotate={int(rotate)} Grab={int(grab)}")
+                else:
+                    info_texts.append(f"Agent {i}: Invalid action data")
+
         
-        for text in info_texts:
-            if text:
-                surface = self.font.render(text, True, TEXT_COLOR)
-                self.screen.blit(surface, (20, y_offset))
-            y_offset += 20
+        # Rewards are now shape (1, 2) instead of (1, 1)
+        if 'rewards' in data:
+            rewards = data['rewards'][0]  # Shape: (num_agents,)
+            for i, reward in enumerate(rewards):
+                info_texts.append(f"Agent {i} Reward: {reward:.2f}")
+        
+        # Done flags are now shape (1, 2) instead of (1, 1)  
+        if 'done' in data:
+            done_flags = data['done'][0]  # Shape: (num_agents,)
+            for i, done in enumerate(done_flags):
+                info_texts.append(f"Agent {i} Done: {done}")
+            
+
+            for text in info_texts:
+                if text:
+                    surface = self.font.render(text, True, TEXT_COLOR)
+                    self.screen.blit(surface, (20, y_offset))
+                y_offset += 20
 
 
         # Draw basketball positions
         if 'basketball_pos' in data:
-            raw_positions = data['basketball_pos']  # Shape: (1, num_basketballs, 2)
-            positions = raw_positions[0]  # Get first world, shape: (num_basketballs, 2)
+            raw_positions = data['basketball_pos']  # Shape: (1, num_basketballs, 3) - x,y,z
+            positions = raw_positions[0]  # Get first world, shape: (num_basketballs, 3)
 
             # Draw basketball positions with different colors
             colors = [(255, 100, 0), (255, 200, 0), (100, 255, 0)]  # Orange, Yellow, Green
             
             for i, pos in enumerate(positions):
-                if len(pos) >= 2:
+                if len(pos) >= 2:  # Use x,y from the 3-component position (x,y,z)
                     screen_x, screen_y = self.grid_to_screen(pos[0], pos[1])
                     color = colors[i % len(colors)]
                     pygame.draw.circle(self.screen, color, (screen_x, screen_y), 12)
@@ -285,26 +310,29 @@ class MadronaPipeline:
                     
                     # Add a number to identify each basketball
                     font_small = pygame.font.Font(None, 16)
-                    text_surface = font_small.render(str(i + 1), True, (255, 255, 255))
-                    self.screen.blit(text_surface, (screen_x - 5, screen_y - 5))
+                    text_surface = font_small.render(f"B{i + 1}", True, (255, 255, 255))
+                    self.screen.blit(text_surface, (screen_x - 8, screen_y - 5))
 
         # Draw agent positions  
         if 'observations' in data:
-            raw_positions = data['observations']  # Shape: (1, num_basketballs, 2)
-            positions = raw_positions[0]  # Get first world, shape: (num_basketballs, 2)
+            raw_positions = data['observations']  # Shape: (1, num_agents, 3) - x,y,z
+            positions = raw_positions[0]  # Get first world, shape: (num_agents, 3)
 
-            # Draw basketball positions with different colors
-            colors = [(255, 100, 0), (255, 200, 0), (100, 255, 0)]  # Orange, Yellow, Green
+            # Draw agents with distinct colors (different from basketballs)
+            agent_colors = [(0, 100, 255), (255, 0, 100)]  # Blue, Pink - distinct from basketball orange
             
             for i, pos in enumerate(positions):
-                if len(pos) >= 2:
+                if len(pos) >= 2:  # Use x,y from the 3-component position (x,y,z)
                     screen_x, screen_y = self.grid_to_screen(pos[0], pos[1])
-                    color = colors[i % len(colors)]
-                    pygame.draw.rect(self.screen, color, (screen_x, screen_y, 12, 12))
-                    pygame.draw.rect(self.screen, (200, 50, 0), (screen_x, screen_y, 12, 12), 2)
+                    color = agent_colors[i % len(agent_colors)]
+                    # Draw agents as rectangles to distinguish from circular basketballs
+                    pygame.draw.rect(self.screen, color, (screen_x - 8, screen_y - 8, 16, 16))
+                    pygame.draw.rect(self.screen, (255, 255, 255), (screen_x - 8, screen_y - 8, 16, 16), 2)
+                    
+                    # Add agent number
                     font_small = pygame.font.Font(None, 16)
-                    text_surface = font_small.render(str(i + 1), True, (255, 255, 255))
-                    self.screen.blit(text_surface, (screen_x - 5, screen_y - 5))
+                    text_surface = font_small.render(f"A{i + 1}", True, (255, 255, 255))
+                    self.screen.blit(text_surface, (screen_x - 8, screen_y - 20))
 
     
     def step_simulation(self):
@@ -323,38 +351,76 @@ class MadronaPipeline:
             print(f"Error resetting simulation: {e}")
     
     def handle_input(self):
-        """Handle keyboard input and inject actions into simulation"""
+        """Handle keyboard input and inject enhanced actions into simulation"""
         keys = pygame.key.get_pressed()
         
         # Agent 0 actions (WASD keys)
-        agent0_action = 5  # Default to Action::None
-        if keys[pygame.K_w]:
-            agent0_action = 0  # Action::Up
-        elif keys[pygame.K_s]:
-            agent0_action = 1  # Action::Down
-        elif keys[pygame.K_a]:
-            agent0_action = 2  # Action::Left
-        elif keys[pygame.K_d]:
-            agent0_action = 3  # Action::Right
-        elif keys[pygame.K_SPACE]:
-            agent0_action = 4  # Action::Right
+        move_speed = 0
+        move_angle = 0
+        rotate = 0
+        grab = 0
         
-        # Agent 1 actions (Arrow keys)
-        agent1_action = 5
-        if keys[pygame.K_UP]:
-            agent1_action = 0  # Action::Up
-        elif keys[pygame.K_DOWN]:
-            agent1_action = 1  # Action::Down
-        elif keys[pygame.K_LEFT]:
-            agent1_action = 2  # Action::Left
-        elif keys[pygame.K_RIGHT]:
-            agent1_action = 3  # Action::Right
-        elif keys[pygame.K_RSHIFT]:
-            agent1_action = 4
+        # Movement (WASD)
+        if keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d]:
+            move_speed = 1  # Normal speed
+            
+            # 8-directional movement
+            if keys[pygame.K_w] and keys[pygame.K_d]:      # NE
+                move_angle = 1
+            elif keys[pygame.K_d] and keys[pygame.K_s]:    # SE  
+                move_angle = 3
+            elif keys[pygame.K_s] and keys[pygame.K_a]:    # SW
+                move_angle = 5
+            elif keys[pygame.K_a] and keys[pygame.K_w]:    # NW
+                move_angle = 7
+            elif keys[pygame.K_w]:                         # N
+                move_angle = 0
+            elif keys[pygame.K_d]:                         # E
+                move_angle = 2
+            elif keys[pygame.K_s]:                         # S
+                move_angle = 4
+            elif keys[pygame.K_a]:                         # W
+                move_angle = 6
         
-        # Inject actions for both agents
-        self.sim.set_action(0, 0, agent0_action)  # World 0, Agent 0
-        self.sim.set_action(0, 1, agent1_action)  # World 0, Agent 1
+        # Rotation (Q/E)
+        if keys[pygame.K_q]:
+            rotate = -1  # Turn left
+        elif keys[pygame.K_e]:
+            rotate = 1   # Turn right
+        
+        # Grab (Space)
+        if keys[pygame.K_SPACE]:
+            grab = 1
+        
+        # Agent 1 actions (Arrow keys + other keys)
+        move_speed1 = 0
+        move_angle1 = 0  
+        rotate1 = 0
+        grab1 = 0
+        
+        if keys[pygame.K_UP] or keys[pygame.K_DOWN] or keys[pygame.K_LEFT] or keys[pygame.K_RIGHT]:
+            move_speed1 = 1
+            
+            if keys[pygame.K_UP]:
+                move_angle1 = 0
+            elif keys[pygame.K_RIGHT]:
+                move_angle1 = 2
+            elif keys[pygame.K_DOWN]:
+                move_angle1 = 4
+            elif keys[pygame.K_LEFT]:
+                move_angle1 = 6
+        
+        if keys[pygame.K_COMMA]:  # '<' key
+            rotate1 = -1
+        elif keys[pygame.K_PERIOD]:  # '>' key  
+            rotate1 = 1
+        
+        if keys[pygame.K_RSHIFT]:
+            grab1 = 1
+        
+        # Send enhanced actions to simulation
+        self.sim.set_action(0, 0, move_speed, move_angle, rotate, grab)
+        self.sim.set_action(0, 1, move_speed1, move_angle1, rotate1, grab1)
     
     def run(self):
         """Main pipeline loop"""

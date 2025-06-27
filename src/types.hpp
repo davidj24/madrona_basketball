@@ -2,13 +2,16 @@
 
 #include <madrona/components.hpp>
 
+using namespace madrona::math;
+
 namespace madsimple {
 
 // ================================================ Config Constants ================================================
     constexpr int32_t NUM_AGENTS = 2;
     constexpr int32_t NUM_BASKETBALLS = 1;
 
-    enum class ExportID : uint32_t {
+    enum class ExportID : uint32_t 
+    {
         Reset,
         Action,
         AgentPos,
@@ -16,46 +19,57 @@ namespace madsimple {
         Reward,
         Done,
         NumExports,
-};
+    };
 
-struct Reset {
+struct Reset 
+{
     int32_t resetNow;
 };
 
-enum class Action : int32_t {
-    Down  = 0,
-    Up    = 1,
-    Left  = 2,
-    Right = 3,
-    Grab  = 4,
-    None,
+struct Action 
+{
+    int32_t moveSpeed; // [0, 3] - how fast to move
+    int32_t moveAngle;  // [0, 7] - which direction (8 directions)
+    int32_t rotate;     // [-2, 2] - turning
+    int32_t grab;       // 0/1 - grab action
 };
 
-struct GridPos {
+struct GridPos 
+{
     int32_t x;
     int32_t y;
     int32_t z;
 };
 
-struct Reward {
+struct Orientation
+{
+    Quat orientation;
+};
+
+struct Reward 
+{
     float r;
 };
 
-struct Done {
+struct Done 
+{
     float episodeDone;
 };
 
-struct RandomMovement {
+struct RandomMovement 
+{
     float moveTimer;
     float moveInterval;
 };
 
-struct InPossession {
+struct InPossession 
+{
     bool hasBall;
     uint32_t ballEntityID;
 };
 
-struct Grabbed {
+struct Grabbed 
+{
     bool isGrabbed;
     uint32_t holderEntityID;
 };
@@ -64,7 +78,8 @@ struct Grabbed {
 
 // ================================================ Archetypes ================================================
 
-struct CurStep {
+struct CurStep 
+{
     uint32_t step;
 };
 
@@ -75,7 +90,8 @@ struct Agent : public madrona::Archetype<
     Reward,
     Done,
     CurStep,
-    InPossession
+    InPossession,
+    Orientation
 > {};
 
 

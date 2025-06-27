@@ -22,14 +22,16 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.registerComponent<RandomMovement>();
     registry.registerComponent<InPossession>();
     registry.registerComponent<Grabbed>();
+    registry.registerComponent<Orientation>();
 
 
     // ================================================= Archetypes ================================================= 
     registry.registerArchetype<Agent>();
     registry.registerArchetype<Basketball>();
 
-    // Export tensors for pytorch
-    registry.exportColumn<Agent, Reset>((uint32_t)ExportID::Reset);
+
+
+    // ================================================= Tensor Exports For Viewer =================================================
     registry.exportColumn<Agent, Action>((uint32_t)ExportID::Action);
     registry.exportColumn<Agent, GridPos>((uint32_t)ExportID::AgentPos);
     registry.exportColumn<Agent, Reward>((uint32_t)ExportID::Reward);
@@ -73,7 +75,6 @@ inline void processGrab(Engine &ctx,
                         GridPos &agent_pos,
                         InPossession &in_possession)
 {
-    bool grabbing = (action == Action::Grab);
 
     auto basketball_query = ctx.query<Entity, GridPos, Grabbed>();
     ctx.iterateQuery(basketball_query, [&](Entity ball_entity, GridPos &basketball_pos, Grabbed &grabbed) 
@@ -86,7 +87,7 @@ inline void processGrab(Engine &ctx,
             basketball_pos = agent_pos;  // Move basketball to agent's new position
         }
 
-        if (!grabbing) {return;}
+        if (action.grab == 0) {return;}
 
         // If agent already has a ball, drop it
         if (agent_is_holding_this_ball) 
@@ -104,7 +105,7 @@ inline void processGrab(Engine &ctx,
             auto agent_query = ctx.query<InPossession>();
             ctx.iterateQuery(agent_query, [&] (InPossession &other_in_possession)
             {
-                if (other_in_possession.ballEntityID == ball_entity.id) // if we're stealing from another agent
+                if (other_in_possession.ballEntityID == (uint32_t)ball_entity.id) // if we're stealing from another agent
                 {
                     other_in_possession.hasBall = false;
                     other_in_possession.ballEntityID = 0;
@@ -118,7 +119,46 @@ inline void processGrab(Engine &ctx,
         }
     });
 
-    // if (grabbing) {action = Action::None;}
+}
+
+
+inline void movementSystem(Engine &ctx,
+                           Action &action,
+                           GridPos &entity_pos,
+                           Orientation &entity_orientation)
+{
+    const GridState *grid = ctx.data().grid;
+    if (action.rotate != 0)
+    {
+        float turn_angle = (pi/4.f) * action.rotate;
+        Quat turn = Quat::angleAxis(turn_angle, Vector3{0, 0, 1});
+        entity_orientation.orientation = turn * entity_orientation.orientation;
+    }
+
+    if (action.moveSpeed > 0)
+    {
+        constexpr float angle_between_directions = pi / 4.f;
+        float move_angle = action.moveAngle * angle_between_directions;
+
+        int32_t dx = (int32_t)std::round(std::sin(move_angle) * action.moveSpeed);
+        int32_t dy = (int32_t)std::round(-std::cos(move_angle) * action.moveSpeed);
+
+        int32_t new_x = entity_pos.x + dx;  
+        int32_t new_y = entity_pos.y + dy;  
+
+        // Boundary checking
+        new_x = std::clamp(new_x, 0, grid->width - 1);
+        new_y = std::clamp(new_y, 0, grid->height - 1);
+
+        // Wall collision (if needed)
+        GridPos test_pos = {new_x, new_y, entity_pos.z};
+        const Cell &new_cell = grid->cells[test_pos.y * grid->width + test_pos.x];
+        
+        if (!(new_cell.flags & CellFlag::Wall)) {
+            entity_pos.x = new_x;
+            entity_pos.y = new_y;
+        }
+    }
 }
 
 
@@ -128,10 +168,9 @@ inline void processGrab(Engine &ctx,
 // =================================== Tick System =========================================
 inline void tick(Engine &ctx,
                  Entity agent_entity,
-                 Action &action,
                  Reset &reset,
                  GridPos &grid_pos,
-                 Reward &reward,
+                 Reward &reward, //add later
                  Done &done,
                  CurStep &episode_step,
                  InPossession &in_possession)
@@ -139,31 +178,6 @@ inline void tick(Engine &ctx,
     const GridState *grid = ctx.data().grid;
 
     GridPos new_pos = grid_pos;
-
-    switch (action) 
-    {
-        case Action::Up: {new_pos.y += 1;} break;
-        case Action::Down: {new_pos.y -= 1;} break;
-        case Action::Left: {new_pos.x -= 1;} break;
-        case Action::Right: {new_pos.x += 1;} break;
-        case Action::Grab: {} break;
-        default: break;
-    }
-
-    
-
-    if (new_pos.x < 0) {new_pos.x = 0;}
-    if (new_pos.x >= grid->width) {new_pos.x = grid->width - 1;}
-    if (new_pos.y < 0) {new_pos.y = 0;}
-    if (new_pos.y >= grid->height) {new_pos.y = grid->height -1;}
-
-    {
-        const Cell &new_cell = grid->cells[new_pos.y * grid->width + new_pos.x];
-
-        if ((new_cell.flags & CellFlag::Wall)) {new_pos = grid_pos;}
-    }
-
-    const Cell &cur_cell = grid->cells[new_pos.y * grid->width + new_pos.x];
 
     bool episode_done = false;
     if (reset.resetNow != 0) 
@@ -221,6 +235,8 @@ inline void tick(Engine &ctx,
 
     grid_pos = new_pos;
 
+    // Calculate reward based on current position
+    const Cell &cur_cell = grid->cells[grid_pos.y * grid->width + grid_pos.x];
     reward.r = cur_cell.reward;
 }
 
@@ -236,8 +252,11 @@ void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
 {
     TaskGraphBuilder &builder = taskgraph_mgr.init(0);
 
+    builder.addToGraph<ParallelForNode<Engine, movementSystem,
+        Action, GridPos, Orientation>>({});
+
     builder.addToGraph<ParallelForNode<Engine, tick,
-        Entity, Action, Reset, GridPos, Reward, Done, CurStep, InPossession>>({});
+        Entity, Reset, GridPos, Reward, Done, CurStep, InPossession>>({});
     
     // builder.addToGraph<ParallelForNode<Engine, moveBall,
     //     GridPos, RandomMovement>>({});
@@ -257,29 +276,33 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
       maxEpisodeLength(cfg.maxEpisodeLength)
 {
     Entity agent = ctx.makeEntity<Agent>();
-    ctx.get<Action>(agent) = Action::None;
+    ctx.get<Action>(agent) = Action{0, 0, 0, 0}; // Initialize with no action
     ctx.get<GridPos>(agent) = GridPos {
         (grid->startX - 5),
         grid->startY,
         0
     };
+    ctx.get<Reset>(agent) = Reset{0}; // Initialize reset component
     ctx.get<Reward>(agent).r = 0.f;
     ctx.get<Done>(agent).episodeDone = 0.f;
     ctx.get<CurStep>(agent).step = 0;
     ctx.get<InPossession>(agent) = {false, 0};
+    ctx.get<Orientation>(agent) = Orientation {Quat::id()};
 
 
     Entity agent2 = ctx.makeEntity<Agent>();
-    ctx.get<Action>(agent2) = Action::None;
+    ctx.get<Action>(agent2) = Action{0, 0, 0, 0}; // Initialize with no action
     ctx.get<GridPos>(agent2) = GridPos {
         (grid->startX + 5),
         grid->startY,
         0
     };
+    ctx.get<Reset>(agent2) = Reset{0}; // Initialize reset component
     ctx.get<Reward>(agent2).r = 0.f;
     ctx.get<Done>(agent2).episodeDone = 0.f;
     ctx.get<CurStep>(agent2).step = 0;
     ctx.get<InPossession>(agent2) = {false, 0};
+    ctx.get<Orientation>(agent2) = Orientation {Quat::id()};
     
 
     for (int i = 0; i < NUM_BASKETBALLS; i++) {
@@ -289,7 +312,9 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
             grid->startY,  
             0
         };
-
+        ctx.get<Reset>(basketball) = Reset{0}; // Initialize reset component
+        ctx.get<Done>(basketball).episodeDone = 0.f;
+        ctx.get<CurStep>(basketball).step = 0;
         ctx.get<Grabbed>(basketball) = Grabbed {false, 0};
 
         // Keep random movement commented out as requested

@@ -234,21 +234,48 @@ void Manager::step()
     impl_->run();
 }
 
-void Manager::setAction(int32_t world_idx, int32_t agent_idx, int32_t action)
+// This is the old setAction just in case we need it
+// void Manager::setAction(int32_t world_idx, int32_t agent_idx, int32_t action)
+// {
+//     // Get the action tensor and set the action for the specified world/agent
+//     Tensor action_tensor = actionTensor();
+//     int32_t *action_data = static_cast<int32_t *>(action_tensor.devicePtr());
+
+    
+//     if (world_idx >= 0 && world_idx < impl_->cfg.numWorlds && 
+//         agent_idx >= 0 && agent_idx < NUM_AGENTS) 
+//         {
+//         int32_t index = world_idx * NUM_AGENTS + agent_idx;
+//         action_data[index] = action;
+        
+//     } else {
+//         printf("ERROR: Invalid indices! world=%d (max=%d), agent=%d (max=%d)\n",
+//                world_idx, impl_->cfg.numWorlds-1, agent_idx, NUM_AGENTS-1);
+//     }
+// }
+
+// New more robust setAction, easily adaptable to 3D
+void Manager::setAction(int32_t world_idx, int32_t agent_idx, int32_t move_speed, int32_t move_angle, int32_t rotate, int32_t grab)
 {
     // Get the action tensor and set the action for the specified world/agent
     Tensor action_tensor = actionTensor();
-    int32_t *action_data = static_cast<int32_t *>(action_tensor.devicePtr());
+    Action *action_data = static_cast<Action *>(action_tensor.devicePtr());
 
     
-    if (world_idx >= 0 && world_idx < impl_->cfg.numWorlds && 
-        agent_idx >= 0 && agent_idx < NUM_AGENTS) {
+    if (world_idx >= 0 && world_idx < (int32_t)impl_->cfg.numWorlds && 
+        agent_idx >= 0 && agent_idx < NUM_AGENTS) 
+    {
         int32_t index = world_idx * NUM_AGENTS + agent_idx;
-        action_data[index] = action;
+        action_data[index].moveSpeed = move_speed;
+        action_data[index].moveAngle = move_angle;
+        action_data[index].rotate = rotate;
+        action_data[index].grab = grab;
         
-    } else {
+    } 
+    else 
+    {
         printf("ERROR: Invalid indices! world=%d (max=%d), agent=%d (max=%d)\n",
-               world_idx, impl_->cfg.numWorlds-1, agent_idx, NUM_AGENTS-1);
+               world_idx, (int32_t)impl_->cfg.numWorlds-1, agent_idx, NUM_AGENTS-1);
     }
 }
 
@@ -258,7 +285,7 @@ void Manager::triggerReset(int32_t world_idx)
     Tensor reset_tensor = resetTensor();
     int32_t *reset_data = static_cast<int32_t *>(reset_tensor.devicePtr());
     
-    if (world_idx >= 0 && world_idx < impl_->cfg.numWorlds) {
+    if (world_idx >= 0 && world_idx < (int32_t)impl_->cfg.numWorlds) {
         reset_data[world_idx] = 1;  // Set reset flag
     }
 }
@@ -276,7 +303,7 @@ Tensor Manager::resetTensor() const
 Tensor Manager::actionTensor() const
 {
     return impl_->exportTensor(ExportID::Action, TensorElementType::Int32,
-        {impl_->cfg.numWorlds, NUM_AGENTS});
+        {impl_->cfg.numWorlds, NUM_AGENTS, 4});
 }
 
 Tensor Manager::observationTensor() const
@@ -288,13 +315,13 @@ Tensor Manager::observationTensor() const
 Tensor Manager::rewardTensor() const
 {
     return impl_->exportTensor(ExportID::Reward, TensorElementType::Float32,
-        {impl_->cfg.numWorlds, 1});
+        {impl_->cfg.numWorlds, NUM_AGENTS});
 }
 
 Tensor Manager::doneTensor() const
 {
     return impl_->exportTensor(ExportID::Done, TensorElementType::Float32,
-        {impl_->cfg.numWorlds, 1});
+        {impl_->cfg.numWorlds, NUM_AGENTS});
 }
 
 Tensor Manager::basketballPosTensor() const
