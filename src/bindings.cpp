@@ -111,6 +111,7 @@ NB_MODULE(_madrona_simple_example_cpp, m) {
         .def("reward_tensor", &Manager::rewardTensor)
         .def("done_tensor", &Manager::doneTensor)
         .def("basketball_pos_tensor", &Manager::basketballPosTensor)
+        .def("hoop_pos_tensor", &Manager::hoopPosTensor)
     ;
 }
 

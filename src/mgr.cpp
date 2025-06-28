@@ -312,6 +312,8 @@ Tensor Manager::observationTensor() const
         {impl_->cfg.numWorlds, NUM_AGENTS, 3});
 }
 
+// Should probably add a Orientation tensor here?
+
 Tensor Manager::rewardTensor() const
 {
     return impl_->exportTensor(ExportID::Reward, TensorElementType::Float32,
@@ -329,5 +331,12 @@ Tensor Manager::basketballPosTensor() const
     return impl_->exportTensor(ExportID::BasketballPos, TensorElementType::Int32,
         {impl_->cfg.numWorlds, NUM_BASKETBALLS, 3});
 
+}
+
+
+Tensor Manager::hoopPosTensor() const
+{
+    return impl_->exportTensor(ExportID::HoopPos, TensorElementType::Int32,
+        {impl_->cfg.numWorlds, NUM_HOOPS, 3});
 }
 }

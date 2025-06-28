@@ -19,8 +19,8 @@ TEXT_COLOR = (255, 255, 255)     # White
 
 WORLD_WIDTH = 51 
 WORLD_HEIGHT = 35  
-CELL_SIZE = 45     # For lab computer
-# CELL_SIZE = 30     # For laptop
+# CELL_SIZE = 45     # For lab computer
+CELL_SIZE = 30     # For laptop
 GRID_OFFSET_X = 250 # Offset from screen edge
 GRID_OFFSET_Y = 100 # Offset from screen edge
 
@@ -101,7 +101,8 @@ class MadronaPipeline:
             reward_tensor = self.sim.reward_tensor()
             done_tensor = self.sim.done_tensor()
             reset_tensor = self.sim.reset_tensor()
-            basketballpos_tensor = self.sim.basketball_pos_tensor()
+            basketball_pos_tensor = self.sim.basketball_pos_tensor()
+            hoop_pos_tensor = self.sim.hoop_pos_tensor()
 
             
             # Convert to numpy arrays using torch backend (CPU only mode already set)
@@ -110,7 +111,8 @@ class MadronaPipeline:
             reward_data = reward_tensor.to_torch().detach().cpu().numpy() # Reward data
             done_data = done_tensor.to_torch().detach().cpu().numpy()     # Episode done flags
             reset_data = reset_tensor.to_torch().detach().cpu().numpy()   # Reset flags
-            basketball_pos_data = basketballpos_tensor.to_torch().detach().cpu().numpy()  # Basketball position
+            basketball_pos_data = basketball_pos_tensor.to_torch().detach().cpu().numpy()  # Basketball position
+            hoop_pos_data = hoop_pos_tensor.to_torch().detach().cpu().numpy()  # Basketball position
             
             
             return {
@@ -119,7 +121,8 @@ class MadronaPipeline:
                 'rewards': reward_data,
                 'done': done_data,
                 'reset': reset_data,
-                'basketball_pos': basketball_pos_data
+                'basketball_pos': basketball_pos_data,
+                'hoop_pos' : hoop_pos_data
             }
             
         except Exception as e:
@@ -229,11 +232,11 @@ class MadronaPipeline:
             three_pt_arc_rect = pygame.Rect(hoop_center_x - three_pt_radius, center_y - three_pt_radius, three_pt_radius * 2, three_pt_radius * 2)
             pygame.draw.arc(self.screen, LINE_WHITE, three_pt_arc_rect, start_angle, end_angle, LINE_THICKNESS)
 
-            # Backboard and Hoop
-            backboard_x = court_rect.left + hoop_offset_x if side == -1 else court_rect.right - hoop_offset_x
-            pygame.draw.line(self.screen, LINE_WHITE, (backboard_x, center_y - 30), (backboard_x, center_y + 30), LINE_THICKNESS + 2)
-            pygame.draw.circle(self.screen, COURT_ORANGE, (backboard_x, center_y), 8, 0) # The hoop
-            pygame.draw.circle(self.screen, LINE_WHITE, (backboard_x, center_y), 8, 2) # Hoop rim
+            # # Backboard and Hoop
+            # backboard_x = court_rect.left + hoop_offset_x if side == -1 else court_rect.right - hoop_offset_x
+            # pygame.draw.line(self.screen, LINE_WHITE, (backboard_x, center_y - 30), (backboard_x, center_y + 30), LINE_THICKNESS + 2)
+            # pygame.draw.circle(self.screen, COURT_ORANGE, (backboard_x, center_y), 8, 0) # The hoop
+            # pygame.draw.circle(self.screen, LINE_WHITE, (backboard_x, center_y), 8, 2) # Hoop rim
     
 
 
@@ -306,6 +309,34 @@ class MadronaPipeline:
                     font_small = pygame.font.Font(None, 16)
                     text_surface = font_small.render(f"B{i + 1}", True, (255, 255, 255))
                     self.screen.blit(text_surface, (screen_x - 8, screen_y - 5))
+
+        # Draw hoop positions
+        if 'hoop_pos' in data:
+            raw_positions = data['hoop_pos']  # Shape: (1, num_hoops, 3) - x,y,z
+            positions = raw_positions[0]  # Get first world, shape: (num_hoops, 3)
+            
+            for i, pos in enumerate(positions):
+                if len(pos) >= 2:  # Use x,y from the 3-component position (x,y,z)
+                    screen_x, screen_y = self.grid_to_screen(pos[0], pos[1])
+                    
+                    # Draw backboard (vertical line behind hoop)
+                    backboard_color = (255, 255, 255)  # White backboard
+                    pygame.draw.line(self.screen, backboard_color, 
+                                (screen_x - 2, screen_y - 15), 
+                                (screen_x - 2, screen_y + 15), 4)
+                    
+                    # Draw hoop base (orange circle)
+                    hoop_base_color = (255, 140, 0)  # Orange hoop base
+                    pygame.draw.circle(self.screen, hoop_base_color, (screen_x, screen_y), 10, 0)
+                    
+                    # Draw red rim (circle outline)
+                    rim_color = (220, 20, 20)  # Red rim
+                    pygame.draw.circle(self.screen, rim_color, (screen_x, screen_y), 10, 3)
+                    
+                    # Add hoop number/label
+                    font_small = pygame.font.Font(None, 16)
+                    text_surface = font_small.render(f"H{i + 1}", True, (255, 255, 255))
+                    self.screen.blit(text_surface, (screen_x - 8, screen_y + 15))
 
         # Draw agent positions  
         if 'observations' in data:

@@ -28,6 +28,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     // ================================================= Archetypes ================================================= 
     registry.registerArchetype<Agent>();
     registry.registerArchetype<Basketball>();
+    registry.registerArchetype<Hoop>();
 
 
 
@@ -38,6 +39,8 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.exportColumn<Agent, Done>((uint32_t)ExportID::Done);
 
     registry.exportColumn<Basketball, GridPos>((uint32_t)ExportID::BasketballPos);
+
+    registry.exportColumn<Hoop, GridPos>((uint32_t)ExportID::HoopPos);
     
 }
 
@@ -263,8 +266,9 @@ void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
 
     builder.addToGraph<ParallelForNode<Engine, processGrab,
         Entity, Action, GridPos, InPossession>>({});
-
 }
+
+
 
 
 
@@ -315,6 +319,40 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
         //     1.f + i * 2.f  // Different movement intervals: 1s, 3s, 5s...
         // };
     }
+
+
+    for (int i = 0; i < NUM_HOOPS; i++) 
+    {
+        Entity hoop = ctx.makeEntity<Hoop>();
+        GridPos hoop_pos;
+        if (i == 0) {
+            // Left hoop
+            hoop_pos = GridPos { 3, 17, 0 };
+        } else if (i == 1) {
+            // Right hoop  
+            hoop_pos = GridPos { 47, 17, 0 };
+        } else {
+            // Additional hoops (if NUM_HOOPS > 2)
+            hoop_pos = GridPos { 
+                grid->startX + 10 + i * 5,   
+                grid->startY + 10,  
+                0
+            };
+        }
+
+        ctx.get<GridPos>(hoop) = hoop_pos;
+        ctx.get<Reset>(hoop) = Reset{0};
+        ctx.get<Done>(hoop).episodeDone = 0.f;
+        ctx.get<CurStep>(hoop).step = 0;
+        
+
+        // Keep random movement commented out as requested
+        // ctx.get<RandomMovement>(basketball) = RandomMovement {
+        //     0.f,
+        //     1.f + i * 2.f  // Different movement intervals: 1s, 3s, 5s...
+        // };
+    }
+
 }
 
 MADRONA_BUILD_MWGPU_ENTRY(Engine, Sim, Sim::Config, WorldInit);
