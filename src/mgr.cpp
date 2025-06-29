@@ -331,13 +331,44 @@ Tensor Manager::basketballPosTensor() const
 {
     return impl_->exportTensor(ExportID::BasketballPos, TensorElementType::Int32,
         {impl_->cfg.numWorlds, NUM_BASKETBALLS, 3});
+}
+
+Tensor Manager::ballPhysicsTensor() const
+{
+    return impl_->exportTensor(ExportID::BallPhysicsData, TensorElementType::Int32,
+        {impl_->cfg.numWorlds, NUM_BASKETBALLS, 4});
 
 }
+
 
 
 Tensor Manager::hoopPosTensor() const
 {
     return impl_->exportTensor(ExportID::HoopPos, TensorElementType::Int32,
         {impl_->cfg.numWorlds, NUM_HOOPS, 3});
+}
+
+Tensor Manager::agentPossessionTensor() const
+{
+    return impl_->exportTensor(ExportID::AgentPossession, TensorElementType::Int32,
+        {impl_->cfg.numWorlds, NUM_AGENTS, 2});  // hasBall, ballEntityID
+}
+
+Tensor Manager::ballGrabbedTensor() const
+{
+    return impl_->exportTensor(ExportID::BallGrabbed, TensorElementType::Int32,
+        {impl_->cfg.numWorlds, NUM_BASKETBALLS, 2});  // isGrabbed, holderEntityID
+}
+
+Tensor Manager::agentEntityIDTensor() const
+{
+    return impl_->exportTensor(ExportID::AgentEntityID, TensorElementType::Int32,
+        {impl_->cfg.numWorlds, NUM_AGENTS});
+}
+
+Tensor Manager::ballEntityIDTensor() const
+{
+    return impl_->exportTensor(ExportID::BallEntityID, TensorElementType::Int32,
+        {impl_->cfg.numWorlds, NUM_BASKETBALLS});
 }
 }

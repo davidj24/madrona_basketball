@@ -10,6 +10,7 @@ namespace madsimple {
     constexpr int32_t NUM_AGENTS = 2;
     constexpr int32_t NUM_BASKETBALLS = 1;
     constexpr int32_t NUM_HOOPS = 2;
+    constexpr uint32_t INVALID_ENTITY_ID = UINT32_MAX;  // Use max value as invalid/null entity ID
 
     enum class ExportID : uint32_t 
     {
@@ -21,6 +22,10 @@ namespace madsimple {
         Reward,
         Done,
         BallPhysicsData,
+        AgentEntityID,
+        BallEntityID,
+        AgentPossession,
+        BallGrabbed,
         NumExports,
     };
 

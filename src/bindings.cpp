@@ -111,7 +111,12 @@ NB_MODULE(_madrona_simple_example_cpp, m) {
         .def("reward_tensor", &Manager::rewardTensor)
         .def("done_tensor", &Manager::doneTensor)
         .def("basketball_pos_tensor", &Manager::basketballPosTensor)
+        .def("ball_physics_tensor", &Manager::ballPhysicsTensor)
         .def("hoop_pos_tensor", &Manager::hoopPosTensor)
+        .def("agent_possession_tensor", &Manager::agentPossessionTensor)
+        .def("ball_grabbed_tensor", &Manager::ballGrabbedTensor)
+        .def("agent_entity_id_tensor", &Manager::agentEntityIDTensor)
+        .def("ball_entity_id_tensor", &Manager::ballEntityIDTensor)
     ;
 }
 

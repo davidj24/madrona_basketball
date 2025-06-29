@@ -41,7 +41,12 @@ public:
     MGR_EXPORT madrona::py::Tensor rewardTensor() const;
     MGR_EXPORT madrona::py::Tensor doneTensor() const;
     MGR_EXPORT madrona::py::Tensor basketballPosTensor() const;
+    MGR_EXPORT madrona::py::Tensor ballPhysicsTensor() const;
     MGR_EXPORT madrona::py::Tensor hoopPosTensor() const;
+    MGR_EXPORT madrona::py::Tensor agentPossessionTensor() const;
+    MGR_EXPORT madrona::py::Tensor ballGrabbedTensor() const;
+    MGR_EXPORT madrona::py::Tensor agentEntityIDTensor() const;
+    MGR_EXPORT madrona::py::Tensor ballEntityIDTensor() const;
 
     
 

@@ -19,8 +19,8 @@ TEXT_COLOR = (255, 255, 255)     # White
 
 WORLD_WIDTH = 51 
 WORLD_HEIGHT = 35  
-# CELL_SIZE = 45     # For lab computer
-CELL_SIZE = 30     # For laptop
+CELL_SIZE = 45     # For lab computer
+# CELL_SIZE = 30     # For laptop
 GRID_OFFSET_X = 250 # Offset from screen edge
 GRID_OFFSET_Y = 100 # Offset from screen edge
 
@@ -102,7 +102,12 @@ class MadronaPipeline:
             done_tensor = self.sim.done_tensor()
             reset_tensor = self.sim.reset_tensor()
             basketball_pos_tensor = self.sim.basketball_pos_tensor()
+            ball_physics_tensor = self.sim.ball_physics_tensor()
             hoop_pos_tensor = self.sim.hoop_pos_tensor()
+            agent_possession_tensor = self.sim.agent_possession_tensor()
+            ball_grabbed_tensor = self.sim.ball_grabbed_tensor()
+            agent_entity_id_tensor = self.sim.agent_entity_id_tensor()
+            ball_entity_id_tensor = self.sim.ball_entity_id_tensor()
 
             
             # Convert to numpy arrays using torch backend (CPU only mode already set)
@@ -112,7 +117,12 @@ class MadronaPipeline:
             done_data = done_tensor.to_torch().detach().cpu().numpy()     # Episode done flags
             reset_data = reset_tensor.to_torch().detach().cpu().numpy()   # Reset flags
             basketball_pos_data = basketball_pos_tensor.to_torch().detach().cpu().numpy()  # Basketball position
+            ball_physics_data = ball_physics_tensor.to_torch().detach().cpu().numpy()
             hoop_pos_data = hoop_pos_tensor.to_torch().detach().cpu().numpy()  # Basketball position
+            agent_possession_data = agent_possession_tensor.to_torch().detach().cpu().numpy()  # Agent possession
+            ball_grabbed_data = ball_grabbed_tensor.to_torch().detach().cpu().numpy()  # Ball grabbed status
+            agent_entity_id_data = agent_entity_id_tensor.to_torch().detach().cpu().numpy()  # Agent entity IDs
+            ball_entity_id_data = ball_entity_id_tensor.to_torch().detach().cpu().numpy()  # Ball entity IDs
             
             
             return {
@@ -122,7 +132,12 @@ class MadronaPipeline:
                 'done': done_data,
                 'reset': reset_data,
                 'basketball_pos': basketball_pos_data,
-                'hoop_pos' : hoop_pos_data
+                'ball_physics' : ball_physics_data,
+                'hoop_pos' : hoop_pos_data,
+                'agent_possession': agent_possession_data,
+                'ball_grabbed': ball_grabbed_data,
+                'agent_entity_ids': agent_entity_id_data,
+                'ball_entity_ids': ball_entity_id_data
             }
             
         except Exception as e:
@@ -263,8 +278,8 @@ class MadronaPipeline:
             actions = data['actions'][0]  # Get first world, shape: (num_agents, 4)
             for i, action_components in enumerate(actions):
                 if len(action_components) >= 4:
-                    move_speed, move_angle, rotate, grab = action_components
-                    info_texts.append(f"Agent {i}: Speed={int(move_speed)} Angle={int(move_angle)} Rotate={int(rotate)} Grab={int(grab)}")
+                    move_speed, move_angle, rotate, grab, pass_ball = action_components
+                    info_texts.append(f"Agent {i}: Speed={int(move_speed)} Angle={int(move_angle)} Rotate={int(rotate)} Grab={int(grab)} Pass={int(pass_ball)}")
                 else:
                     info_texts.append(f"Agent {i}: Invalid action data")
 
@@ -280,13 +295,7 @@ class MadronaPipeline:
             done_flags = data['done'][0]  # Shape: (num_agents,)
             for i, done in enumerate(done_flags):
                 info_texts.append(f"Agent {i} Done: {done}")
-            
-
-            for text in info_texts:
-                if text:
-                    surface = self.font.render(text, True, TEXT_COLOR)
-                    self.screen.blit(surface, (20, y_offset))
-                y_offset += 20
+        
 
 
         # Draw basketball positions
@@ -359,6 +368,45 @@ class MadronaPipeline:
                     text_surface = font_small.render(f"A{i + 1}", True, (255, 255, 255))
                     self.screen.blit(text_surface, (screen_x - 8, screen_y - 20))
 
+
+        if 'ball_physics' in data:
+            physics_data = data['ball_physics'][0]
+            for i, physics in enumerate(physics_data):
+                if len(physics) >= 4:
+                    in_flight, vel_x, vel_y, vel_z = physics
+                    info_texts.append(f"Ball {i+1}: Flight={bool(in_flight)} Vel=({vel_x:.1f},{vel_y:.1f},{vel_z:.1f})")
+        
+        # Debug: Display ball grabbed status with detailed info
+        if 'ball_grabbed' in data:
+            grabbed_data = data['ball_grabbed'][0]  # Shape: (num_basketballs, 2)
+            for i, grabbed in enumerate(grabbed_data):
+                if len(grabbed) >= 2:
+                    is_grabbed, holder_entity_id = grabbed
+                    info_texts.append(f"Ball {i+1}: isGrabbed={bool(is_grabbed)} holderID={int(holder_entity_id)}")
+        
+        # Debug: Display agent possession status
+        if 'agent_possession' in data:
+            possession_data = data['agent_possession'][0]  # Shape: (num_agents, 2)
+            for i, possession in enumerate(possession_data):
+                if len(possession) >= 2:
+                    has_ball, ball_entity_id = possession
+                    info_texts.append(f"Agent {i}: hasBall={bool(has_ball)} ballEntityID={int(ball_entity_id)}")
+        
+        # Debug: Show what we think the entity IDs are
+        if 'agent_entity_ids' in data:
+            agent_ids = data['agent_entity_ids'][0]
+            info_texts.append(f"Agent Entity IDs: {[int(x) for x in agent_ids]}")
+        
+        if 'ball_entity_ids' in data:
+            ball_ids = data['ball_entity_ids'][0]
+            info_texts.append(f"Ball Entity IDs: {[int(x) for x in ball_ids]}")
+
+        for text in info_texts:
+            if text:
+                surface = self.font.render(text, True, TEXT_COLOR)
+                self.screen.blit(surface, (20, y_offset))
+            y_offset += 20
+
     
     def step_simulation(self):
         """Step your Madrona simulation forward"""
@@ -384,6 +432,7 @@ class MadronaPipeline:
         move_angle = 0
         rotate = 0
         grab = 0
+        pass_ball = 0
         
         # Movement (WASD)
         if keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d]:
@@ -414,14 +463,20 @@ class MadronaPipeline:
             rotate = 1   # Turn right
         
         # Grab (Space)
-        if keys[pygame.K_SPACE]:
+        if keys[pygame.K_LSHIFT]:
             grab = 1
+
+
+        if keys[pygame.K_SPACE]:
+            pass_ball = 1
+        
         
         # Agent 1 actions (Arrow keys + other keys)
         move_speed1 = 0
         move_angle1 = 0  
         rotate1 = 0
         grab1 = 0
+        pass_ball1 = 0
         
         if keys[pygame.K_UP] or keys[pygame.K_DOWN] or keys[pygame.K_LEFT] or keys[pygame.K_RIGHT]:
             move_speed1 = 1  # ← Fix: use move_speed1, not move_speed
@@ -450,12 +505,16 @@ class MadronaPipeline:
         elif keys[pygame.K_PERIOD]:   # '.' key for Agent 1 turn right
             rotate1 = 1
         
-        if keys[pygame.K_RSHIFT]:     # Right Shift for Agent 1 grab
+        if keys[pygame.K_KP0]:        # Numpad 0 for Agent 1 grab
             grab1 = 1
+
+        if keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL]:  # Left or Right Ctrl for Agent 1 pass
+            pass_ball1 = 1
+
         
         # Send enhanced actions to simulation
-        self.sim.set_action(0, 0, move_speed, move_angle, rotate, grab)
-        self.sim.set_action(0, 1, move_speed1, move_angle1, rotate1, grab1)
+        self.sim.set_action(0, 0, move_speed, move_angle, rotate, grab, pass_ball)
+        self.sim.set_action(0, 1, move_speed1, move_angle1, rotate1, grab1, pass_ball1)
     
     def run(self):
         """Main pipeline loop"""
