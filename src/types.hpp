@@ -20,6 +20,7 @@ namespace madsimple {
         HoopPos,
         Reward,
         Done,
+        BallPhysicsData,
         NumExports,
     };
 
@@ -34,6 +35,7 @@ namespace madsimple {
         int32_t moveAngle;  // [0, 7] - which direction (8 directions)
         int32_t rotate;     // [-2, 2] - turning
         int32_t grab;       // 0/1 - grab action
+        int32_t pass;       // 0/1 - pass action
     };
 
     struct GridPos 
@@ -76,6 +78,12 @@ namespace madsimple {
         uint32_t holderEntityID;
     };
 
+    struct BallPhysics
+    {
+        bool in_flight;
+        Vector3 velocity;
+    };
+
 
 
     // ================================================ Archetypes ================================================
@@ -100,6 +108,7 @@ namespace madsimple {
     struct Basketball : public madrona::Archetype<
         Reset,
         GridPos,
+        BallPhysics,
         // RandomMovement,
         Done,
         CurStep,
