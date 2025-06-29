@@ -102,9 +102,9 @@ inline void processGrab(Engine &ctx,
         // If agent already has a ball, drop it
         if (agent_is_holding_this_ball) 
         {
-            in_possession.ballEntityID = INVALID_ENTITY_ID;
+            in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
             in_possession.hasBall = false;
-            grabbed.holderEntityID = INVALID_ENTITY_ID;
+            grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER;
             grabbed.isGrabbed = false;
             return;
         }
@@ -118,7 +118,7 @@ inline void processGrab(Engine &ctx,
                 if (other_in_possession.ballEntityID == (uint32_t)ball_entity.id) // if we're stealing from another agent
                 {
                     other_in_possession.hasBall = false;
-                    other_in_possession.ballEntityID = INVALID_ENTITY_ID;
+                    other_in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
                 }
             });
 
@@ -233,9 +233,9 @@ inline void passSystem(Engine &ctx,
         if (grabbed.holderEntityID == agent_entity.id)
         {
             grabbed.isGrabbed = false;  // Ball is no longer grabbed
-            grabbed.holderEntityID = INVALID_ENTITY_ID; // Ball is no longer held by anyone
+            grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER; // Ball is no longer held by anyone
             in_possession.hasBall = false; // Since agents can only hold 1 ball at a time, if they pass it they can't be holding one anymore
-            in_possession.ballEntityID = INVALID_ENTITY_ID; // Whoever passed the ball is no longer in possession of it
+            in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER; // Whoever passed the ball is no longer in possession of it
             //Affect the ball's movement system here???
             // Don't forget to make the ball's velocity vector equal to the orientation of the agent
             ball_physics.velocity = agent_orientation.orientation.rotateVec(Vector3{0, 2, 0}); // Setting the ball's velocity to have the same direction as the agent's orientation
@@ -293,7 +293,7 @@ inline void tick(Engine &ctx,
         ctx.iterateQuery(basketball_query, [&](GridPos &basketball_pos, Grabbed &grabbed, BallPhysics &ball_physics) 
         {
             grabbed.isGrabbed = false;
-            grabbed.holderEntityID = INVALID_ENTITY_ID;
+            grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER;
             ball_physics.in_flight = false;
             ball_physics.velocity = Vector3::zero();
             // Reset basketball to start position
@@ -303,6 +303,7 @@ inline void tick(Engine &ctx,
                 grid->startY,
                 0
             };
+            ball_physics.lastTouchedByID = ENTITY_ID_PLACEHOLDER;
         });
 
         new_pos = GridPos {
@@ -382,7 +383,7 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
         ctx.get<Reward>(agent).r = 0.f;
         ctx.get<Done>(agent).episodeDone = 0.f;
         ctx.get<CurStep>(agent).step = 0;
-        ctx.get<InPossession>(agent) = {false, INVALID_ENTITY_ID};
+        ctx.get<InPossession>(agent) = {false, ENTITY_ID_PLACEHOLDER};
         ctx.get<Orientation>(agent) = Orientation {Quat::id()};
         ctx.get<Team>(agent) = {i % 2, team_colors[i % 2]}; // Alternates agent teams and colors
     };
@@ -401,8 +402,8 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
         ctx.get<Reset>(basketball) = Reset{0}; // Initialize reset component
         ctx.get<Done>(basketball).episodeDone = 0.f;
         ctx.get<CurStep>(basketball).step = 0;
-        ctx.get<Grabbed>(basketball) = Grabbed {false, INVALID_ENTITY_ID};
-        ctx.get<BallPhysics>(basketball) = BallPhysics {false, Vector3::zero()};
+        ctx.get<Grabbed>(basketball) = Grabbed {false, ENTITY_ID_PLACEHOLDER};
+        ctx.get<BallPhysics>(basketball) = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER};
         
 
         // Keep random movement commented out as requested

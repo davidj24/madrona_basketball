@@ -400,10 +400,10 @@ class MadronaPipeline:
         if 'ball_physics' in data:
             physics_data = data['ball_physics'][0]
             for i, physics in enumerate(physics_data):
-                if len(physics) >= 4:
-                    in_flight, vel_x, vel_y, vel_z = physics
-                    info_texts.append(f"Ball {i+1}: Flight={bool(in_flight)} Vel=({vel_x:.1f},{vel_y:.1f},{vel_z:.1f})")
-        
+                if len(physics) >= 5:
+                    in_flight, vel_x, vel_y, vel_z, lastTouchedByID = physics
+                    info_texts.append(f"Ball {i+1}: Flight={bool(in_flight)} Vel=({vel_x:.1f},{vel_y:.1f},{vel_z:.1f}) Last Touched By ID={int(lastTouchedByID)}")
+
         # Debug: Display ball grabbed status with detailed info
         if 'ball_grabbed' in data:
             grabbed_data = data['ball_grabbed'][0]  # Shape: (num_basketballs, 2)

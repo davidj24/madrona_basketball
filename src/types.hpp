@@ -10,7 +10,7 @@ namespace madsimple {
     constexpr int32_t NUM_AGENTS = 4;
     constexpr int32_t NUM_BASKETBALLS = 1;
     constexpr int32_t NUM_HOOPS = 2;
-    constexpr uint32_t INVALID_ENTITY_ID = UINT32_MAX;  // Use max value as invalid/null entity ID
+    constexpr uint32_t ENTITY_ID_PLACEHOLDER = UINT32_MAX;  // Use max value as invalid/null entity ID
 
     enum class ExportID : uint32_t 
     {
@@ -92,9 +92,9 @@ namespace madsimple {
 
     struct BallPhysics
     {
-        bool in_flight;
+        bool in_flight; // I should've camelCased this but now it's too late and I don't want to find every relevant instance and replace it bc it's also used in other files I didn't make
         Vector3 velocity;
-
+        uint32_t lastTouchedByID; // This is an entity ID of which entity last touched the ball
     };
 
 
