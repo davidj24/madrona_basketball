@@ -2,6 +2,7 @@
 #include "types.hpp"
 #include <madrona/mw_gpu_entry.hpp>
 #include <cstdlib>
+#include <vector>
 
 using namespace madrona;
 using namespace madrona::math;
@@ -24,6 +25,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.registerComponent<Grabbed>();
     registry.registerComponent<Orientation>();
     registry.registerComponent<BallPhysics>();
+    registry.registerComponent<Team>();
 
 
     // ================================================= Archetypes ================================================= 
@@ -39,6 +41,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.exportColumn<Agent, Reward>((uint32_t)ExportID::Reward);
     registry.exportColumn<Agent, Done>((uint32_t)ExportID::Done);
     registry.exportColumn<Agent, InPossession>((uint32_t)ExportID::AgentPossession);
+    registry.exportColumn<Agent, Team>((uint32_t)ExportID::TeamData);
 
     registry.exportColumn<Basketball, GridPos>((uint32_t)ExportID::BasketballPos);
     registry.exportColumn<Basketball, BallPhysics>((uint32_t)ExportID::BallPhysicsData);
@@ -364,6 +367,7 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
       grid(init.grid),
       maxEpisodeLength(cfg.maxEpisodeLength)
 {
+    std::vector<Vector3> team_colors = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
     for (int i = 0; i < NUM_AGENTS; i++) 
     {
         Entity agent = ctx.makeEntity<Agent>();
@@ -380,11 +384,13 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
         ctx.get<CurStep>(agent).step = 0;
         ctx.get<InPossession>(agent) = {false, INVALID_ENTITY_ID};
         ctx.get<Orientation>(agent) = Orientation {Quat::id()};
+        ctx.get<Team>(agent) = {i % 2, team_colors[i % 2]}; // Alternates agent teams and colors
     };
 
     
 
-    for (int i = 0; i < NUM_BASKETBALLS; i++) {
+    for (int i = 0; i < NUM_BASKETBALLS; i++) 
+    {
         Entity basketball = ctx.makeEntity<Basketball>();
         ctx.get<GridPos>(basketball) = GridPos 
         {
@@ -411,15 +417,21 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
     {
         Entity hoop = ctx.makeEntity<Hoop>();
         GridPos hoop_pos;
-        if (i == 0) {
+        if (i == 0) 
+        {
             // Left hoop
             hoop_pos = GridPos { 3, 17, 0 };
-        } else if (i == 1) {
+        } 
+        else if (i == 1) 
+        {
             // Right hoop  
             hoop_pos = GridPos { 47, 17, 0 };
-        } else {
+        } 
+        else 
+        {
             // Additional hoops (if NUM_HOOPS > 2)
-            hoop_pos = GridPos { 
+            hoop_pos = GridPos 
+            { 
                 grid->startX + 10 + i * 5,   
                 grid->startY + 10,  
                 0

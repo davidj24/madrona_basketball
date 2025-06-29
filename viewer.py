@@ -97,6 +97,7 @@ class MadronaPipeline:
         try:
             # Get tensors from your simulation
             obs_tensor = self.sim.observation_tensor()
+            agent_team_tensor = self.sim.agent_team_tensor()
             action_tensor = self.sim.action_tensor() 
             reward_tensor = self.sim.reward_tensor()
             done_tensor = self.sim.done_tensor()
@@ -108,10 +109,12 @@ class MadronaPipeline:
             ball_grabbed_tensor = self.sim.ball_grabbed_tensor()
             agent_entity_id_tensor = self.sim.agent_entity_id_tensor()
             ball_entity_id_tensor = self.sim.ball_entity_id_tensor()
+            agent_team_tensor = self.sim.agent_team_tensor()
 
             
             # Convert to numpy arrays using torch backend (CPU only mode already set)
             obs_data = obs_tensor.to_torch().detach().cpu().numpy()      # Position data
+            agent_team_data = agent_team_tensor.to_torch().detach().cpu().numpy()  # Agent team data
             action_data = action_tensor.to_torch().detach().cpu().numpy() # Action data
             reward_data = reward_tensor.to_torch().detach().cpu().numpy() # Reward data
             done_data = done_tensor.to_torch().detach().cpu().numpy()     # Episode done flags
@@ -124,9 +127,9 @@ class MadronaPipeline:
             agent_entity_id_data = agent_entity_id_tensor.to_torch().detach().cpu().numpy()  # Agent entity IDs
             ball_entity_id_data = ball_entity_id_tensor.to_torch().detach().cpu().numpy()  # Ball entity IDs
             
-            
             return {
                 'observations': obs_data,
+                'agent_team': agent_team_data,
                 'actions': action_data,
                 'rewards': reward_data,
                 'done': done_data,
@@ -137,7 +140,8 @@ class MadronaPipeline:
                 'agent_possession': agent_possession_data,
                 'ball_grabbed': ball_grabbed_data,
                 'agent_entity_ids': agent_entity_id_data,
-                'ball_entity_ids': ball_entity_id_data
+                'ball_entity_ids': ball_entity_id_data,
+                'agent_teams': agent_team_data
             }
             
         except Exception as e:
@@ -348,25 +352,49 @@ class MadronaPipeline:
                     self.screen.blit(text_surface, (screen_x - 8, screen_y + 15))
 
         # Draw agent positions  
-        if 'observations' in data:
+        if 'observations' in data and 'agent_teams' in data:
             raw_positions = data['observations']  # Shape: (1, num_agents, 3) - x,y,z
+            team_data = data['agent_teams'][0]  # Shape: (num_agents, 4) - teamIndex, colorR, colorG, colorB
             positions = raw_positions[0]  # Get first world, shape: (num_agents, 3)
-
-            # Draw agents with distinct colors (different from basketballs)
-            agent_colors = [(0, 100, 255), (255, 0, 100)]  # Blue, Pink - distinct from basketball orange
             
             for i, pos in enumerate(positions):
                 if len(pos) >= 2:  # Use x,y from the 3-component position (x,y,z)
                     screen_x, screen_y = self.grid_to_screen(pos[0], pos[1])
-                    color = agent_colors[i % len(agent_colors)]
+                    
+                    # Extract team color from team data (teamIndex, then RGB components)
+                    if i < len(team_data) and len(team_data[i]) >= 4:
+                        team_index, color_r_raw, color_g_raw, color_b_raw = team_data[i]
+                        
+                        # The color values are stored as int32, but they're actually float32 bit patterns
+                        # Convert them back to floats first
+                        import struct
+                        color_r_float = struct.unpack('f', struct.pack('I', np.uint32(color_r_raw)))[0]
+                        color_g_float = struct.unpack('f', struct.pack('I', np.uint32(color_g_raw)))[0]
+                        color_b_float = struct.unpack('f', struct.pack('I', np.uint32(color_b_raw)))[0]
+                        
+                        # Ensure color values are valid integers in range [0, 255]
+                        color_r = max(0, min(255, int(color_r_float)))
+                        color_g = max(0, min(255, int(color_g_float)))
+                        color_b = max(0, min(255, int(color_b_float))) 
+                        agent_color = (color_r, color_g, color_b)
+                    else:
+                        # Fallback colors if team data is missing or malformed
+                        fallback_colors = [(0, 100, 255), (255, 0, 100)]  # Blue, Pink
+                        agent_color = fallback_colors[i % len(fallback_colors)]
+                    
                     # Draw agents as rectangles to distinguish from circular basketballs
-                    pygame.draw.rect(self.screen, color, (screen_x - 8, screen_y - 8, 16, 16))
+                    pygame.draw.rect(self.screen, agent_color, (screen_x - 8, screen_y - 8, 16, 16))
                     pygame.draw.rect(self.screen, (255, 255, 255), (screen_x - 8, screen_y - 8, 16, 16), 2)
                     
-                    # Add agent number
+                    # Add agent number and team info
                     font_small = pygame.font.Font(None, 16)
                     text_surface = font_small.render(f"A{i + 1}", True, (255, 255, 255))
                     self.screen.blit(text_surface, (screen_x - 8, screen_y - 20))
+                    
+                    # Add team index below agent
+                    if i < len(team_data):
+                        team_text = font_small.render(f"T{int(team_data[i][0])}", True, (255, 255, 255))
+                        self.screen.blit(team_text, (screen_x - 8, screen_y + 10))
 
 
         if 'ball_physics' in data:
@@ -568,7 +596,4 @@ if __name__ == "__main__":
         pipeline.run()
     except Exception as e:
         print(f"Pipeline failed: {e}")
-        print("\nMake sure you've:")
-        print("1. Built the project: cmake --build build")
-        print("2. The C++ simulation is working")
         sys.exit(1)

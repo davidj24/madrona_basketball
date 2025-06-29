@@ -117,6 +117,7 @@ NB_MODULE(_madrona_simple_example_cpp, m) {
         .def("ball_grabbed_tensor", &Manager::ballGrabbedTensor)
         .def("agent_entity_id_tensor", &Manager::agentEntityIDTensor)
         .def("ball_entity_id_tensor", &Manager::ballEntityIDTensor)
+        .def("agent_team_tensor", &Manager::agentTeamTensor)
     ;
 }
 

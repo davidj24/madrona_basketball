@@ -313,7 +313,12 @@ Tensor Manager::observationTensor() const
         {impl_->cfg.numWorlds, NUM_AGENTS, 3});
 }
 
-// Should probably add a Orientation tensor here?
+
+
+
+
+
+
 
 Tensor Manager::rewardTensor() const
 {
@@ -353,6 +358,13 @@ Tensor Manager::agentPossessionTensor() const
     return impl_->exportTensor(ExportID::AgentPossession, TensorElementType::Int32,
         {impl_->cfg.numWorlds, NUM_AGENTS, 2});  // hasBall, ballEntityID
 }
+
+Tensor Manager::agentTeamTensor() const
+{
+    return impl_->exportTensor(ExportID::TeamData, TensorElementType::Int32,
+        {impl_->cfg.numWorlds, NUM_AGENTS, 4});  // team id, and 3 vector components
+}
+
 
 Tensor Manager::ballGrabbedTensor() const
 {

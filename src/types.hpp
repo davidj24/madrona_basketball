@@ -7,7 +7,7 @@ using namespace madrona::math;
 namespace madsimple {
 
 // ================================================ Config Constants ================================================
-    constexpr int32_t NUM_AGENTS = 2;
+    constexpr int32_t NUM_AGENTS = 4;
     constexpr int32_t NUM_BASKETBALLS = 1;
     constexpr int32_t NUM_HOOPS = 2;
     constexpr uint32_t INVALID_ENTITY_ID = UINT32_MAX;  // Use max value as invalid/null entity ID
@@ -26,6 +26,7 @@ namespace madsimple {
         BallEntityID,
         AgentPossession,
         BallGrabbed,
+        TeamData,
         NumExports,
     };
 
@@ -83,10 +84,17 @@ namespace madsimple {
         uint32_t holderEntityID;
     };
 
+    struct Team
+    {
+        int32_t teamIndex;
+        Vector3 teamColor;
+    };
+
     struct BallPhysics
     {
         bool in_flight;
         Vector3 velocity;
+
     };
 
 
@@ -106,7 +114,8 @@ namespace madsimple {
         Done,
         CurStep,
         InPossession,
-        Orientation
+        Orientation,
+        Team
     > {};
 
 
