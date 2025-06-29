@@ -31,7 +31,7 @@ public:
     // Input injection interface (following escape room pattern)
     MGR_EXPORT void setAction(int32_t world_idx, int32_t agent_idx, 
                              int32_t move_speed, int32_t move_angle, 
-                             int32_t rotate, int32_t grab);
+                             int32_t rotate, int32_t grab, int32_t pass);
     MGR_EXPORT void triggerReset(int32_t world_idx);
 
     // State extraction interface (tensor outputs)

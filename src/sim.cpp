@@ -235,8 +235,7 @@ inline void passSystem(Engine &ctx,
 
 // =================================== Tick System =========================================
 inline void tick(Engine &ctx,
-                 Entity 
-                 ,
+                 Entity agent_entity,
                  Reset &reset,
                  GridPos &grid_pos,
                  Reward &reward, //add later
@@ -334,6 +333,9 @@ void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
 
     builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
         GridPos, BallPhysics, Grabbed>>({});
+
+    builder.addToGraph<ParallelForNode<Engine, passSystem,
+        Entity, Action, Orientation, InPossession>>({});
 }
 
 

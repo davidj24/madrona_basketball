@@ -255,7 +255,7 @@ void Manager::step()
 // }
 
 // New more robust setAction, easily adaptable to 3D
-void Manager::setAction(int32_t world_idx, int32_t agent_idx, int32_t move_speed, int32_t move_angle, int32_t rotate, int32_t grab)
+void Manager::setAction(int32_t world_idx, int32_t agent_idx, int32_t move_speed, int32_t move_angle, int32_t rotate, int32_t grab, int32_t pass)
 {
     // Get the action tensor and set the action for the specified world/agent
     Tensor action_tensor = actionTensor();
@@ -270,7 +270,8 @@ void Manager::setAction(int32_t world_idx, int32_t agent_idx, int32_t move_speed
         action_data[index].moveAngle = move_angle;
         action_data[index].rotate = rotate;
         action_data[index].grab = grab;
-        
+        action_data[index].pass = pass;
+
     } 
     else 
     {
@@ -303,7 +304,7 @@ Tensor Manager::resetTensor() const
 Tensor Manager::actionTensor() const
 {
     return impl_->exportTensor(ExportID::Action, TensorElementType::Int32,
-        {impl_->cfg.numWorlds, NUM_AGENTS, 4});
+        {impl_->cfg.numWorlds, NUM_AGENTS, 5});
 }
 
 Tensor Manager::observationTensor() const
