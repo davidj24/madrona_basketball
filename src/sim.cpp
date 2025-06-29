@@ -17,6 +17,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.registerComponent<Reset>();
     registry.registerComponent<Action>();
     registry.registerComponent<GridPos>();
+    registry.registerComponent<Inbounding>();
     registry.registerComponent<Reward>();
     registry.registerComponent<Done>();
     registry.registerComponent<CurStep>();
@@ -247,7 +248,81 @@ inline void passSystem(Engine &ctx,
 
 
                         
+inline void updateLastTouchSystem(Engine &ctx,
+                                  Entity ball_entity,
+                                  GridPos &ball_pos,
+                                  BallPhysics &ball_physics)
+{
+    auto touched_agent_query = ctx.query<Entity, GridPos, Team>();
+    ctx.iterateQuery(touched_agent_query, [&] (Entity agent_entity, GridPos &agent_pos, Team &team)
+    {
+        if (ball_pos.x == agent_pos.x && ball_pos.y == agent_pos.y && ball_pos.z == agent_pos.z) 
+        {
+            ball_physics.lastTouchedByID = (uint32_t)agent_entity.id;
+        }
+    });
+}
 
+
+
+inline void outOfBoundsSystem(Engine &ctx,
+                              Entity ball_entity,
+                              GridPos &ball_pos,
+                              Grabbed &grabbed,
+                              BallPhysics &ball_physics)
+{
+    const GridState *grid = ctx.data().grid;
+    
+
+    // Check if the ball is out of bounds
+    constexpr int COURT_SIDELINE_LENGTH = 1;
+    if (ball_pos.x < COURT_SIDELINE_LENGTH || ball_pos.x >= grid->width - COURT_SIDELINE_LENGTH ||
+        ball_pos.y < COURT_SIDELINE_LENGTH || ball_pos.y >= grid->height - COURT_SIDELINE_LENGTH)
+        // ball_pos.z < 0 || ball_pos.z >= grid->depth) 
+    {
+        // Reset the ball physics
+        ball_physics.in_flight = false;
+        ball_physics.velocity = Vector3::zero();
+        
+        //Check if someone is already inbounding
+        bool inbounder_found = false;
+        auto inbounder_query = ctx.query<Inbounding>();
+        ctx.iterateQuery(inbounder_query, [&](Inbounding &inbounding) 
+        {
+            if (inbounding.imInbounding) {inbounder_found = true;}
+        });
+        if (inbounder_found) return;
+
+        // Check if an agent ran out of bounds while grabbing the ball
+        auto agent_query = ctx.query<Entity, Team, InPossession, GridPos, Inbounding>();
+        ctx.iterateQuery(agent_query, [&] (Entity agent_entity, Team &agent_team, InPossession &in_possession, GridPos &agent_pos, Inbounding &inbounding)
+        {
+            if (agent_team.teamIndex != ball_physics.lastTouchedByID && !inbounding.imInbounding)
+            {
+                inbounding.imInbounding = true;
+                agent_pos = ball_pos;
+                grabbed.isGrabbed = true;
+                grabbed.holderEntityID = agent_entity.id;
+                in_possession.hasBall = true;
+                in_possession.ballEntityID = ball_entity.id;
+            }
+
+            if (in_possession.ballEntityID == ball_entity.id)
+            {
+                // If the agent has the ball, we need to reset their position
+                agent_pos = GridPos {
+                    grid->startX,
+                    grid->startY,
+                    0
+                };
+                in_possession.hasBall = false;
+                in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
+            }
+
+            
+        });
+    }
+}
 
 
 
@@ -260,7 +335,8 @@ inline void tick(Engine &ctx,
                  Reward &reward, //add later
                  Done &done,
                  CurStep &episode_step,
-                 InPossession &in_possession)
+                 InPossession &in_possession,
+                 Inbounding &inbounding)
 {
     const GridState *grid = ctx.data().grid;
 
@@ -287,6 +363,8 @@ inline void tick(Engine &ctx,
 
         // Reset possession state
         in_possession.hasBall = false;
+        inbounding.imInbounding = false;
+
 
         // Reset all basketballs when episode ends
         auto basketball_query = ctx.query<GridPos, Grabbed, BallPhysics>();
@@ -343,7 +421,7 @@ void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
         Action, GridPos, Orientation>>({});
 
     auto tickNode = builder.addToGraph<ParallelForNode<Engine, tick,
-        Entity, Reset, GridPos, Reward, Done, CurStep, InPossession>>({});
+        Entity, Reset, GridPos, Reward, Done, CurStep, InPossession, Inbounding>>({});
     
     // builder.addToGraph<ParallelForNode<Engine, moveBallRandomly,
     //     GridPos, RandomMovement>>({});
@@ -353,13 +431,16 @@ void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
     auto processGrabNode = builder.addToGraph<ParallelForNode<Engine, processGrab,
         Entity, Action, GridPos, InPossession>>({});
 
+
+    auto updateLastTouchSystemNode = builder.addToGraph<ParallelForNode<Engine, updateLastTouchSystem,
+        Entity, GridPos, BallPhysics>>({});
+
+    auto outOfBoundsSystemNode = builder.addToGraph<ParallelForNode<Engine, outOfBoundsSystem,
+        Entity, GridPos, Grabbed, BallPhysics>>({updateLastTouchSystemNode});
+
     auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
-        GridPos, BallPhysics, Grabbed>>({passSystemNode, processGrabNode});
+        GridPos, BallPhysics, Grabbed>>({passSystemNode, processGrabNode, outOfBoundsSystemNode});
 }
-
-
-
-
 
 // =================================================== Sim Creation ===================================================
 Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
@@ -380,6 +461,7 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
             0
         };
         ctx.get<Reset>(agent) = Reset{0}; // Initialize reset component
+        ctx.get<Inbounding>(agent) = {false};
         ctx.get<Reward>(agent).r = 0.f;
         ctx.get<Done>(agent).episodeDone = 0.f;
         ctx.get<CurStep>(agent).step = 0;

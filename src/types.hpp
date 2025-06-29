@@ -97,6 +97,12 @@ namespace madsimple {
         uint32_t lastTouchedByID; // This is an entity ID of which entity last touched the ball
     };
 
+    struct Inbounding
+    {
+        bool imInbounding;
+        bool allowedToMove;
+    };
+
 
 
     // ================================================ Archetypes ================================================
@@ -115,6 +121,7 @@ namespace madsimple {
         CurStep,
         InPossession,
         Orientation,
+        Inbounding,
         Team
     > {};
 
