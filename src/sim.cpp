@@ -3,6 +3,7 @@
 #include <madrona/mw_gpu_entry.hpp>
 #include <cstdlib>
 #include <vector>
+#include <random>
 
 using namespace madrona;
 using namespace madrona::math;
@@ -43,6 +44,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
     // ================================================== Hoop Components ==================================================
     registry.registerComponent<ImAHoop>();
+    registry.registerComponent<ScoringZone>();
 
 
     // ================================================= Archetypes ================================================= 
@@ -239,13 +241,71 @@ inline void passSystem(Engine &ctx,
 
 inline void shootSystem(Engine &ctx,
                         Entity agent_entity,
-                        GridPos agent_pos,
                         Action &action,
+                        GridPos agent_pos,
                         Orientation &agent_orientation,
                         InPossession &in_possession,
                         Inbounding &inbounding,
                         Team &team)
 {
+    if (action.shoot == 0 || !in_possession.hasBall) {return;}
+
+    // Find the attacking hoop (not defendingHoopID)
+    auto hoop_query = ctx.query<Entity, GridPos, ScoringZone>();
+    GridPos attacking_hoop_pos = {0, 0, 0};
+    ctx.iterateQuery(hoop_query, [&](Entity hoop_entity, GridPos &hoop_pos, ScoringZone &scoring_zone) {
+        if ((uint32_t)hoop_entity.id != team.defendingHoopID) 
+        {
+            attacking_hoop_pos = hoop_pos;
+            return;
+        }
+    });
+
+    // Calculate vector to attacking hoop
+    Vector3 hoop_vec = Vector3{
+        static_cast<float>(attacking_hoop_pos.x - agent_pos.x),
+        static_cast<float>(attacking_hoop_pos.y - agent_pos.y),
+        0.f
+    };
+
+    Vector3 shot_vector = Vector3{
+        static_cast<float>(agent_pos.x - attacking_hoop_pos.x),
+        static_cast<float>(agent_pos.y - attacking_hoop_pos.y),
+        0.f
+    };
+
+    float distance_to_hoop = shot_vector.length();
+
+    // Calculate intended angle
+    float intended_direction = std::atan2(shot_vector.x, shot_vector.y); // This points in the direction of the hoop
+
+    // Add random deviation based on distance
+    float direction_deviation_per_meter = 0.0f; // radians per unit distance (tune as desired)
+    float stddev = direction_deviation_per_meter * distance_to_hoop;
+    static thread_local std::mt19937 rng(std::random_device{}()); // Creates random number generator
+    std::normal_distribution<float> dist(0.0f, stddev); // Creates the normal distribution
+    float direction_deviation = dist(rng); // Samples from distribution to get the deviation
+    float shot_direction = intended_direction + direction_deviation;
+
+    // Set agent orientation with deviation
+    agent_orientation.orientation = Quat::angleAxis(shot_direction, Vector3{0, 2, 0});
+
+    // Shoot the ball in the (possibly deviated) direction
+    Vector3 final_shot_vec = Vector3{std::sin(shot_direction), std::cos(shot_direction), 0.f};
+    auto held_ball_query = ctx.query<Grabbed, BallPhysics>();
+    ctx.iterateQuery(held_ball_query, [&] (Grabbed &grabbed, BallPhysics &ball_physics)
+    {
+        if (grabbed.holderEntityID == agent_entity.id)
+        {
+            grabbed.isGrabbed = false;
+            grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER;
+            in_possession.hasBall = false;
+            in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
+            inbounding.imInbounding = false;
+            ball_physics.velocity = final_shot_vec * 2.0f; // 2.0f matches passSystem's speed
+            ball_physics.inFlight = true;
+        }
+    });
 }
 
 
@@ -466,9 +526,13 @@ void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
 
     auto updateLastTouchSystemNode = builder.addToGraph<ParallelForNode<Engine, updateLastTouchSystem,
         GridPos, BallPhysics>>({});
+
+    auto shootSystemNode = builder.addToGraph<ParallelForNode<Engine, shootSystem,
+        Entity, Action, GridPos, Orientation, InPossession, Inbounding, Team>>({});
 }
 
 // =================================================== Sim Creation ===================================================
+
 Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
     : WorldBase(ctx),
       episodeMgr(init.episodeMgr),
@@ -487,7 +551,7 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
     for (int i = 0; i < NUM_AGENTS; i++) 
     {
         Entity agent = ctx.makeEntity<Agent>();
-        ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0}; // Initialize with no action
+        ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0}; // Initialize with no action
         ctx.get<GridPos>(agent) = GridPos 
         {
             (grid->startX + i - 5),
@@ -501,7 +565,7 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
         ctx.get<CurStep>(agent).step = 0;
         ctx.get<InPossession>(agent) = {false, ENTITY_ID_PLACEHOLDER};
         ctx.get<Orientation>(agent) = Orientation {Quat::id()};
-        ctx.get<Team>(agent) = {i % 2, team_colors[i % 2]}; // Alternates agent teams and colors
+        ctx.get<Team>(agent) = {i % 2, team_colors[i % 2]}, i % 2; // Alternates agent teams and colors
     };
 
     
@@ -560,6 +624,12 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
         ctx.get<Done>(hoop).episodeDone = 0.f;
         ctx.get<CurStep>(hoop).step = 0;
         ctx.get<ImAHoop>(hoop) = ImAHoop{};
+        ctx.get<ScoringZone>(hoop) = ScoringZone 
+        {
+            1.f, // Radius of scoring zone
+            2.f, // Height of scoring zone
+            Vector3{static_cast<float>(hoop_pos.x), static_cast<float>(hoop_pos.y), static_cast<float>(hoop_pos.z)} // Center of the scoring zone
+        };
         
 
         // Keep random movement commented out as requested

@@ -260,7 +260,7 @@ namespace madsimple {
 
 
     // New more robust setAction, easily adaptable to 3D
-    void Manager::setAction(int32_t world_idx, int32_t agent_idx, int32_t move_speed, int32_t move_angle, int32_t rotate, int32_t grab, int32_t pass)
+    void Manager::setAction(int32_t world_idx, int32_t agent_idx, int32_t move_speed, int32_t move_angle, int32_t rotate, int32_t grab, int32_t pass, int32_t shoot)
     {
         // Get the action tensor and set the action for the specified world/agent
         Tensor action_tensor = actionTensor();
@@ -276,6 +276,7 @@ namespace madsimple {
             action_data[index].rotate = rotate;
             action_data[index].grab = grab;
             action_data[index].pass = pass;
+            action_data[index].shoot = shoot; 
         } 
         else 
         {
@@ -320,7 +321,7 @@ namespace madsimple {
     Tensor Manager::actionTensor() const
     {
         return impl_->exportTensor(ExportID::Action, TensorElementType::Int32,
-            {impl_->cfg.numWorlds, NUM_AGENTS, 5});
+            {impl_->cfg.numWorlds, NUM_AGENTS, 6});
     }
 
 

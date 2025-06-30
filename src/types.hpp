@@ -49,11 +49,11 @@ namespace madsimple {
     {
         bool inboundingInProgress;
         bool liveBall; // 0 if dead ball, 1 if live ball
-        bool basket_was_just_made;
-        bool ball_is_loose;
 
         uint32_t period;
         uint32_t teamInPossession; // The index of the team that is currently in possession of the ball
+        uint32_t team0Score;
+        uint32_t team1Score;
 
         float gameClock; // Time left, figure out if this is in seconds or timesteps, and how it should work with tickSystem
         float shotClock;
@@ -156,8 +156,16 @@ namespace madsimple {
 // ======================================================================================================= Hoop Components =======================================================================================================
     struct ImAHoop{}; // This component is just a tag to differenitate that a hoop entity is a hoop
 
+    // If the ball is FULLY within the scoring zone, it should count as a made basket
+    struct ScoringZone
+    {
+        float radius;
+        float height; // The scoring zone should be a cyliner
+        Vector3 center;
+    };
 
-    // ================================================ Archetypes ================================================
+
+// ================================================ Archetypes ================================================
 
     struct CurStep 
     {
@@ -193,6 +201,7 @@ namespace madsimple {
         Reset,
         GridPos,
         ImAHoop,
+        ScoringZone,
         // RandomMovement,
         Done,
         CurStep

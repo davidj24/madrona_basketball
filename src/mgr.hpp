@@ -31,7 +31,7 @@ public:
     // Input injection interface (following escape room pattern)
     MGR_EXPORT void setAction(int32_t world_idx, int32_t agent_idx, 
                              int32_t move_speed, int32_t move_angle, 
-                             int32_t rotate, int32_t grab, int32_t pass);
+                             int32_t rotate, int32_t grab, int32_t pass, int32_t shoot);
     MGR_EXPORT void triggerReset(int32_t world_idx);
 
 
@@ -64,7 +64,7 @@ public:
     MGR_EXPORT madrona::py::Tensor hoopPosTensor() const;
     
 
-    
+
 private:
     struct Impl;
     struct CPUImpl;

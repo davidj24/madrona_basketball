@@ -294,15 +294,14 @@ class MadronaPipeline:
 
         # Add action debugging for enhanced actions
         if 'actions' in data:
-            actions = data['actions'][0]  # Get first world, shape: (num_agents, 4)
+            actions = data['actions'][0]  # Get first world, shape: (num_agents, N)
             for i, action_components in enumerate(actions):
-                if len(action_components) >= 4:
-                    move_speed, move_angle, rotate, grab, pass_ball = action_components
-                    info_texts.append(f"Agent {i}: Speed={int(move_speed)} Angle={int(move_angle)} Rotate={int(rotate)} Grab={int(grab)} Pass={int(pass_ball)}")
+                if len(action_components) >= 6:
+                    move_speed, move_angle, rotate, grab, pass_ball, shoot_ball = action_components[:6]
+                    info_texts.append(f"Agent {i}: Speed={int(move_speed)} Angle={int(move_angle)} Rotate={int(rotate)} Grab={int(grab)} Pass={int(pass_ball)} Shoot={int(shoot_ball)}")
                 else:
                     info_texts.append(f"Agent {i}: Invalid action data")
 
-        
         # Rewards are now shape (1, 2) instead of (1, 1)
         if 'rewards' in data:
             rewards = data['rewards'][0]  # Shape: (num_agents,)
@@ -486,6 +485,7 @@ class MadronaPipeline:
         rotate = 0
         grab = 0
         pass_ball = 0
+        shoot_ball = 0
         
         # Movement (WASD)
         if keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d]:
@@ -508,7 +508,8 @@ class MadronaPipeline:
                 move_angle = 4
             elif keys[pygame.K_a]:                         # W
                 move_angle = 6
-        
+            
+
         # Rotation (Q/E)
         if keys[pygame.K_q]:
             rotate = -1  # Turn left
@@ -522,6 +523,9 @@ class MadronaPipeline:
 
         if keys[pygame.K_SPACE]:
             pass_ball = 1
+
+        if keys[pygame.K_h]:
+            shoot_ball = 1
         
         
         # Agent 1 actions (Arrow keys + other keys)
@@ -530,6 +534,7 @@ class MadronaPipeline:
         rotate1 = 0
         grab1 = 0
         pass_ball1 = 0
+        shoot_ball1 = 0
         
         if keys[pygame.K_UP] or keys[pygame.K_DOWN] or keys[pygame.K_LEFT] or keys[pygame.K_RIGHT]:
             move_speed1 = 1  # ← Fix: use move_speed1, not move_speed
@@ -566,9 +571,9 @@ class MadronaPipeline:
 
         
         # Send enhanced actions to simulation
-        self.sim.set_action(0, 0, move_speed, move_angle, rotate, grab, pass_ball)
-        self.sim.set_action(0, 1, move_speed1, move_angle1, rotate1, grab1, pass_ball1)
-    
+        self.sim.set_action(0, 0, move_speed, move_angle, rotate, grab, pass_ball, shoot_ball)
+        self.sim.set_action(0, 1, move_speed1, move_angle1, rotate1, grab1, pass_ball1, shoot_ball1)
+
     def run(self):
         """Main pipeline loop"""
         running = True

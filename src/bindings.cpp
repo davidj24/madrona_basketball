@@ -104,9 +104,9 @@ NB_MODULE(_madrona_simple_example_cpp, m) {
         //=================================================== General Tensors ===================================================
         .def("step", &Manager::step)
         .def("set_action", &Manager::setAction,
-             "Set enhanced action with move_speed, move_angle, rotate, grab, pass",
+             "Set enhanced action with move_speed, move_angle, rotate, grab, pass, shoot",
              nb::arg("world_idx"), nb::arg("agent_idx"), nb::arg("move_speed"), 
-             nb::arg("move_angle"), nb::arg("rotate"), nb::arg("grab"), nb::arg("pass"))
+             nb::arg("move_angle"), nb::arg("rotate"), nb::arg("grab"), nb::arg("pass"), nb::arg("shoot"))
         .def("trigger_reset", &Manager::triggerReset)
         .def("reset_tensor", &Manager::resetTensor)
         .def("game_state_inbounding_tensor", &Manager::gameStateInboundingTensor)
