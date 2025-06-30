@@ -52,6 +52,15 @@ except ImportError as e:
     sys.exit(1)
 
 
+
+def quaternion_to_angle(q):
+    # q: [w, x, y, z] (assuming z is up, so rotation is around z)
+    # Returns angle in radians
+    w, x, y, z = q
+    # 2D heading from quaternion (yaw)
+    angle = np.arctan2(2*(w*z + x*y), 1 - 2*(y*y + z*z)) + np.pi/2
+    return angle
+
 class MadronaPipeline:
     """
     Simple pipeline that connects to your Madrona simulation and displays the data
@@ -111,6 +120,7 @@ class MadronaPipeline:
             ball_entity_id_tensor = self.sim.ball_entity_id_tensor()
             agent_team_tensor = self.sim.agent_team_tensor()
             game_state_inbounding_tensor = self.sim.game_state_inbounding_tensor()
+            orientation_tensor = self.sim.orientation_tensor()
 
             
             # Convert to numpy arrays using torch backend (CPU only mode already set)
@@ -128,6 +138,7 @@ class MadronaPipeline:
             agent_entity_id_data = agent_entity_id_tensor.to_torch().detach().cpu().numpy()  # Agent entity IDs
             ball_entity_id_data = ball_entity_id_tensor.to_torch().detach().cpu().numpy()  # Ball entity IDs
             game_state_inbounding_data = game_state_inbounding_tensor.to_torch().detach().cpu().numpy()
+            orientation_data = orientation_tensor.to_torch().detach().cpu().numpy()  # Orientation data
             
             return {
                 'observations': obs_data,
@@ -144,7 +155,8 @@ class MadronaPipeline:
                 'agent_entity_ids': agent_entity_id_data,
                 'ball_entity_ids': ball_entity_id_data,
                 'agent_teams': agent_team_data,
-                'game_state_inbounding' : game_state_inbounding_data
+                'game_state_inbounding' : game_state_inbounding_data,
+                'orientation': orientation_data
             }
             
         except Exception as e:
@@ -355,10 +367,11 @@ class MadronaPipeline:
                     self.screen.blit(text_surface, (screen_x - 8, screen_y + 15))
 
         # Draw agent positions  
-        if 'observations' in data and 'agent_teams' in data:
+        if 'observations' in data and 'agent_teams' in data and 'orientation' in data:
             raw_positions = data['observations']  # Shape: (1, num_agents, 3) - x,y,z
             team_data = data['agent_teams'][0]  # Shape: (num_agents, 4) - teamIndex, colorR, colorG, colorB
             positions = raw_positions[0]  # Get first world, shape: (num_agents, 3)
+            orientations = data['orientation'][0]  # (num_agents, 4) [w, x, y, z]
             
             for i, pos in enumerate(positions):
                 if len(pos) >= 2:  # Use x,y from the 3-component position (x,y,z)
@@ -398,6 +411,15 @@ class MadronaPipeline:
                     if i < len(team_data):
                         team_text = font_small.render(f"T{int(team_data[i][0])}", True, (255, 255, 255))
                         self.screen.blit(team_text, (screen_x - 8, screen_y + 10))
+                    
+                    q = orientations[i]
+                    angle = quaternion_to_angle(q)
+                    arrow_length = 24  # pixels
+                    dx = arrow_length * np.cos(angle)
+                    dy = arrow_length * np.sin(angle)
+                    arrow_end = (int(screen_x + dx), int(screen_y + dy))
+                    pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 3)
+                    # Optionally, draw a triangle head or circle at the end for clarity
 
 
         if 'ball_physics' in data:

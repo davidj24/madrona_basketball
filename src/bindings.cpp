@@ -99,6 +99,9 @@ NB_MODULE(_madrona_simple_example_cpp, m) {
            nb::arg("exec_mode"),
            nb::arg("num_worlds"),
            nb::arg("gpu_id") = -1)
+
+
+        //=================================================== General Tensors ===================================================
         .def("step", &Manager::step)
         .def("set_action", &Manager::setAction,
              "Set enhanced action with move_speed, move_angle, rotate, grab, pass",
@@ -106,20 +109,30 @@ NB_MODULE(_madrona_simple_example_cpp, m) {
              nb::arg("move_angle"), nb::arg("rotate"), nb::arg("grab"), nb::arg("pass"))
         .def("trigger_reset", &Manager::triggerReset)
         .def("reset_tensor", &Manager::resetTensor)
+        .def("game_state_inbounding_tensor", &Manager::gameStateInboundingTensor)
+
+
+        //=================================================== Agent Tensors ===================================================
         .def("action_tensor", &Manager::actionTensor)
         .def("observation_tensor", &Manager::observationTensor)
         .def("reward_tensor", &Manager::rewardTensor)
         .def("done_tensor", &Manager::doneTensor)
+        .def("agent_possession_tensor", &Manager::agentPossessionTensor)
+        .def("agent_entity_id_tensor", &Manager::agentEntityIDTensor)
+        .def("agent_team_tensor", &Manager::agentTeamTensor)
+        .def("orientation_tensor", &Manager::orientationTensor)
+
+
+        //=================================================== Basketball Tensors ===================================================
         .def("basketball_pos_tensor", &Manager::basketballPosTensor)
         .def("ball_physics_tensor", &Manager::ballPhysicsTensor)
-        .def("hoop_pos_tensor", &Manager::hoopPosTensor)
-        .def("agent_possession_tensor", &Manager::agentPossessionTensor)
         .def("ball_grabbed_tensor", &Manager::ballGrabbedTensor)
-        .def("agent_entity_id_tensor", &Manager::agentEntityIDTensor)
         .def("ball_entity_id_tensor", &Manager::ballEntityIDTensor)
-        .def("agent_team_tensor", &Manager::agentTeamTensor)
 
-        .def("game_state_inbounding_tensor", &Manager::gameStateInboundingTensor)
+
+        //=================================================== Hoop Tensors ===================================================
+        .def("hoop_pos_tensor", &Manager::hoopPosTensor)
+
     ;
 }
 

@@ -46,6 +46,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.exportColumn<Agent, Done>((uint32_t)ExportID::Done);
     registry.exportColumn<Agent, InPossession>((uint32_t)ExportID::AgentPossession);
     registry.exportColumn<Agent, Team>((uint32_t)ExportID::TeamData);
+    registry.exportColumn<Agent, Orientation>((uint32_t)ExportID::Orientation);
 
     registry.exportColumn<Basketball, GridPos>((uint32_t)ExportID::BasketballPos);
     registry.exportColumn<Basketball, BallPhysics>((uint32_t)ExportID::BallPhysicsData);
@@ -63,8 +64,9 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 }
 
 
-//=================================================== Systems ===================================================
 
+
+//=================================================== Motion Systems ===================================================
 inline void moveBallRandomly(Engine &ctx,
                     GridPos &ball_pos,
                     RandomMovement &random_movement)
@@ -87,57 +89,6 @@ inline void moveBallRandomly(Engine &ctx,
         ball_pos.x = new_x;
         ball_pos.y = new_y;
     } 
-}
-
-
-inline void processGrab(Engine &ctx,
-                        Entity agent_entity,
-                        Action &action,
-                        GridPos &agent_pos,
-                        InPossession &in_possession)
-{
-
-    auto basketball_query = ctx.query<Entity, GridPos, Grabbed, BallPhysics>();
-    ctx.iterateQuery(basketball_query, [&](Entity ball_entity, GridPos &basketball_pos, Grabbed &grabbed, BallPhysics &ball_physics) 
-    {
-        if (action.grab == 0) {return;}
-
-        bool agent_is_holding_this_ball = (in_possession.hasBall == true &&
-                                            grabbed.isGrabbed &&
-                                            grabbed.holderEntityID == (uint32_t)agent_entity.id);
-
-        // If agent already has a ball, drop it
-        if (agent_is_holding_this_ball) 
-        {
-            in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
-            in_possession.hasBall = false;
-            grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER;
-            grabbed.isGrabbed = false;
-            return;
-        }
-
-        // Otherwise, try to grab a ball at current position
-        if (basketball_pos.x == agent_pos.x && basketball_pos.y == agent_pos.y) 
-        {
-            auto agent_query = ctx.query<InPossession>();
-            ctx.iterateQuery(agent_query, [&] (InPossession &other_in_possession)
-            {
-                if (other_in_possession.ballEntityID == (uint32_t)ball_entity.id) // if we're stealing from another agent
-                {
-                    other_in_possession.hasBall = false;
-                    other_in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
-                }
-            });
-
-            in_possession.hasBall = true;
-            in_possession.ballEntityID = ball_entity.id;
-            grabbed.holderEntityID = (uint32_t)agent_entity.id;
-            grabbed.isGrabbed = true;
-            ball_physics.in_flight = false; // Make it so the ball isn't "in flight" anymore
-            ball_physics.velocity = Vector3::zero(); // And change its velocity to be zero
-        }
-    });
-
 }
 
 
@@ -223,6 +174,62 @@ inline void moveBallSystem(Engine &ctx,
 }
 
 
+
+//=================================================== Action Systems ===================================================
+inline void processGrab(Engine &ctx,
+                        Entity agent_entity,
+                        Action &action,
+                        GridPos &agent_pos,
+                        InPossession &in_possession,
+                        Team &team)
+{
+    GameState &gameState = ctx.singleton<GameState>();
+    auto basketball_query = ctx.query<Entity, GridPos, Grabbed, BallPhysics>();
+    ctx.iterateQuery(basketball_query, [&](Entity ball_entity, GridPos &basketball_pos, Grabbed &grabbed, BallPhysics &ball_physics) 
+    {
+        if (action.grab == 0) {return;}
+
+        bool agent_is_holding_this_ball = (in_possession.hasBall == true &&
+                                            grabbed.isGrabbed &&
+                                            grabbed.holderEntityID == (uint32_t)agent_entity.id);
+
+        // If agent already has a ball, drop it
+        if (agent_is_holding_this_ball) 
+        {
+            in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
+            in_possession.hasBall = false;
+            grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER;
+            grabbed.isGrabbed = false;
+            return;
+        }
+
+        // Otherwise, try to grab a ball at current position
+        if (basketball_pos.x == agent_pos.x && basketball_pos.y == agent_pos.y) 
+        {
+            auto agent_query = ctx.query<InPossession>();
+            ctx.iterateQuery(agent_query, [&] (InPossession &other_in_possession)
+            {
+                if (other_in_possession.ballEntityID == (uint32_t)ball_entity.id) // if we're stealing from another agent
+                {
+                    other_in_possession.hasBall = false;
+                    other_in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
+                }
+            });
+
+            in_possession.hasBall = true;
+            in_possession.ballEntityID = ball_entity.id;
+            grabbed.holderEntityID = (uint32_t)agent_entity.id;
+            grabbed.isGrabbed = true;
+            ball_physics.inFlight = false; // Make it so the ball isn't "in flight" anymore
+            ball_physics.velocity = Vector3::zero(); // And change its velocity to be zero
+        }
+    });
+
+}
+
+
+
+
 inline void passSystem(Engine &ctx,
                        Entity agent_entity,
                        Action &action,
@@ -246,82 +253,15 @@ inline void passSystem(Engine &ctx,
             inbounding.imInbounding = false;
             ball_physics.velocity = agent_orientation.orientation.rotateVec(Vector3{0, 2, 0}); // Setting the ball's velocity to have the same direction as the agent's orientation
                                                                                                // Note: we use 0, 2, 0 because that's forward in our simulation specifically
-            ball_physics.in_flight = true;
+            ball_physics.inFlight = true;
             gameState.inboundingInProgress = false;
         }
     });
 }
 
-                        
-inline void updateLastTouchSystem(Engine &ctx,
-                                  GridPos &ball_pos,
-                                  BallPhysics &ball_physics)
-{
-    auto touched_agent_query = ctx.query<GridPos, Team>();
-    ctx.iterateQuery(touched_agent_query, [&] (GridPos &agent_pos, Team &team)
-    {
-        if (ball_pos.x == agent_pos.x && ball_pos.y == agent_pos.y && ball_pos.z == agent_pos.z) 
-        {
-            ball_physics.lastTouchedByID = (uint32_t)team.teamIndex;
-        }
-    });
-}
+                    
 
-
-
-inline void outOfBoundsSystem(Engine &ctx,
-                              Entity ball_entity,
-                              GridPos &ball_pos,
-                              Grabbed &grabbed,
-                              BallPhysics &ball_physics)
-{
-    const GridState *grid = ctx.data().grid;
-    GameState &gameState = ctx.singleton<GameState>();
-    
-
-    // Check if the ball is out of bounds
-    constexpr int COURT_SIDELINE_LENGTH = 1;
-    if (ball_pos.x < COURT_SIDELINE_LENGTH || ball_pos.x >= grid->width - COURT_SIDELINE_LENGTH ||
-        ball_pos.y < COURT_SIDELINE_LENGTH || ball_pos.y >= grid->height - COURT_SIDELINE_LENGTH)
-        // ball_pos.z < 0 || ball_pos.z >= grid->depth) for when we're in 3D later
-    {
-        // Reset the ball physics
-        ball_physics.in_flight = false;
-        ball_physics.velocity = Vector3::zero();
-
-        auto agent_query = ctx.query<Entity, Team, InPossession, GridPos, Inbounding>();
-        ctx.iterateQuery(agent_query, [&] (Entity agent_entity, Team &agent_team, InPossession &in_possession, GridPos &agent_pos, Inbounding &inbounding)
-        {
-            // If an agent has the ball, we need to reset their position
-            if (in_possession.ballEntityID == ball_entity.id && agent_team.teamIndex == ball_physics.lastTouchedByID && inbounding.imInbounding == false)
-            {
-                agent_pos = GridPos {
-                    grid->startX,
-                    grid->startY,
-                    0
-                };
-                in_possession.hasBall = false;
-                in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
-            }
-
-            if (agent_team.teamIndex != ball_physics.lastTouchedByID && !gameState.inboundingInProgress)
-            {
-                inbounding.imInbounding = true;
-                gameState.inboundingInProgress = true;
-                agent_pos = ball_pos;
-                grabbed.isGrabbed = true;
-                grabbed.holderEntityID = agent_entity.id;
-                in_possession.hasBall = true;
-                in_possession.ballEntityID = ball_entity.id;
-            }
-        });
-    }
-}
-
-
-
-
-// =================================== Tick System =========================================
+//=================================================== General Systems ===================================================
 inline void tick(Engine &ctx,
                  Entity agent_entity,
                  Reset &reset,
@@ -366,7 +306,7 @@ inline void tick(Engine &ctx,
         {
             grabbed.isGrabbed = false;
             grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER;
-            ball_physics.in_flight = false;
+            ball_physics.inFlight = false;
             ball_physics.velocity = Vector3::zero();
             // Reset basketball to start position
             basketball_pos = GridPos 
@@ -401,7 +341,70 @@ inline void tick(Engine &ctx,
 
 
 
+inline void updateLastTouchSystem(Engine &ctx,
+                                  GridPos &ball_pos,
+                                  BallPhysics &ball_physics)
+{
+    auto touched_agent_query = ctx.query<GridPos, Team>();
+    ctx.iterateQuery(touched_agent_query, [&] (GridPos &agent_pos, Team &team)
+    {
+        if (ball_pos.x == agent_pos.x && ball_pos.y == agent_pos.y && ball_pos.z == agent_pos.z) 
+        {
+            ball_physics.lastTouchedByID = (uint32_t)team.teamIndex;
+        }
+    });
+}
 
+
+
+inline void outOfBoundsSystem(Engine &ctx,
+                              Entity ball_entity,
+                              GridPos &ball_pos,
+                              Grabbed &grabbed,
+                              BallPhysics &ball_physics)
+{
+    const GridState *grid = ctx.data().grid;
+    GameState &gameState = ctx.singleton<GameState>();
+    
+
+    // Check if the ball is out of bounds
+    constexpr int COURT_SIDELINE_LENGTH = 1;
+    if (ball_pos.x < COURT_SIDELINE_LENGTH || ball_pos.x >= grid->width - COURT_SIDELINE_LENGTH ||
+        ball_pos.y < COURT_SIDELINE_LENGTH || ball_pos.y >= grid->height - COURT_SIDELINE_LENGTH)
+        // ball_pos.z < 0 || ball_pos.z >= grid->depth) for when we're in 3D later
+    {
+        // Reset the ball physics
+        ball_physics.inFlight = false;
+        ball_physics.velocity = Vector3::zero();
+
+        auto agent_query = ctx.query<Entity, Team, InPossession, GridPos, Inbounding>();
+        ctx.iterateQuery(agent_query, [&] (Entity agent_entity, Team &agent_team, InPossession &in_possession, GridPos &agent_pos, Inbounding &inbounding)
+        {
+            // If an agent has the ball, we need to reset their position
+            if (in_possession.ballEntityID == ball_entity.id && agent_team.teamIndex == ball_physics.lastTouchedByID && inbounding.imInbounding == false)
+            {
+                agent_pos = GridPos {
+                    grid->startX,
+                    grid->startY,
+                    0
+                };
+                in_possession.hasBall = false;
+                in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
+            }
+
+            if (agent_team.teamIndex != ball_physics.lastTouchedByID && !gameState.inboundingInProgress)
+            {
+                inbounding.imInbounding = true;
+                gameState.inboundingInProgress = true;
+                agent_pos = ball_pos;
+                grabbed.isGrabbed = true;
+                grabbed.holderEntityID = agent_entity.id;
+                in_possession.hasBall = true;
+                in_possession.ballEntityID = ball_entity.id;
+            }
+        });
+    }
+}
 
 
 
@@ -421,7 +424,7 @@ void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
     //     GridPos, RandomMovement>>({});
 
     auto processGrabNode = builder.addToGraph<ParallelForNode<Engine, processGrab,
-        Entity, Action, GridPos, InPossession>>({});
+        Entity, Action, GridPos, InPossession, Team>>({});
 
     auto passSystemNode = builder.addToGraph<ParallelForNode<Engine, passSystem,
         Entity, Action, Orientation, InPossession, Inbounding>>({});

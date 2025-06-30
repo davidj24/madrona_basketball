@@ -34,24 +34,37 @@ public:
                              int32_t rotate, int32_t grab, int32_t pass);
     MGR_EXPORT void triggerReset(int32_t world_idx);
 
-    // State extraction interface (tensor outputs)
+
+
+
+    //=================================================== General Tensors ===================================================
     MGR_EXPORT madrona::py::Tensor resetTensor() const;
+    MGR_EXPORT madrona::py::Tensor gameStateInboundingTensor() const;
+
+
+    //=================================================== Agent Tensors ===================================================
     MGR_EXPORT madrona::py::Tensor actionTensor() const;
     MGR_EXPORT madrona::py::Tensor observationTensor() const;
+    MGR_EXPORT madrona::py::Tensor orientationTensor() const;
     MGR_EXPORT madrona::py::Tensor agentTeamTensor() const;
     MGR_EXPORT madrona::py::Tensor rewardTensor() const;
     MGR_EXPORT madrona::py::Tensor doneTensor() const;
+    MGR_EXPORT madrona::py::Tensor agentPossessionTensor() const;
+    MGR_EXPORT madrona::py::Tensor agentEntityIDTensor() const;
+
+
+    //=================================================== Basketball Tensors ===================================================
     MGR_EXPORT madrona::py::Tensor basketballPosTensor() const;
     MGR_EXPORT madrona::py::Tensor ballPhysicsTensor() const;
-    MGR_EXPORT madrona::py::Tensor hoopPosTensor() const;
-    MGR_EXPORT madrona::py::Tensor agentPossessionTensor() const;
     MGR_EXPORT madrona::py::Tensor ballGrabbedTensor() const;
-    MGR_EXPORT madrona::py::Tensor agentEntityIDTensor() const;
     MGR_EXPORT madrona::py::Tensor ballEntityIDTensor() const;
-    MGR_EXPORT madrona::py::Tensor gameStateInboundingTensor() const;
-
+    
+    
+    //=================================================== Hoop Tensors ===================================================
+    MGR_EXPORT madrona::py::Tensor hoopPosTensor() const;
     
 
+    
 private:
     struct Impl;
     struct CPUImpl;
