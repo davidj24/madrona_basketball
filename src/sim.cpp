@@ -66,7 +66,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
 
 
-//=================================================== Motion Systems ===================================================
+//=================================================== Ball Systems ===================================================
 inline void moveBallRandomly(Engine &ctx,
                     GridPos &ball_pos,
                     RandomMovement &random_movement)
@@ -91,45 +91,6 @@ inline void moveBallRandomly(Engine &ctx,
     } 
 }
 
-
-inline void moveAgentSystem(Engine &ctx,
-                           Action &action,
-                           GridPos &agent_pos,
-                           Orientation &agent_orientation)
-{
-    const GridState *grid = ctx.data().grid;
-    if (action.rotate != 0)
-    {
-        float turn_angle = (pi/4.f) * action.rotate;
-        Quat turn = Quat::angleAxis(turn_angle, Vector3{0, 0, 1});
-        agent_orientation.orientation = turn * agent_orientation.orientation;
-    }
-
-    if (action.moveSpeed > 0)
-    {
-        constexpr float angle_between_directions = pi / 4.f;
-        float move_angle = action.moveAngle * angle_between_directions;
-
-        int32_t dx = (int32_t)std::round(std::sin(move_angle) * action.moveSpeed);
-        int32_t dy = (int32_t)std::round(-std::cos(move_angle) * action.moveSpeed);
-
-        int32_t new_x = agent_pos.x + dx;  
-        int32_t new_y = agent_pos.y + dy;  
-
-        // Boundary checking
-        new_x = std::clamp(new_x, 0, grid->width - 1);
-        new_y = std::clamp(new_y, 0, grid->height - 1);
-
-        // Wall collision (if needed)
-        GridPos test_pos = {new_x, new_y, agent_pos.z};
-        const Cell &new_cell = grid->cells[test_pos.y * grid->width + test_pos.x];
-        
-        if (!(new_cell.flags & CellFlag::Wall)) {
-            agent_pos.x = new_x;
-            agent_pos.y = new_y;
-        }
-    }
-}
 
 
 inline void moveBallSystem(Engine &ctx,
@@ -175,7 +136,7 @@ inline void moveBallSystem(Engine &ctx,
 
 
 
-//=================================================== Action Systems ===================================================
+//=================================================== Agent Systems ===================================================
 inline void processGrab(Engine &ctx,
                         Entity agent_entity,
                         Action &action,
@@ -222,11 +183,11 @@ inline void processGrab(Engine &ctx,
             grabbed.isGrabbed = true;
             ball_physics.inFlight = false; // Make it so the ball isn't "in flight" anymore
             ball_physics.velocity = Vector3::zero(); // And change its velocity to be zero
+            gameState.teamInPossession = team.teamIndex; // Update the team in possession
         }
     });
 
 }
-
 
 
 
@@ -237,9 +198,12 @@ inline void passSystem(Engine &ctx,
                        InPossession &in_possession,
                        Inbounding &inbounding)
 {
-    if (action.pass == 0) {return;}
 
+    if (action.pass == 0 || !in_possession.hasBall) {return;}
     GameState &gameState = ctx.singleton<GameState>();
+
+
+
 
     auto held_ball_query = ctx.query<Grabbed, BallPhysics>();
     ctx.iterateQuery(held_ball_query, [&] (Grabbed &grabbed, BallPhysics &ball_physics)
@@ -259,7 +223,75 @@ inline void passSystem(Engine &ctx,
     });
 }
 
-                    
+
+
+inline void shootSystem(Engine &ctx,
+                        Entity agent_entity,
+                        Action &action,
+                        Orientation &agent_orientation,
+                        InPossession &in_possession,
+                        Inbounding &inbounding,
+                        Team &team)
+{
+    if (action.shoot == 0 || !in_possession.hasBall) {return;}
+    GameState &gameState = ctx.singleton<GameState>();
+
+    auto held_ball_query = ctx.query<Grabbed, BallPhysics>();
+    ctx.iterateQuery(held_ball_query, [&] (Grabbed &grabbed, BallPhysics &ball_physics)
+    {
+        if (grabbed.holderEntityID == agent_entity.id)
+        {
+            grabbed.isGrabbed = false;  // Ball is no longer grabbed
+            grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER; // Ball is no longer held by anyone
+            in_possession.hasBall = false; // Since agents can only hold 1 ball at a time, if they shoot it they can't be holding one anymore
+            in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER; // Whoever shot the ball is no longer in possession of it
+            ball_physics.velocity = agent_orientation.orientation.rotateVec(Vector3{0, 2, 0}); // Setting the ball's velocity to have the same direction as the agent's orientation
+                                                                                               // Note: we use 0, 2, 0 because that's forward in our simulation specifically
+            ball_physics.inFlight = true;
+            gameState.inboundingInProgress = false;
+        }
+    });
+}
+
+inline void moveAgentSystem(Engine &ctx,
+                           Action &action,
+                           GridPos &agent_pos,
+                           Orientation &agent_orientation)
+{
+    const GridState *grid = ctx.data().grid;
+    if (action.rotate != 0)
+    {
+        float turn_angle = (pi/4.f) * action.rotate;
+        Quat turn = Quat::angleAxis(turn_angle, Vector3{0, 0, 1});
+        agent_orientation.orientation = turn * agent_orientation.orientation;
+    }
+
+    if (action.moveSpeed > 0)
+    {
+        constexpr float angle_between_directions = pi / 4.f;
+        float move_angle = action.moveAngle * angle_between_directions;
+
+        int32_t dx = (int32_t)std::round(std::sin(move_angle) * action.moveSpeed);
+        int32_t dy = (int32_t)std::round(-std::cos(move_angle) * action.moveSpeed);
+
+        int32_t new_x = agent_pos.x + dx;  
+        int32_t new_y = agent_pos.y + dy;  
+
+        // Boundary checking
+        new_x = std::clamp(new_x, 0, grid->width - 1);
+        new_y = std::clamp(new_y, 0, grid->height - 1);
+
+        // Wall collision (if needed)
+        GridPos test_pos = {new_x, new_y, agent_pos.z};
+        const Cell &new_cell = grid->cells[test_pos.y * grid->width + test_pos.x];
+        
+        if (!(new_cell.flags & CellFlag::Wall)) {
+            agent_pos.x = new_x;
+            agent_pos.y = new_y;
+        }
+    }
+}
+
 
 //=================================================== General Systems ===================================================
 inline void tick(Engine &ctx,
@@ -401,6 +433,7 @@ inline void outOfBoundsSystem(Engine &ctx,
                 grabbed.holderEntityID = agent_entity.id;
                 in_possession.hasBall = true;
                 in_possession.ballEntityID = ball_entity.id;
+                gameState.teamInPossession = agent_team.teamIndex;
             }
         });
     }
@@ -446,7 +479,7 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
       grid(init.grid),
       maxEpisodeLength(cfg.maxEpisodeLength)
 {
-    ctx.singleton<GameState>() = GameState
+    ctx.singleton<GameState>() = GameState // CHANGE LATER TO INCLUDE OTHER ATTRIBUTES
     {
         .inboundingInProgress = false,
         .period = 1,
