@@ -9,11 +9,14 @@ using namespace madrona::math;
 
 namespace madsimple {
 
-// ================================================== Components ==================================================
 void Sim::registerTypes(ECSRegistry &registry, const Config &)
 {
     base::registerTypes(registry);
 
+    // ================================================== Singletons ==================================================
+    registry.registerSingleton<GameState>();
+
+    // ================================================== Components ==================================================
     registry.registerComponent<Reset>();
     registry.registerComponent<Action>();
     registry.registerComponent<GridPos>();
@@ -49,6 +52,9 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.exportColumn<Basketball, Grabbed>((uint32_t)ExportID::BallGrabbed);
 
     registry.exportColumn<Hoop, GridPos>((uint32_t)ExportID::HoopPos);
+
+    // Singleton exports
+    registry.exportSingleton<GameState>((uint32_t)ExportID::GameState);
     
     // Export entity IDs for debugging
     registry.exportColumn<Agent, madrona::Entity>((uint32_t)ExportID::AgentEntityID);
@@ -217,16 +223,16 @@ inline void moveBallSystem(Engine &ctx,
 }
 
 
-
-
-
 inline void passSystem(Engine &ctx,
                        Entity agent_entity,
                        Action &action,
                        Orientation &agent_orientation,
-                       InPossession &in_possession)
+                       InPossession &in_possession,
+                       Inbounding &inbounding)
 {
     if (action.pass == 0) {return;}
+
+    GameState &gameState = ctx.singleton<GameState>();
 
     auto held_ball_query = ctx.query<Grabbed, BallPhysics>();
     ctx.iterateQuery(held_ball_query, [&] (Grabbed &grabbed, BallPhysics &ball_physics)
@@ -237,15 +243,14 @@ inline void passSystem(Engine &ctx,
             grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER; // Ball is no longer held by anyone
             in_possession.hasBall = false; // Since agents can only hold 1 ball at a time, if they pass it they can't be holding one anymore
             in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER; // Whoever passed the ball is no longer in possession of it
-            //Affect the ball's movement system here???
-            // Don't forget to make the ball's velocity vector equal to the orientation of the agent
+            inbounding.imInbounding = false;
             ball_physics.velocity = agent_orientation.orientation.rotateVec(Vector3{0, 2, 0}); // Setting the ball's velocity to have the same direction as the agent's orientation
                                                                                                // Note: we use 0, 2, 0 because that's forward in our simulation specifically
             ball_physics.in_flight = true;
+            gameState.inboundingInProgress = false;
         }
     });
 }
-
 
                         
 inline void updateLastTouchSystem(Engine &ctx,
@@ -272,6 +277,7 @@ inline void outOfBoundsSystem(Engine &ctx,
                               BallPhysics &ball_physics)
 {
     const GridState *grid = ctx.data().grid;
+    GameState &gameState = ctx.singleton<GameState>();
     
 
     // Check if the ball is out of bounds
@@ -283,30 +289,11 @@ inline void outOfBoundsSystem(Engine &ctx,
         // Reset the ball physics
         ball_physics.in_flight = false;
         ball_physics.velocity = Vector3::zero();
-        
-        //Check if someone is already inbounding
-        bool inbounder_found = false;
-        auto inbounder_query = ctx.query<Inbounding>();
-        ctx.iterateQuery(inbounder_query, [&](Inbounding &inbounding) 
-        {
-            if (inbounding.imInbounding) {inbounder_found = true;}
-        });
-        if (inbounder_found) return;
 
         // Check if an agent ran out of bounds while grabbing the ball
         auto agent_query = ctx.query<Entity, Team, InPossession, GridPos, Inbounding>();
         ctx.iterateQuery(agent_query, [&] (Entity agent_entity, Team &agent_team, InPossession &in_possession, GridPos &agent_pos, Inbounding &inbounding)
         {
-            if (agent_team.teamIndex != ball_physics.lastTouchedByID && !inbounding.imInbounding)
-            {
-                inbounding.imInbounding = true;
-                agent_pos = ball_pos;
-                grabbed.isGrabbed = true;
-                grabbed.holderEntityID = agent_entity.id;
-                in_possession.hasBall = true;
-                in_possession.ballEntityID = ball_entity.id;
-            }
-
             if (in_possession.ballEntityID == ball_entity.id)
             {
                 // If the agent has the ball, we need to reset their position
@@ -319,7 +306,16 @@ inline void outOfBoundsSystem(Engine &ctx,
                 in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
             }
 
-            
+            if (agent_team.teamIndex != ball_physics.lastTouchedByID && !gameState.inboundingInProgress)
+            {
+                inbounding.imInbounding = true;
+                gameState.inboundingInProgress = true;
+                agent_pos = ball_pos;
+                grabbed.isGrabbed = true;
+                grabbed.holderEntityID = agent_entity.id;
+                in_possession.hasBall = true;
+                in_possession.ballEntityID = ball_entity.id;
+            }
         });
     }
 }
@@ -426,7 +422,7 @@ void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
     // builder.addToGraph<ParallelForNode<Engine, moveBallRandomly,
     //     GridPos, RandomMovement>>({});
     auto passSystemNode = builder.addToGraph<ParallelForNode<Engine, passSystem,
-        Entity, Action, Orientation, InPossession>>({});
+        Entity, Action, Orientation, InPossession, Inbounding>>({});
 
     auto processGrabNode = builder.addToGraph<ParallelForNode<Engine, processGrab,
         Entity, Action, GridPos, InPossession>>({});
@@ -449,6 +445,14 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
       grid(init.grid),
       maxEpisodeLength(cfg.maxEpisodeLength)
 {
+    ctx.singleton<GameState>() = GameState
+    {
+        .inboundingInProgress = false,
+        .period = 1,
+        .gameClock = 720,
+        .shotClock = 24
+    };
+
     std::vector<Vector3> team_colors = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
     for (int i = 0; i < NUM_AGENTS; i++) 
     {

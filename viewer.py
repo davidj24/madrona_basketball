@@ -110,6 +110,7 @@ class MadronaPipeline:
             agent_entity_id_tensor = self.sim.agent_entity_id_tensor()
             ball_entity_id_tensor = self.sim.ball_entity_id_tensor()
             agent_team_tensor = self.sim.agent_team_tensor()
+            game_state_inbounding_tensor = self.sim.game_state_inbounding_tensor()
 
             
             # Convert to numpy arrays using torch backend (CPU only mode already set)
@@ -126,6 +127,7 @@ class MadronaPipeline:
             ball_grabbed_data = ball_grabbed_tensor.to_torch().detach().cpu().numpy()  # Ball grabbed status
             agent_entity_id_data = agent_entity_id_tensor.to_torch().detach().cpu().numpy()  # Agent entity IDs
             ball_entity_id_data = ball_entity_id_tensor.to_torch().detach().cpu().numpy()  # Ball entity IDs
+            game_state_inbounding_data = game_state_inbounding_tensor.to_torch().detach().cpu().numpy()
             
             return {
                 'observations': obs_data,
@@ -141,7 +143,8 @@ class MadronaPipeline:
                 'ball_grabbed': ball_grabbed_data,
                 'agent_entity_ids': agent_entity_id_data,
                 'ball_entity_ids': ball_entity_id_data,
-                'agent_teams': agent_team_data
+                'agent_teams': agent_team_data,
+                'game_state_inbounding' : game_state_inbounding_data
             }
             
         except Exception as e:

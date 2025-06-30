@@ -48,6 +48,7 @@ public:
     MGR_EXPORT madrona::py::Tensor ballGrabbedTensor() const;
     MGR_EXPORT madrona::py::Tensor agentEntityIDTensor() const;
     MGR_EXPORT madrona::py::Tensor ballEntityIDTensor() const;
+    MGR_EXPORT madrona::py::Tensor gameStateInboundingTensor() const;
 
     
 

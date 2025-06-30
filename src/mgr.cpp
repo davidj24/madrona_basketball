@@ -383,4 +383,10 @@ Tensor Manager::ballEntityIDTensor() const
     return impl_->exportTensor(ExportID::BallEntityID, TensorElementType::Int32,
         {impl_->cfg.numWorlds, NUM_BASKETBALLS});
 }
+
+Tensor Manager::gameStateInboundingTensor() const
+{
+    return impl_->exportTensor(ExportID::GameStateInbounding, TensorElementType::Int32,
+        {impl_->cfg.numWorlds, 1});
+}
 }

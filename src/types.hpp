@@ -27,8 +27,26 @@ namespace madsimple {
         AgentPossession,
         BallGrabbed,
         TeamData,
+        GameState,
+        GameStateInbounding,
         NumExports,
     };
+
+
+// ================================================ Singletons ================================================
+    struct GameState
+    {
+        bool inboundingInProgress;
+        uint32_t period;
+        float gameClock; // Time left, figure out if this is in seconds or timesteps, and how it should work with tickSystem
+        float shotClock;
+
+        // Maybe add states for free throws, fouls, and jump balls later
+    };
+
+
+
+// ================================================ Components ================================================
 
     struct Reset 
     {
