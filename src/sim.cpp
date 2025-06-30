@@ -16,20 +16,33 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     // ================================================== Singletons ==================================================
     registry.registerSingleton<GameState>();
 
-    // ================================================== Components ==================================================
+
+
+
+    // ================================================== General Components ==================================================
     registry.registerComponent<Reset>();
-    registry.registerComponent<Action>();
     registry.registerComponent<GridPos>();
-    registry.registerComponent<Inbounding>();
-    registry.registerComponent<Reward>();
     registry.registerComponent<Done>();
     registry.registerComponent<CurStep>();
     registry.registerComponent<RandomMovement>();
+
+
+    // ================================================== Agent Components ==================================================
+    registry.registerComponent<Action>();
+    registry.registerComponent<Reward>();
+    registry.registerComponent<Inbounding>();
     registry.registerComponent<InPossession>();
-    registry.registerComponent<Grabbed>();
     registry.registerComponent<Orientation>();
-    registry.registerComponent<BallPhysics>();
     registry.registerComponent<Team>();
+
+
+    // ================================================== Ball Components ==================================================
+    registry.registerComponent<BallPhysics>();
+    registry.registerComponent<Grabbed>();
+
+
+    // ================================================== Hoop Components ==================================================
+    registry.registerComponent<ImAHoop>();
 
 
     // ================================================= Archetypes ================================================= 
@@ -224,34 +237,17 @@ inline void passSystem(Engine &ctx,
 }
 
 
-
 inline void shootSystem(Engine &ctx,
                         Entity agent_entity,
+                        GridPos agent_pos,
                         Action &action,
                         Orientation &agent_orientation,
                         InPossession &in_possession,
                         Inbounding &inbounding,
                         Team &team)
 {
-    if (action.shoot == 0 || !in_possession.hasBall) {return;}
-    GameState &gameState = ctx.singleton<GameState>();
-
-    auto held_ball_query = ctx.query<Grabbed, BallPhysics>();
-    ctx.iterateQuery(held_ball_query, [&] (Grabbed &grabbed, BallPhysics &ball_physics)
-    {
-        if (grabbed.holderEntityID == agent_entity.id)
-        {
-            grabbed.isGrabbed = false;  // Ball is no longer grabbed
-            grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER; // Ball is no longer held by anyone
-            in_possession.hasBall = false; // Since agents can only hold 1 ball at a time, if they shoot it they can't be holding one anymore
-            in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER; // Whoever shot the ball is no longer in possession of it
-            ball_physics.velocity = agent_orientation.orientation.rotateVec(Vector3{0, 2, 0}); // Setting the ball's velocity to have the same direction as the agent's orientation
-                                                                                               // Note: we use 0, 2, 0 because that's forward in our simulation specifically
-            ball_physics.inFlight = true;
-            gameState.inboundingInProgress = false;
-        }
-    });
 }
+
 
 inline void moveAgentSystem(Engine &ctx,
                            Action &action,
@@ -563,6 +559,7 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
         ctx.get<Reset>(hoop) = Reset{0};
         ctx.get<Done>(hoop).episodeDone = 0.f;
         ctx.get<CurStep>(hoop).step = 0;
+        ctx.get<ImAHoop>(hoop) = ImAHoop{};
         
 
         // Keep random movement commented out as requested

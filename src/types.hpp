@@ -133,6 +133,7 @@ namespace madsimple {
     {
         int32_t teamIndex;
         Vector3 teamColor;
+        uint32_t defendingHoopID; // The ID of the hoop that the agent is defending
     };
 
 
@@ -152,7 +153,8 @@ namespace madsimple {
     };
 
     
-
+// ======================================================================================================= Hoop Components =======================================================================================================
+    struct ImAHoop{}; // This component is just a tag to differenitate that a hoop entity is a hoop
 
 
     // ================================================ Archetypes ================================================
@@ -190,6 +192,7 @@ namespace madsimple {
     struct Hoop : public madrona::Archetype<
         Reset,
         GridPos,
+        ImAHoop,
         // RandomMovement,
         Done,
         CurStep
