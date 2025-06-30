@@ -112,7 +112,7 @@ namespace madsimple {
     {
         bool in_flight; // I should've camelCased this but now it's too late and I don't want to find every relevant instance and replace it bc it's also used in other files I didn't make
         Vector3 velocity;
-        uint32_t lastTouchedByID; // This is an entity ID of which entity last touched the ball
+        uint32_t lastTouchedByID; // This is a team ID of which entity last touched the ball
     };
 
     struct Inbounding

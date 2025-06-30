@@ -254,16 +254,15 @@ inline void passSystem(Engine &ctx,
 
                         
 inline void updateLastTouchSystem(Engine &ctx,
-                                  Entity ball_entity,
                                   GridPos &ball_pos,
                                   BallPhysics &ball_physics)
 {
-    auto touched_agent_query = ctx.query<Entity, GridPos, Team>();
-    ctx.iterateQuery(touched_agent_query, [&] (Entity agent_entity, GridPos &agent_pos, Team &team)
+    auto touched_agent_query = ctx.query<GridPos, Team>();
+    ctx.iterateQuery(touched_agent_query, [&] (GridPos &agent_pos, Team &team)
     {
         if (ball_pos.x == agent_pos.x && ball_pos.y == agent_pos.y && ball_pos.z == agent_pos.z) 
         {
-            ball_physics.lastTouchedByID = (uint32_t)agent_entity.id;
+            ball_physics.lastTouchedByID = (uint32_t)team.teamIndex;
         }
     });
 }
@@ -284,19 +283,18 @@ inline void outOfBoundsSystem(Engine &ctx,
     constexpr int COURT_SIDELINE_LENGTH = 1;
     if (ball_pos.x < COURT_SIDELINE_LENGTH || ball_pos.x >= grid->width - COURT_SIDELINE_LENGTH ||
         ball_pos.y < COURT_SIDELINE_LENGTH || ball_pos.y >= grid->height - COURT_SIDELINE_LENGTH)
-        // ball_pos.z < 0 || ball_pos.z >= grid->depth) 
+        // ball_pos.z < 0 || ball_pos.z >= grid->depth) for when we're in 3D later
     {
         // Reset the ball physics
         ball_physics.in_flight = false;
         ball_physics.velocity = Vector3::zero();
 
-        // Check if an agent ran out of bounds while grabbing the ball
         auto agent_query = ctx.query<Entity, Team, InPossession, GridPos, Inbounding>();
         ctx.iterateQuery(agent_query, [&] (Entity agent_entity, Team &agent_team, InPossession &in_possession, GridPos &agent_pos, Inbounding &inbounding)
         {
-            if (in_possession.ballEntityID == ball_entity.id)
+            // If an agent has the ball, we need to reset their position
+            if (in_possession.ballEntityID == ball_entity.id && agent_team.teamIndex == ball_physics.lastTouchedByID && inbounding.imInbounding == false)
             {
-                // If the agent has the ball, we need to reset their position
                 agent_pos = GridPos {
                     grid->startX,
                     grid->startY,
@@ -421,21 +419,21 @@ void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
     
     // builder.addToGraph<ParallelForNode<Engine, moveBallRandomly,
     //     GridPos, RandomMovement>>({});
-    auto passSystemNode = builder.addToGraph<ParallelForNode<Engine, passSystem,
-        Entity, Action, Orientation, InPossession, Inbounding>>({});
 
     auto processGrabNode = builder.addToGraph<ParallelForNode<Engine, processGrab,
         Entity, Action, GridPos, InPossession>>({});
 
-
-    auto updateLastTouchSystemNode = builder.addToGraph<ParallelForNode<Engine, updateLastTouchSystem,
-        Entity, GridPos, BallPhysics>>({});
-
-    auto outOfBoundsSystemNode = builder.addToGraph<ParallelForNode<Engine, outOfBoundsSystem,
-        Entity, GridPos, Grabbed, BallPhysics>>({updateLastTouchSystemNode});
+    auto passSystemNode = builder.addToGraph<ParallelForNode<Engine, passSystem,
+        Entity, Action, Orientation, InPossession, Inbounding>>({});
 
     auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
-        GridPos, BallPhysics, Grabbed>>({passSystemNode, processGrabNode, outOfBoundsSystemNode});
+        GridPos, BallPhysics, Grabbed>>({processGrabNode});
+
+    auto outOfBoundsSystemNode = builder.addToGraph<ParallelForNode<Engine, outOfBoundsSystem,
+        Entity, GridPos, Grabbed, BallPhysics>>({passSystemNode, moveBallSystemNode});
+
+    auto updateLastTouchSystemNode = builder.addToGraph<ParallelForNode<Engine, updateLastTouchSystem,
+        GridPos, BallPhysics>>({});
 }
 
 // =================================================== Sim Creation ===================================================
