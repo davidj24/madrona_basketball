@@ -242,10 +242,10 @@ inline void passSystem(Engine &ctx,
 inline void shootSystem(Engine &ctx,
                         Entity agent_entity,
                         Action &action,
-                        GridPos agent_pos,
+                        GridPos &agent_pos,
                         Orientation &agent_orientation,
-                        InPossession &in_possession,
                         Inbounding &inbounding,
+                        InPossession &in_possession,
                         Team &team)
 {
     if (action.shoot == 0 || !in_possession.hasBall) {return;}
@@ -262,17 +262,12 @@ inline void shootSystem(Engine &ctx,
     });
 
     // Calculate vector to attacking hoop
-    Vector3 hoop_vec = Vector3{
+    Vector3 shot_vector = Vector3{
         static_cast<float>(attacking_hoop_pos.x - agent_pos.x),
         static_cast<float>(attacking_hoop_pos.y - agent_pos.y),
         0.f
     };
 
-    Vector3 shot_vector = Vector3{
-        static_cast<float>(agent_pos.x - attacking_hoop_pos.x),
-        static_cast<float>(agent_pos.y - attacking_hoop_pos.y),
-        0.f
-    };
 
     float distance_to_hoop = shot_vector.length();
 
@@ -288,8 +283,10 @@ inline void shootSystem(Engine &ctx,
     float shot_direction = intended_direction + direction_deviation;
 
     // Set agent orientation with deviation
-    agent_orientation.orientation = Quat::angleAxis(shot_direction, Vector3{0, 2, 0});
-
+    agent_orientation.orientation = madrona::math::Quat::angleAxis(
+            shot_direction - (pi / 2.0f), // Adjust target angle by -PI/2
+            Vector3{0.f, 0.f, 1.f} // Correct axis of rotation (Z-axis)
+        );
     // Shoot the ball in the (possibly deviated) direction
     Vector3 final_shot_vec = Vector3{std::sin(shot_direction), std::cos(shot_direction), 0.f};
     auto held_ball_query = ctx.query<Grabbed, BallPhysics>();
@@ -528,7 +525,7 @@ void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
         GridPos, BallPhysics>>({});
 
     auto shootSystemNode = builder.addToGraph<ParallelForNode<Engine, shootSystem,
-        Entity, Action, GridPos, Orientation, InPossession, Inbounding, Team>>({});
+        Entity, Action, GridPos, Orientation, Inbounding, InPossession, Team>>({});
 }
 
 // =================================================== Sim Creation ===================================================
