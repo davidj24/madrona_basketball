@@ -357,12 +357,17 @@ inline void shootSystem(Engine &ctx,
 
 inline void moveAgentSystem(Engine &ctx,
                            Action &action,
-                           Position &agent_pos,
+                           Position &agent_pos, // Note: This should now store floats
                            Orientation &agent_orientation)
 {
+    // Define the duration of a single simulation step.
+    // For example, if your simulation runs at 30 steps per second.
+    const float delta_time = 1.0f / 30.0f;
+
     const GridState *grid = ctx.data().grid;
     if (action.rotate != 0)
     {
+        // Rotation logic is fine as it is
         float turn_angle = (pi/4.f) * action.rotate;
         Quat turn = Quat::angleAxis(turn_angle, Vector3{0, 0, 1});
         agent_orientation.orientation = turn * agent_orientation.orientation;
@@ -370,16 +375,24 @@ inline void moveAgentSystem(Engine &ctx,
 
     if (action.moveSpeed > 0)
     {
+        // Treat moveSpeed as a velocity in meters/second, not a distance.
+        // Let's say a moveSpeed of 1 corresponds to 5 m/s.
+        float agent_velocity_magnitude = action.moveSpeed * 5.0f;
+
         constexpr float angle_between_directions = pi / 4.f;
         float move_angle = action.moveAngle * angle_between_directions;
 
-        // Movement in meters per step
-        float move_speed_ms = action.moveSpeed * .1f; // 0.2 m/s per speed unit
-        float dx = std::sin(move_angle) * move_speed_ms;
-        float dy = -std::cos(move_angle) * move_speed_ms;
+        // Calculate velocity vector components
+        float vel_x = std::sin(move_angle);
+        float vel_y = -std::cos(move_angle); // Your forward is -Y
 
-        float new_x = agent_pos.x + dx;  
-        float new_y = agent_pos.y + dy;  
+        // Calculate distance to move this frame
+        float dx = vel_x * agent_velocity_magnitude * delta_time;
+        float dy = vel_y * agent_velocity_magnitude * delta_time;
+
+        // Update position (now using floats)
+        float new_x = agent_pos.x + dx;
+        float new_y = agent_pos.y + dy;
 
         // Boundary checking in continuous space
         new_x = std::clamp(new_x, 0.f, grid->width);

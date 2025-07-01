@@ -192,23 +192,29 @@ class MadronaPipeline:
     
     def draw_basketball_court(self):
         """Draws a basketball court that dynamically fits the grid."""
-        # Define court colors
-        COURT_ORANGE = (205, 133, 63)
-        COURT_BLUE = (20, 40, 80)
-        LINE_WHITE = (255, 255, 255)
-        KEY_RED = (139, 0, 0)
+        # --- NBA standard dimensions (meters) ---
+        NBA_COURT_W = 28.65
+        NBA_COURT_H = 15.24
+        KEY_W = 4.88
+        KEY_H = 5.79
+        FT_CIRCLE_R = 1.8
+        THREE_PT_R = 6.75
+        HOOP_OFFSET = 1.575  # Distance from baseline to hoop center
         LINE_THICKNESS = 3
 
-        # --- Dynamic Court Dimensions in meters ---
-        margin_meters = 2.0  # 1 meter margin
+        # --- Dynamic Court Rectangle ---
+        margin_meters = 2.0
         court_start_x = self.grid_offset_x + margin_meters * self.meters_to_pixels
         court_start_y = self.grid_offset_y + margin_meters * self.meters_to_pixels
-        court_width = (self.world_width_meters - 2 * margin_meters) * self.meters_to_pixels # NBA court is 28.65 meters long
-        court_height = (self.world_height_meters - 2 * margin_meters) * self.meters_to_pixels # NBA Court is 15.24 meters wide
-
+        court_width = (self.world_width_meters - 2 * margin_meters) * self.meters_to_pixels
+        court_height = (self.world_height_meters - 2 * margin_meters) * self.meters_to_pixels
         if court_width <= 0 or court_height <= 0: return
-
         court_rect = pygame.Rect(court_start_x, court_start_y, court_width, court_height)
+
+        # --- Calculate scale: pixels per meter for this court rectangle ---
+        px_per_meter_x = court_width / NBA_COURT_W
+        px_per_meter_y = court_height / NBA_COURT_H
+        px_per_meter = min(px_per_meter_x, px_per_meter_y)  # Use min to avoid overflow
 
         # --- Draw World Boundary ---
         # Draw world boundary (full world, not just court)
@@ -221,49 +227,46 @@ class MadronaPipeline:
         pygame.draw.rect(self.screen, (255, 255, 255), world_rect, 4)  # Yellow, 4px thick
 
         # --- Draw Court Background ---
-        pygame.draw.rect(self.screen, COURT_ORANGE, court_rect)
+        pygame.draw.rect(self.screen, (205, 133, 63), court_rect)
         playable_rect = court_rect.inflate(-LINE_THICKNESS * 2, -LINE_THICKNESS * 2)
-        pygame.draw.rect(self.screen, COURT_BLUE, playable_rect)
+        pygame.draw.rect(self.screen, (20, 40, 80), playable_rect)
 
         # --- Draw Court Markings ---
         center_x, center_y = court_rect.centerx, court_rect.centery
 
         # Center line
-        pygame.draw.line(self.screen, LINE_WHITE, (center_x, court_rect.top), (center_x, court_rect.bottom), LINE_THICKNESS)
+        pygame.draw.line(self.screen, (255, 255, 255), (center_x, court_rect.top), (center_x, court_rect.bottom), LINE_THICKNESS)
 
         # Center circle (3 meter radius in basketball)
-        center_circle_radius = int(3.0 * self.meters_to_pixels)
-        pygame.draw.circle(self.screen, LINE_WHITE, (center_x, center_y), center_circle_radius, LINE_THICKNESS)
-        pygame.draw.circle(self.screen, KEY_RED, (center_x, center_y), center_circle_radius - LINE_THICKNESS)
+        center_circle_radius = int(3.0 * px_per_meter)
+        pygame.draw.circle(self.screen, (255, 255, 255), (center_x, center_y), center_circle_radius, LINE_THICKNESS)
+        pygame.draw.circle(self.screen, (139, 0, 0), (center_x, center_y), center_circle_radius - LINE_THICKNESS)
 
         # --- Draw Features for Both Halves ---
         for side in [-1, 1]:  # -1 for left side, 1 for right side
             # Key (the "paint") - 5.8m x 4.9m in real basketball
-            key_width_meters = 5.8
-            key_height_meters = 4.9
-            key_width = int(key_width_meters * self.meters_to_pixels)
-            key_height = int(key_height_meters * self.meters_to_pixels)
-            key_x = court_rect.left if side == -1 else court_rect.right - key_width
-            key_y = center_y - key_height / 2
-            key_rect = pygame.Rect(key_x, key_y, key_width, key_height)
-            pygame.draw.rect(self.screen, KEY_RED, key_rect)
+            key_w = KEY_W * px_per_meter
+            key_h = KEY_H * px_per_meter
+            key_x = court_rect.left if side == -1 else court_rect.right - key_w
+            key_y = center_y - key_h / 2
+            key_rect = pygame.Rect(key_x, key_y, key_w, key_h)
+            pygame.draw.rect(self.screen, (139, 0, 0), key_rect)
 
             # Free-throw circle (1.8m radius)
-            ft_circle_radius = int(1.8 * self.meters_to_pixels)
-            ft_center_x = court_rect.left + key_width if side == -1 else court_rect.right - key_width
+            ft_circle_radius = int(FT_CIRCLE_R * px_per_meter)
+            ft_center_x = key_x + key_w if side == -1 else key_x
             arc_rect = pygame.Rect(ft_center_x - ft_circle_radius, center_y - ft_circle_radius, ft_circle_radius * 2, ft_circle_radius * 2)
             
             start_angle = -np.pi / 2 if side == -1 else np.pi / 2
             end_angle = np.pi / 2 if side == -1 else 3 * np.pi / 2
-            pygame.draw.arc(self.screen, LINE_WHITE, arc_rect, start_angle, end_angle, LINE_THICKNESS)
+            pygame.draw.arc(self.screen, (255, 255, 255), arc_rect, start_angle, end_angle, LINE_THICKNESS)
 
             # Three-point line (6.75m from basket in NBA)
-            hoop_offset_meters = 1.5  # 1.5 meters from edge
-            hoop_center_x = court_rect.left + hoop_offset_meters * self.meters_to_pixels if side == -1 else court_rect.right - hoop_offset_meters * self.meters_to_pixels
+            hoop_center_x = court_rect.left + HOOP_OFFSET * px_per_meter if side == -1 else court_rect.right - HOOP_OFFSET * px_per_meter
             
-            three_pt_radius = int(6.75 * self.meters_to_pixels)
+            three_pt_radius = int(THREE_PT_R * px_per_meter)
             three_pt_arc_rect = pygame.Rect(hoop_center_x - three_pt_radius, center_y - three_pt_radius, three_pt_radius * 2, three_pt_radius * 2)
-            pygame.draw.arc(self.screen, LINE_WHITE, three_pt_arc_rect, start_angle, end_angle, LINE_THICKNESS)
+            pygame.draw.arc(self.screen, (255, 255, 255), three_pt_arc_rect, start_angle, end_angle, LINE_THICKNESS)
     
 
 
