@@ -52,7 +52,9 @@ namespace madsimple {
 
         uint32_t period;
         uint32_t teamInPossession; // The index of the team that is currently in possession of the ball
+        uint32_t team0Hoop; // Entity id of team 0's hoop (will switch at half time)
         uint32_t team0Score;
+        uint32_t team1Hoop;
         uint32_t team1Score;
 
         float gameClock; // Time left, figure out if this is in seconds or timesteps, and how it should work with tickSystem
@@ -147,9 +149,9 @@ namespace madsimple {
 
     struct BallPhysics
     {
-        bool inFlight; // I should've camelCased this but now it's too late and I don't want to find every relevant instance and replace it bc it's also used in other files I didn't make
+        bool inFlight;
         Vector3 velocity;
-        uint32_t lastTouchedByID; // This is a team ID of which entity last touched the ball
+        uint32_t lastTouchedByID; // This is a team ID of which entity last touched the ball 
     };
 
     
@@ -185,7 +187,6 @@ namespace madsimple {
         Team
     > {};
 
-
     struct Basketball : public madrona::Archetype<
         Reset,
         Position,
@@ -195,7 +196,6 @@ namespace madsimple {
         CurStep,
         Grabbed
     > {};
-
 
     struct Hoop : public madrona::Archetype<
         Reset,
