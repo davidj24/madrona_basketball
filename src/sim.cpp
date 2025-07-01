@@ -273,7 +273,7 @@ inline void passSystem(Engine &ctx,
             in_possession.hasBall = false; // Since agents can only hold 1 ball at a time, if they pass it they can't be holding one anymore
             in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER; // Whoever passed the ball is no longer in possession of it
             inbounding.imInbounding = false;
-            ball_physics.velocity = agent_orientation.orientation.rotateVec(Vector3{0, 2, 0}); // Setting the ball's velocity to have the same direction as the agent's orientation
+            ball_physics.velocity = agent_orientation.orientation.rotateVec(Vector3{0, 1, 0}); // Setting the ball's velocity to have the same direction as the agent's orientation
                                                                                                // Note: we use 0, 2, 0 because that's forward in our simulation specifically
             ball_physics.inFlight = true;
             gameState.inboundingInProgress = false;
@@ -362,13 +362,13 @@ inline void moveAgentSystem(Engine &ctx,
 {
     // Define the duration of a single simulation step.
     // For example, if your simulation runs at 30 steps per second.
-    const float delta_time = 1.0f / 30.0f;
+    const float delta_time = 1.0f / 60.0f;
 
     const GridState *grid = ctx.data().grid;
     if (action.rotate != 0)
     {
         // Rotation logic is fine as it is
-        float turn_angle = (pi/4.f) * action.rotate;
+        float turn_angle = (pi/180.f) * action.rotate * 4;
         Quat turn = Quat::angleAxis(turn_angle, Vector3{0, 0, 1});
         agent_orientation.orientation = turn * agent_orientation.orientation;
     }
@@ -376,8 +376,8 @@ inline void moveAgentSystem(Engine &ctx,
     if (action.moveSpeed > 0)
     {
         // Treat moveSpeed as a velocity in meters/second, not a distance.
-        // Let's say a moveSpeed of 1 corresponds to 5 m/s.
-        float agent_velocity_magnitude = action.moveSpeed * 5.0f;
+        // Let's say a moveSpeed of 1 corresponds to 1 m/s.
+        float agent_velocity_magnitude = action.moveSpeed * 7;
 
         constexpr float angle_between_directions = pi / 4.f;
         float move_angle = action.moveAngle * angle_between_directions;

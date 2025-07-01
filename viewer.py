@@ -113,7 +113,7 @@ class MadronaPipeline:
             rewards=rewards, 
             start_x=self.world_width_meters / 2.0,  # Center of court
             start_y=self.world_height_meters / 2.0,  # Center of court
-            max_episode_length=1000,
+            max_episode_length=10000,
             exec_mode=ExecMode.CPU,
             num_worlds=1,
             gpu_id=-1
@@ -187,6 +187,118 @@ class MadronaPipeline:
             return None
         
 
+# ======================================================================= FUTURE LATER COURT ==================================================================
+# def draw_basketball_court(self):
+#         """
+#         Draws a basketball court styled after the Los Angeles Lakers court,
+#         correcting geometry and text placement.
+#         """
+#         # 1. Define Colors and Dynamic Sizes
+#         LAKERS_PURPLE = (85, 37, 130)
+#         LAKERS_GOLD = (253, 185, 39)
+#         WOOD_FLOOR = (210, 180, 140)  # A standard light wood color
+#         WOOD_PAINT = (190, 160, 120)  # A slightly darker wood for the paint
+#         BLACK = (0, 0, 0)
+#         LINE_THICKNESS = max(2, int(self.meters_to_pixels * 0.075))
+
+#         # 2. Calculate Court Dimensions in Pixels
+#         court_width_px = self.world_width_meters * self.meters_to_pixels
+#         court_height_px = self.world_height_meters * self.meters_to_pixels
+#         court_rect = pygame.Rect(
+#             self.grid_offset_x,
+#             self.grid_offset_y,
+#             court_width_px,
+#             court_height_px
+#         )
+#         center_x, center_y = court_rect.centerx, court_rect.centery
+
+#         # 3. Draw Court Floor and Black Border
+#         pygame.draw.rect(self.screen, BLACK, court_rect.inflate(LINE_THICKNESS, LINE_THICKNESS))
+#         pygame.draw.rect(self.screen, WOOD_FLOOR, court_rect)
+
+#         # --- Draw Features for Both Halves ---
+#         for side in [-1, 1]:  # -1 for left side, 1 for right side
+#             # --- Key ("The Paint") ---
+#             key_width = court_width_px * 0.26
+#             key_height = court_height_px * 0.4
+#             key_x = court_rect.left if side == -1 else court_rect.right - key_width
+#             key_rect = pygame.Rect(key_x, center_y - key_height / 2, key_width, key_height)
+            
+#             # Draw filled key area with darker wood color
+#             pygame.draw.rect(self.screen, WOOD_PAINT, key_rect)
+#             # Draw purple outline for the key
+#             pygame.draw.rect(self.screen, LAKERS_PURPLE, key_rect, LINE_THICKNESS)
+
+#             # --- Free-Throw Semi-Circle ---
+#             ft_circle_radius = key_height / 2
+#             ft_center_x = court_rect.left + key_width if side == -1 else court_rect.right - key_width
+#             ft_arc_rect = pygame.Rect(ft_center_x - ft_circle_radius, center_y - ft_circle_radius, ft_circle_radius * 2, ft_circle_radius * 2)
+#             start_angle = -np.pi / 2 if side == -1 else np.pi / 2
+#             end_angle = np.pi / 2 if side == -1 else 3 * np.pi / 2
+#             pygame.draw.arc(self.screen, LAKERS_PURPLE, ft_arc_rect, start_angle, end_angle, LINE_THICKNESS)
+
+#             # --- Corrected Three-Point Line (Arc + Straight Lines) ---
+#             three_pt_radius = key_width * 1.5 # Make radius proportional to key
+#             hoop_dist_from_baseline = key_width * 0.35
+#             hoop_x = court_rect.left + hoop_dist_from_baseline if side == -1 else court_rect.right - hoop_dist_from_baseline
+            
+#             # Arc part
+#             three_pt_arc_rect = pygame.Rect(hoop_x - three_pt_radius, center_y - three_pt_radius, three_pt_radius * 2, three_pt_radius * 2)
+#             pygame.draw.arc(self.screen, LAKERS_PURPLE, three_pt_arc_rect, start_angle, end_angle, LINE_THICKNESS)
+            
+#             # Straight lines for the corner 3
+#             corner_three_y_start = center_y + np.sqrt(three_pt_radius**2 - (hoop_x - key_rect.right)**2) if side == -1 else center_y + np.sqrt(three_pt_radius**2 - (hoop_x - key_rect.left)**2)
+#             corner_three_y_end = court_rect.bottom
+#             corner_x = key_rect.right if side == -1 else key_rect.left
+#             pygame.draw.line(self.screen, LAKERS_PURPLE, (corner_x, corner_three_y_start), (corner_x, corner_three_y_end), LINE_THICKNESS)
+#             pygame.draw.line(self.screen, LAKERS_PURPLE, (corner_x, court_rect.top), (corner_x, court_rect.top + (court_rect.height - (corner_three_y_start - court_rect.top))), LINE_THICKNESS)
+
+
+#         # --- Center Line and Logo ---
+#         pygame.draw.line(self.screen, LAKERS_PURPLE, (center_x, court_rect.top), (center_x, court_rect.bottom), LINE_THICKNESS)
+#         center_circle_radius = court_height_px * 0.15
+#         pygame.draw.circle(self.screen, LAKERS_PURPLE, (center_x, center_y), center_circle_radius, LINE_THICKNESS)
+#         logo_ball_radius = center_circle_radius * 0.85
+#         pygame.draw.circle(self.screen, LAKERS_GOLD, (center_x, center_y), logo_ball_radius)
+#         pygame.draw.circle(self.screen, BLACK, (center_x, center_y), logo_ball_radius, max(1, int(LINE_THICKNESS / 2)))
+
+#         # --- Render Text Elements ---
+#         try:
+#             main_font = pygame.font.SysFont('impact', int(court_height_px * 0.1), bold=True)
+#             small_font = pygame.font.SysFont('arial', int(court_height_px * 0.04), bold=True)
+
+#             # Center "LAKERS" text
+#             logo_text_surface = main_font.render('LAKERS', True, LAKERS_PURPLE)
+#             self.screen.blit(logo_text_surface, logo_text_surface.get_rect(center=(center_x, center_y)))
+
+#             # Numbers "8" and "24" - repositioned
+#             num_padding = court_width_px * 0.05
+#             num_8_surface = main_font.render('8', True, LAKERS_PURPLE)
+#             self.screen.blit(num_8_surface, num_8_surface.get_rect(center=(court_rect.left + num_padding, center_y)))
+#             num_24_surface = main_font.render('24', True, LAKERS_PURPLE)
+#             self.screen.blit(num_24_surface, num_24_surface.get_rect(center=(court_rect.right - num_padding, center_y)))
+
+#             # Side "LAKERS" text - repositioned and styled
+#             side_text_surface = main_font.render('LAKERS', True, LAKERS_GOLD)
+#             side_text_padding = court_height_px * 0.02
+#             # Left
+#             left_bg_rect = pygame.Rect(0, 0, court_height_px, side_text_surface.get_height() * 1.2)
+#             left_bg_rect.center = (court_rect.left - side_text_padding - left_bg_rect.width / 2, center_y)
+#             left_text = pygame.transform.rotate(side_text_surface, 90)
+#             self.screen.blit(left_text, left_text.get_rect(center=left_bg_rect.center))
+#             # Right
+#             right_text = pygame.transform.rotate(side_text_surface, -90)
+#             self.screen.blit(right_text, right_text.get_rect(center=(court_rect.right + side_text_padding + left_bg_rect.width / 2, center_y)))
+            
+#             # Top text - repositioned
+#             top_text_padding = small_font.get_height() * 0.5
+#             lcom_surface = small_font.render('Lakers.com', True, BLACK)
+#             self.screen.blit(lcom_surface, lcom_surface.get_rect(midleft=(court_rect.left, court_rect.top - top_text_padding)))
+#             at_lakers_surface = small_font.render('@Lakers', True, BLACK)
+#             self.screen.blit(at_lakers_surface, at_lakers_surface.get_rect(midright=(court_rect.right, court_rect.top - top_text_padding)))
+
+#         except pygame.error as e:
+#             print(f"Warning: Font rendering failed (fonts might not be installed). Skipping text. Error: {e}")
 
 
     
@@ -429,7 +541,7 @@ class MadronaPipeline:
                     dy = direction_3d[1]
                     
                     # Set the screen length of the orientation line (0.8 meters)
-                    arrow_length_meters = 0.8
+                    arrow_length_meters = 0.5
                     arrow_length_pixels = arrow_length_meters * self.meters_to_pixels
                     
                     # Calculate the end point of the orientation line
@@ -637,7 +749,7 @@ class MadronaPipeline:
             
             # Update display
             pygame.display.flip()
-            self.clock.tick(10)  # 10 FPS for easy viewing
+            self.clock.tick(60)  # 10 FPS for easy viewing
         
         pygame.quit()
         print(f"Pipeline ended after {self.step_count} steps")
