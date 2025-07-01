@@ -68,11 +68,11 @@ namespace madsimple {
         int32_t resetNow;
     };
 
-    struct GridPos 
+    struct Position 
     {
-        int32_t x;
-        int32_t y;
-        int32_t z;
+        float x;
+        float y;
+        float z;
     };
 
     struct RandomMovement 
@@ -175,7 +175,7 @@ namespace madsimple {
     struct Agent : public madrona::Archetype<
         Reset,
         Action,
-        GridPos,
+        Position,
         Reward,
         Done,
         CurStep,
@@ -188,7 +188,7 @@ namespace madsimple {
 
     struct Basketball : public madrona::Archetype<
         Reset,
-        GridPos,
+        Position,
         BallPhysics,
         // RandomMovement,
         Done,
@@ -199,7 +199,7 @@ namespace madsimple {
 
     struct Hoop : public madrona::Archetype<
         Reset,
-        GridPos,
+        Position,
         ImAHoop,
         ScoringZone,
         // RandomMovement,

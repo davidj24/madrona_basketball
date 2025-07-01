@@ -57,7 +57,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
     // ================================================== General Components ==================================================
     registry.registerComponent<Reset>();
-    registry.registerComponent<GridPos>();
+    registry.registerComponent<Position>();
     registry.registerComponent<Done>();
     registry.registerComponent<CurStep>();
     registry.registerComponent<RandomMovement>();
@@ -91,18 +91,18 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
     // ================================================= Tensor Exports For Viewer =================================================
     registry.exportColumn<Agent, Action>((uint32_t)ExportID::Action);
-    registry.exportColumn<Agent, GridPos>((uint32_t)ExportID::AgentPos);
+    registry.exportColumn<Agent, Position>((uint32_t)ExportID::AgentPos);
     registry.exportColumn<Agent, Reward>((uint32_t)ExportID::Reward);
     registry.exportColumn<Agent, Done>((uint32_t)ExportID::Done);
     registry.exportColumn<Agent, InPossession>((uint32_t)ExportID::AgentPossession);
     registry.exportColumn<Agent, Team>((uint32_t)ExportID::TeamData);
     registry.exportColumn<Agent, Orientation>((uint32_t)ExportID::Orientation);
 
-    registry.exportColumn<Basketball, GridPos>((uint32_t)ExportID::BasketballPos);
+    registry.exportColumn<Basketball, Position>((uint32_t)ExportID::BasketballPos);
     registry.exportColumn<Basketball, BallPhysics>((uint32_t)ExportID::BallPhysicsData);
     registry.exportColumn<Basketball, Grabbed>((uint32_t)ExportID::BallGrabbed);
 
-    registry.exportColumn<Hoop, GridPos>((uint32_t)ExportID::HoopPos);
+    registry.exportColumn<Hoop, Position>((uint32_t)ExportID::HoopPos);
 
     // Singleton exports
     registry.exportSingleton<GameState>((uint32_t)ExportID::GameState);
@@ -118,7 +118,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
 //=================================================== Ball Systems ===================================================
 inline void moveBallRandomly(Engine &ctx,
-                    GridPos &ball_pos,
+                    Position &ball_pos,
                     RandomMovement &random_movement)
 {
     random_movement.moveTimer ++;
@@ -127,14 +127,15 @@ inline void moveBallRandomly(Engine &ctx,
         random_movement.moveTimer = 0.f;
         const GridState *grid = ctx.data().grid;
 
-        int dx = (rand() % 3) - 1; // -1, 0, or 1
-        int dy = (rand() % 3) - 1; // -1, 0, or 1
+        // Random movement in continuous space (0.1m steps)
+        float dx = ((rand() % 3) - 1) * 0.1f; // -0.1, 0, or 0.1 meters
+        float dy = ((rand() % 3) - 1) * 0.1f; // -0.1, 0, or 0.1 meters
 
-        int32_t new_x = ball_pos.x + dx;
-        int32_t new_y = ball_pos.y + dy;
+        float new_x = ball_pos.x + dx;
+        float new_y = ball_pos.y + dy;
 
-        new_x = std::clamp(new_x, 0, grid->width - 1);
-        new_y = std::clamp(new_y, 0, grid->height - 1);
+        new_x = std::clamp(new_x, 0.f, grid->width);
+        new_y = std::clamp(new_y, 0.f, grid->height);
 
         ball_pos.x = new_x;
         ball_pos.y = new_y;
@@ -144,12 +145,12 @@ inline void moveBallRandomly(Engine &ctx,
 
 
 inline void moveBallSystem(Engine &ctx,
-                           GridPos &ball_pos,
+                           Position &ball_pos,
                            BallPhysics &ball_physics,
                            Grabbed &grabbed)
 {
-    auto holder_query = ctx.query<Entity, GridPos, InPossession>();
-    ctx.iterateQuery(holder_query, [&](Entity &agent_entity, GridPos &agent_pos, InPossession &in_possession)
+    auto holder_query = ctx.query<Entity, Position, InPossession>();
+    ctx.iterateQuery(holder_query, [&](Entity &agent_entity, Position &agent_pos, InPossession &in_possession)
     {
         // Make the ball move with the agent if it's held
         bool agent_is_holding_this_ball = (in_possession.hasBall == true &&
@@ -165,17 +166,21 @@ inline void moveBallSystem(Engine &ctx,
     if (ball_physics.velocity.length() == 0 || grabbed.isGrabbed) {return;}
 
     const GridState* grid = ctx.data().grid; // To clamp later
-    int32_t new_x = ball_pos.x + (int32_t)ball_physics.velocity[0];
-    int32_t new_y = ball_pos.y + (int32_t)ball_physics.velocity[1];
-    int32_t new_z = ball_pos.z + (int32_t)ball_physics.velocity[2];
+    float new_x = ball_pos.x + ball_physics.velocity[0];
+    float new_y = ball_pos.y + ball_physics.velocity[1];
+    float new_z = ball_pos.z + ball_physics.velocity[2];
 
-    new_x = std::clamp(new_x, 0, (int32_t)grid->width - 1);
-    new_y = std::clamp(new_y, 0, (int32_t)grid->height - 1);
-    // new_z = std::clamp(new_z, 0, grid->depth - 1);
+    new_x = std::clamp(new_x, 0.f, grid->width);
+    new_y = std::clamp(new_y, 0.f, grid->height);
+    // new_z = std::clamp(new_z, 0.f, grid->depth);
     
-    // Wall collision (if needed)
-    GridPos test_pos = {new_x, new_y, new_z};
-    const Cell &new_cell = grid->cells[test_pos.y * grid->width + test_pos.x];
+    // Convert to discrete grid for wall collision checking
+    int32_t discrete_x = (int32_t)(new_x * grid->cellsPerMeter);
+    int32_t discrete_y = (int32_t)(new_y * grid->cellsPerMeter);
+    discrete_x = std::clamp(discrete_x, 0, grid->discreteWidth - 1);
+    discrete_y = std::clamp(discrete_y, 0, grid->discreteHeight - 1);
+    
+    const Cell &new_cell = grid->cells[discrete_y * grid->discreteWidth + discrete_x];
     
     if (!(new_cell.flags & CellFlag::Wall)) {
         ball_pos.x = new_x;
@@ -190,13 +195,13 @@ inline void moveBallSystem(Engine &ctx,
 inline void processGrab(Engine &ctx,
                         Entity agent_entity,
                         Action &action,
-                        GridPos &agent_pos,
+                        Position &agent_pos,
                         InPossession &in_possession,
                         Team &team)
 {
     GameState &gameState = ctx.singleton<GameState>();
-    auto basketball_query = ctx.query<Entity, GridPos, Grabbed, BallPhysics>();
-    ctx.iterateQuery(basketball_query, [&](Entity ball_entity, GridPos &basketball_pos, Grabbed &grabbed, BallPhysics &ball_physics) 
+    auto basketball_query = ctx.query<Entity, Position, Grabbed, BallPhysics>();
+    ctx.iterateQuery(basketball_query, [&](Entity ball_entity, Position &basketball_pos, Grabbed &grabbed, BallPhysics &ball_physics) 
     {
         if (action.grab == 0) {return;}
 
@@ -214,8 +219,11 @@ inline void processGrab(Engine &ctx,
             return;
         }
 
-        // Otherwise, try to grab a ball at current position
-        if (basketball_pos.x == agent_pos.x && basketball_pos.y == agent_pos.y) 
+        // Check if ball is within grab distance (0.5 meters)
+        float distance = sqrt((basketball_pos.x - agent_pos.x) * (basketball_pos.x - agent_pos.x) +
+                             (basketball_pos.y - agent_pos.y) * (basketball_pos.y - agent_pos.y));
+        
+        if (distance <= 0.5f) // 0.5 meter grab radius
         {
             auto agent_query = ctx.query<InPossession>();
             ctx.iterateQuery(agent_query, [&] (InPossession &other_in_possession)
@@ -277,7 +285,7 @@ inline void passSystem(Engine &ctx,
 inline void shootSystem(Engine &ctx,
                         Entity agent_entity,
                         Action &action,
-                        GridPos agent_pos,
+                        Position agent_pos,
                         Orientation &agent_orientation,
                         Inbounding &inbounding,
                         InPossession &in_possession,
@@ -286,9 +294,9 @@ inline void shootSystem(Engine &ctx,
     if (action.shoot == 0 || !in_possession.hasBall) {return;}
 
     // Find the attacking hoop (not defendingHoopID)
-    auto hoop_query = ctx.query<Entity, GridPos, ScoringZone>();
-    GridPos attacking_hoop_pos = {0, 0, 0};
-    ctx.iterateQuery(hoop_query, [&](Entity hoop_entity, GridPos &hoop_pos, ScoringZone &scoring_zone) {
+    auto hoop_query = ctx.query<Entity, Position, ScoringZone>();
+    Position attacking_hoop_pos = {0.f, 0.f, 0.f};
+    ctx.iterateQuery(hoop_query, [&](Entity hoop_entity, Position &hoop_pos, ScoringZone &scoring_zone) {
         if ((uint32_t)hoop_entity.id != team.defendingHoopID)
         {
             attacking_hoop_pos = hoop_pos;
@@ -298,8 +306,8 @@ inline void shootSystem(Engine &ctx,
 
     // Calculate vector to attacking hoop
     Vector3 shot_vector = Vector3{
-        static_cast<float>(attacking_hoop_pos.x - agent_pos.x),
-        static_cast<float>(attacking_hoop_pos.y - agent_pos.y),
+        attacking_hoop_pos.x - agent_pos.x,
+        attacking_hoop_pos.y - agent_pos.y,
         0.f
     };
 
@@ -309,7 +317,7 @@ inline void shootSystem(Engine &ctx,
     // Calculate intended angle
     float intended_direction = std::atan2(shot_vector.x, shot_vector.y); // This points in the direction of the hoop
 
-    float direction_deviation_per_meter = 0.0f;
+    float direction_deviation_per_meter = 0.1f; // radians per meter distance
     float stddev = direction_deviation_per_meter * distance_to_hoop;
     static thread_local std::mt19937 rng(std::random_device{}());
     std::normal_distribution<float> dist(0.0f, stddev);
@@ -340,7 +348,7 @@ inline void shootSystem(Engine &ctx,
             in_possession.hasBall = false;
             in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
             inbounding.imInbounding = false;
-            ball_physics.velocity = final_shot_vec * 2.0f;
+            ball_physics.velocity = final_shot_vec * 5.0f; // 5 m/s shot speed
             ball_physics.inFlight = true;
         }
     });
@@ -349,7 +357,7 @@ inline void shootSystem(Engine &ctx,
 
 inline void moveAgentSystem(Engine &ctx,
                            Action &action,
-                           GridPos &agent_pos,
+                           Position &agent_pos,
                            Orientation &agent_orientation)
 {
     const GridState *grid = ctx.data().grid;
@@ -365,19 +373,25 @@ inline void moveAgentSystem(Engine &ctx,
         constexpr float angle_between_directions = pi / 4.f;
         float move_angle = action.moveAngle * angle_between_directions;
 
-        int32_t dx = (int32_t)std::round(std::sin(move_angle) * action.moveSpeed);
-        int32_t dy = (int32_t)std::round(-std::cos(move_angle) * action.moveSpeed);
+        // Movement in meters per step
+        float move_speed_ms = action.moveSpeed * .1f; // 0.2 m/s per speed unit
+        float dx = std::sin(move_angle) * move_speed_ms;
+        float dy = -std::cos(move_angle) * move_speed_ms;
 
-        int32_t new_x = agent_pos.x + dx;  
-        int32_t new_y = agent_pos.y + dy;  
+        float new_x = agent_pos.x + dx;  
+        float new_y = agent_pos.y + dy;  
 
-        // Boundary checking
-        new_x = std::clamp(new_x, 0, grid->width - 1);
-        new_y = std::clamp(new_y, 0, grid->height - 1);
+        // Boundary checking in continuous space
+        new_x = std::clamp(new_x, 0.f, grid->width);
+        new_y = std::clamp(new_y, 0.f, grid->height);
 
-        // Wall collision (if needed)
-        GridPos test_pos = {new_x, new_y, agent_pos.z};
-        const Cell &new_cell = grid->cells[test_pos.y * grid->width + test_pos.x];
+        // Convert to discrete grid for wall collision checking
+        int32_t discrete_x = (int32_t)(new_x * grid->cellsPerMeter);
+        int32_t discrete_y = (int32_t)(new_y * grid->cellsPerMeter);
+        discrete_x = std::clamp(discrete_x, 0, grid->discreteWidth - 1);
+        discrete_y = std::clamp(discrete_y, 0, grid->discreteHeight - 1);
+        
+        const Cell &new_cell = grid->cells[discrete_y * grid->discreteWidth + discrete_x];
         
         if (!(new_cell.flags & CellFlag::Wall)) {
             agent_pos.x = new_x;
@@ -391,7 +405,7 @@ inline void moveAgentSystem(Engine &ctx,
 inline void tick(Engine &ctx,
                  Entity agent_entity,
                  Reset &reset,
-                 GridPos &grid_pos,
+                 Position &position,
                  Reward &reward, //add later
                  Done &done,
                  CurStep &episode_step,
@@ -400,7 +414,7 @@ inline void tick(Engine &ctx,
 {
     const GridState *grid = ctx.data().grid;
 
-    GridPos new_pos = grid_pos;
+    Position new_pos = position;
 
     bool episode_done = false;
     if (reset.resetNow != 0) 
@@ -408,10 +422,6 @@ inline void tick(Engine &ctx,
         reset.resetNow = 0;
         episode_done = true;
     }
-
-    // if ((cur_cell.flags & CellFlag::End)) {
-    //     episode_done = true;
-    // }
 
     uint32_t cur_step = episode_step.step;
 
@@ -425,29 +435,28 @@ inline void tick(Engine &ctx,
         in_possession.hasBall = false;
         inbounding.imInbounding = false;
 
-
         // Reset all basketballs when episode ends
-        auto basketball_query = ctx.query<GridPos, Grabbed, BallPhysics>();
-        ctx.iterateQuery(basketball_query, [&](GridPos &basketball_pos, Grabbed &grabbed, BallPhysics &ball_physics) 
+        auto basketball_query = ctx.query<Position, Grabbed, BallPhysics>();
+        ctx.iterateQuery(basketball_query, [&](Position &basketball_pos, Grabbed &grabbed, BallPhysics &ball_physics) 
         {
             grabbed.isGrabbed = false;
             grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER;
             ball_physics.inFlight = false;
             ball_physics.velocity = Vector3::zero();
             // Reset basketball to start position
-            basketball_pos = GridPos 
+            basketball_pos = Position 
             {
                 grid->startX,
                 grid->startY,
-                0
+                0.f
             };
             ball_physics.lastTouchedByID = ENTITY_ID_PLACEHOLDER;
         });
 
-        new_pos = GridPos {
+        new_pos = Position {
             grid->startX,
             grid->startY,
-            0
+            0.f
         };
 
         episode_step.step = 0;
@@ -458,23 +467,33 @@ inline void tick(Engine &ctx,
         episode_step.step = cur_step + 1;
     }
 
-    grid_pos = new_pos;
+    position = new_pos;
 
-    // Calculate reward based on current position
-    const Cell &cur_cell = grid->cells[grid_pos.y * grid->width + grid_pos.x];
+    // Calculate reward based on current position (convert to discrete for cell lookup)
+    int32_t discrete_x = (int32_t)(position.x * grid->cellsPerMeter);
+    int32_t discrete_y = (int32_t)(position.y * grid->cellsPerMeter);
+    discrete_x = std::clamp(discrete_x, 0, grid->discreteWidth - 1);
+    discrete_y = std::clamp(discrete_y, 0, grid->discreteHeight - 1);
+    
+    const Cell &cur_cell = grid->cells[discrete_y * grid->discreteWidth + discrete_x];
     reward.r = cur_cell.reward;
 }
 
 
 
 inline void updateLastTouchSystem(Engine &ctx,
-                                  GridPos &ball_pos,
+                                  Position &ball_pos,
                                   BallPhysics &ball_physics)
 {
-    auto touched_agent_query = ctx.query<GridPos, Team>();
-    ctx.iterateQuery(touched_agent_query, [&] (GridPos &agent_pos, Team &team)
+    auto touched_agent_query = ctx.query<Position, Team>();
+    ctx.iterateQuery(touched_agent_query, [&] (Position &agent_pos, Team &team)
     {
-        if (ball_pos.x == agent_pos.x && ball_pos.y == agent_pos.y && ball_pos.z == agent_pos.z) 
+        // Check if agent is within touch distance (0.5 meters)
+        float distance = sqrt((ball_pos.x - agent_pos.x) * (ball_pos.x - agent_pos.x) +
+                             (ball_pos.y - agent_pos.y) * (ball_pos.y - agent_pos.y) +
+                             (ball_pos.z - agent_pos.z) * (ball_pos.z - agent_pos.z));
+        
+        if (distance <= 0.5f) 
         {
             ball_physics.lastTouchedByID = (uint32_t)team.teamIndex;
         }
@@ -485,7 +504,7 @@ inline void updateLastTouchSystem(Engine &ctx,
 
 inline void outOfBoundsSystem(Engine &ctx,
                               Entity ball_entity,
-                              GridPos &ball_pos,
+                              Position &ball_pos,
                               Grabbed &grabbed,
                               BallPhysics &ball_physics)
 {
@@ -493,26 +512,26 @@ inline void outOfBoundsSystem(Engine &ctx,
     GameState &gameState = ctx.singleton<GameState>();
     
 
-    // Check if the ball is out of bounds
-    constexpr int COURT_SIDELINE_LENGTH = 1;
-    if (ball_pos.x < COURT_SIDELINE_LENGTH || ball_pos.x >= grid->width - COURT_SIDELINE_LENGTH ||
-        ball_pos.y < COURT_SIDELINE_LENGTH || ball_pos.y >= grid->height - COURT_SIDELINE_LENGTH)
+    // Check if the ball is out of bounds (1 meter sideline)
+    constexpr float COURT_SIDELINE_WIDTH = 1.0f; // 1 meter sideline
+    if (ball_pos.x < COURT_SIDELINE_WIDTH || ball_pos.x >= grid->width - COURT_SIDELINE_WIDTH ||
+        ball_pos.y < COURT_SIDELINE_WIDTH || ball_pos.y >= grid->height - COURT_SIDELINE_WIDTH)
         // ball_pos.z < 0 || ball_pos.z >= grid->depth) for when we're in 3D later
     {
         // Reset the ball physics
         ball_physics.inFlight = false;
         ball_physics.velocity = Vector3::zero();
 
-        auto agent_query = ctx.query<Entity, Team, InPossession, GridPos, Inbounding>();
-        ctx.iterateQuery(agent_query, [&] (Entity agent_entity, Team &agent_team, InPossession &in_possession, GridPos &agent_pos, Inbounding &inbounding)
+        auto agent_query = ctx.query<Entity, Team, InPossession, Position, Inbounding>();
+        ctx.iterateQuery(agent_query, [&] (Entity agent_entity, Team &agent_team, InPossession &in_possession, Position &agent_pos, Inbounding &inbounding)
         {
             // If an agent has the ball, we need to reset their position
             if (in_possession.ballEntityID == ball_entity.id && agent_team.teamIndex == ball_physics.lastTouchedByID && inbounding.imInbounding == false)
             {
-                agent_pos = GridPos {
+                agent_pos = Position {
                     grid->startX,
                     grid->startY,
-                    0
+                    0.f
                 };
                 in_possession.hasBall = false;
                 in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
@@ -542,31 +561,31 @@ void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
     TaskGraphBuilder &builder = taskgraph_mgr.init(0);
 
     auto moveAgentSystemNode = builder.addToGraph<ParallelForNode<Engine, moveAgentSystem,
-        Action, GridPos, Orientation>>({});
+        Action, Position, Orientation>>({});
 
     auto tickNode = builder.addToGraph<ParallelForNode<Engine, tick,
-        Entity, Reset, GridPos, Reward, Done, CurStep, InPossession, Inbounding>>({});
+        Entity, Reset, Position, Reward, Done, CurStep, InPossession, Inbounding>>({});
     
     // builder.addToGraph<ParallelForNode<Engine, moveBallRandomly,
-    //     GridPos, RandomMovement>>({});
+    //     Position, RandomMovement>>({});
 
     auto processGrabNode = builder.addToGraph<ParallelForNode<Engine, processGrab,
-        Entity, Action, GridPos, InPossession, Team>>({});
+        Entity, Action, Position, InPossession, Team>>({});
 
     auto passSystemNode = builder.addToGraph<ParallelForNode<Engine, passSystem,
         Entity, Action, Orientation, InPossession, Inbounding>>({});
 
     auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
-        GridPos, BallPhysics, Grabbed>>({processGrabNode});
+        Position, BallPhysics, Grabbed>>({processGrabNode});
 
     auto outOfBoundsSystemNode = builder.addToGraph<ParallelForNode<Engine, outOfBoundsSystem,
-        Entity, GridPos, Grabbed, BallPhysics>>({passSystemNode, moveBallSystemNode});
+        Entity, Position, Grabbed, BallPhysics>>({passSystemNode, moveBallSystemNode});
 
     auto updateLastTouchSystemNode = builder.addToGraph<ParallelForNode<Engine, updateLastTouchSystem,
-        GridPos, BallPhysics>>({});
+        Position, BallPhysics>>({});
 
     auto shootSystemNode = builder.addToGraph<ParallelForNode<Engine, shootSystem,
-        Entity, Action, GridPos, Orientation, Inbounding, InPossession, Team>>({});
+        Entity, Action, Position, Orientation, Inbounding, InPossession, Team>>({});
 }
 
 // =================================================== Sim Creation ===================================================
@@ -577,33 +596,41 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
       grid(init.grid),
       maxEpisodeLength(cfg.maxEpisodeLength)
 {
-    ctx.singleton<GameState>() = GameState // CHANGE LATER TO INCLUDE OTHER ATTRIBUTES
+    ctx.singleton<GameState>() = GameState 
     {
         .inboundingInProgress = false,
+        .liveBall = true,
         .period = 1,
-        .gameClock = 720,
-        .shotClock = 24
+        .teamInPossession = 0,
+        .team0Score = 0,
+        .team1Score = 0,
+        .gameClock = 720.0f,
+        .shotClock = 24.0f
     };
 
     std::vector<Vector3> team_colors = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
     for (int i = 0; i < NUM_AGENTS; i++) 
     {
         Entity agent = ctx.makeEntity<Agent>();
-        ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0}; // Initialize with no action
-        ctx.get<GridPos>(agent) = GridPos 
+        ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0, 0, 0}; // Initialize with no action - fixed field count
+        ctx.get<Position>(agent) = Position 
         {
-            (grid->startX + i - 5),
+            grid->startX + (i - 2) * 1.0f, // Space agents 1 meter apart
             grid->startY,
-            0
+            0.f
         };
         ctx.get<Reset>(agent) = Reset{0}; // Initialize reset component
-        ctx.get<Inbounding>(agent) = {false};
+        ctx.get<Inbounding>(agent) = Inbounding{false, true}; // Fixed field initialization
         ctx.get<Reward>(agent).r = 0.f;
         ctx.get<Done>(agent).episodeDone = 0.f;
         ctx.get<CurStep>(agent).step = 0;
         ctx.get<InPossession>(agent) = {false, ENTITY_ID_PLACEHOLDER};
         ctx.get<Orientation>(agent) = Orientation {Quat::id()};
-        ctx.get<Team>(agent) = {i % 2, team_colors[i % 2]}, i % 2; // Alternates agent teams and colors
+        
+        // Set defending hoop based on team
+        uint32_t defending_hoop_id = (i % 2 == 0) ? 1 : 0; // Team 0 defends hoop 1, Team 1 defends hoop 0
+        
+        ctx.get<Team>(agent) = Team{i % 2, team_colors[i % 2], defending_hoop_id}; // Fixed initialization
     };
 
     
@@ -611,11 +638,11 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
     for (int i = 0; i < NUM_BASKETBALLS; i++) 
     {
         Entity basketball = ctx.makeEntity<Basketball>();
-        ctx.get<GridPos>(basketball) = GridPos 
+        ctx.get<Position>(basketball) = Position 
         {
             grid->startX,   
             grid->startY,  
-            0
+            0.f
         };
         ctx.get<Reset>(basketball) = Reset{0}; // Initialize reset component
         ctx.get<Done>(basketball).episodeDone = 0.f;
@@ -635,38 +662,38 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
     for (int i = 0; i < NUM_HOOPS; i++) 
     {
         Entity hoop = ctx.makeEntity<Hoop>();
-        GridPos hoop_pos;
+        Position hoop_pos;
         if (i == 0) 
         {
-            // Left hoop
-            hoop_pos = GridPos { 3, 17, 0 };
+            // Left hoop (3 meters from left edge, center court)
+            hoop_pos = Position { 3.0f, grid->height / 2.0f, 0.f };
         } 
         else if (i == 1) 
         {
-            // Right hoop  
-            hoop_pos = GridPos { 47, 17, 0 };
+            // Right hoop (3 meters from right edge, center court)  
+            hoop_pos = Position { grid->width - 3.0f, grid->height / 2.0f, 0.f };
         } 
         else 
         {
             // Additional hoops (if NUM_HOOPS > 2)
-            hoop_pos = GridPos 
+            hoop_pos = Position 
             { 
-                grid->startX + 10 + i * 5,   
-                grid->startY + 10,  
-                0
+                grid->startX + 10.0f + i * 5.0f,   
+                grid->startY + 10.0f,  
+                0.f
             };
         }
 
-        ctx.get<GridPos>(hoop) = hoop_pos;
+        ctx.get<Position>(hoop) = hoop_pos;
         ctx.get<Reset>(hoop) = Reset{0};
         ctx.get<Done>(hoop).episodeDone = 0.f;
         ctx.get<CurStep>(hoop).step = 0;
         ctx.get<ImAHoop>(hoop) = ImAHoop{};
         ctx.get<ScoringZone>(hoop) = ScoringZone 
         {
-            1.f, // Radius of scoring zone
-            2.f, // Height of scoring zone
-            Vector3{static_cast<float>(hoop_pos.x), static_cast<float>(hoop_pos.y), static_cast<float>(hoop_pos.z)} // Center of the scoring zone
+            1.0f, // Radius of scoring zone (1 meter)
+            2.0f, // Height of scoring zone (2 meters)
+            Vector3{hoop_pos.x, hoop_pos.y, hoop_pos.z} // Center of the scoring zone
         };
         
 

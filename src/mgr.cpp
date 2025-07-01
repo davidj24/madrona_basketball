@@ -157,22 +157,25 @@ namespace madsimple {
         switch (cfg.execMode) {
         case ExecMode::CPU: {
             EpisodeManager *episode_mgr = new EpisodeManager { 0 };
-
+            
             uint64_t num_cell_bytes =
-                sizeof(Cell) * src_grid.width * src_grid.height;
+                sizeof(Cell) * src_grid.discreteWidth * src_grid.discreteHeight;
 
             auto *grid_data =
                 (char *)malloc(sizeof(GridState) + num_cell_bytes);
             Cell *cpu_cell_data = (Cell *)(grid_data + sizeof(GridState));
 
-            GridState *cpu_grid = (GridState *)grid_data;
-            *cpu_grid = GridState {
-                .cells = cpu_cell_data,
-                .startX = src_grid.startX,
-                .startY = src_grid.startY,
-                .width = src_grid.width,
-                .height = src_grid.height,
-            };
+        GridState *cpu_grid = (GridState *)grid_data;
+        *cpu_grid = GridState {
+            .cells = cpu_cell_data,
+            .startX = src_grid.startX,
+            .startY = src_grid.startY,
+            .width = src_grid.width,
+            .height = src_grid.height,
+            .cellsPerMeter = src_grid.cellsPerMeter,
+            .discreteWidth = src_grid.discreteWidth,
+            .discreteHeight = src_grid.discreteHeight,
+        };
 
             memcpy(cpu_cell_data, src_grid.cells, num_cell_bytes);
 
@@ -194,7 +197,7 @@ namespace madsimple {
             REQ_CUDA(cudaMemset(episode_mgr, 0, sizeof(EpisodeManager)));
 
             uint64_t num_cell_bytes =
-                sizeof(Cell) * src_grid.width * src_grid.height;
+                sizeof(Cell) * src_grid.discreteWidth * src_grid.discreteHeight;
 
             auto *grid_data =
                 (char *)cu::allocGPU(sizeof(GridState) + num_cell_bytes);
@@ -206,6 +209,9 @@ namespace madsimple {
                 .startY = src_grid.startY,
                 .width = src_grid.width,
                 .height = src_grid.height,
+                .cellsPerMeter = src_grid.cellsPerMeter,
+                .discreteWidth = src_grid.discreteWidth,
+                .discreteHeight = src_grid.discreteHeight,
             };
 
             cudaMemcpy(grid_data, &grid_staging, sizeof(GridState),
@@ -321,13 +327,13 @@ namespace madsimple {
     Tensor Manager::actionTensor() const
     {
         return impl_->exportTensor(ExportID::Action, TensorElementType::Int32,
-            {impl_->cfg.numWorlds, NUM_AGENTS, 6});
+            {impl_->cfg.numWorlds, NUM_AGENTS, 8}); // 8 actions: moveSpeed, moveAngle, rotate, grab, pass, shoot, steal, contest
     }
 
 
     Tensor Manager::observationTensor() const
     {
-        return impl_->exportTensor(ExportID::AgentPos, TensorElementType::Int32,
+        return impl_->exportTensor(ExportID::AgentPos, TensorElementType::Float32,
             {impl_->cfg.numWorlds, NUM_AGENTS, 3});
     }
 
@@ -379,7 +385,7 @@ namespace madsimple {
     //=================================================== Basketball Tensors ===================================================
     Tensor Manager::basketballPosTensor() const
     {
-        return impl_->exportTensor(ExportID::BasketballPos, TensorElementType::Int32,
+        return impl_->exportTensor(ExportID::BasketballPos, TensorElementType::Float32,
             {impl_->cfg.numWorlds, NUM_BASKETBALLS, 3});
     }
 
@@ -408,7 +414,7 @@ namespace madsimple {
     //=================================================== Hoop Tensors ===================================================
     Tensor Manager::hoopPosTensor() const
     {
-        return impl_->exportTensor(ExportID::HoopPos, TensorElementType::Int32,
+        return impl_->exportTensor(ExportID::HoopPos, TensorElementType::Float32,
             {impl_->cfg.numWorlds, NUM_HOOPS, 3});
     }
 }

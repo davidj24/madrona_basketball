@@ -16,10 +16,15 @@ struct Cell {
 struct GridState {
     const Cell *cells;
 
-    int32_t startX;
-    int32_t startY;
-    int32_t width;
-    int32_t height;
+    float startX;
+    float startY;
+    float width;  // Width in meters
+    float height; // Height in meters
+    
+    // Grid resolution for discrete cell lookups (cells per meter)
+    int32_t cellsPerMeter;
+    int32_t discreteWidth;  // Width in discrete cells
+    int32_t discreteHeight; // Height in discrete cells
 };
 
 inline CellFlag & operator|=(CellFlag &a, CellFlag b)

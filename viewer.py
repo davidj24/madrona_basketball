@@ -17,10 +17,10 @@ WINDOW_HEIGHT = 1750
 BACKGROUND_COLOR = (50, 50, 50)  # Dark gray
 TEXT_COLOR = (255, 255, 255)     # White
 
-WORLD_WIDTH = 51 
-WORLD_HEIGHT = 35  
-CELL_SIZE = 45     # For lab computer
-# CELL_SIZE = 30     # For laptop
+# World dimensions in meters (continuous coordinates)
+WORLD_WIDTH_METERS = 71.0  
+WORLD_HEIGHT_METERS = 51.0  
+METERS_TO_PIXELS = 30      # Pixels per meter for visualization
 GRID_OFFSET_X = 250 # Offset from screen edge
 GRID_OFFSET_Y = 100 # Offset from screen edge
 
@@ -92,31 +92,34 @@ class MadronaPipeline:
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 24)
         
-        # Configure world size (make it bigger!)
-        self.world_width = WORLD_WIDTH
-        self.world_height = WORLD_HEIGHT
-        self.cell_size = CELL_SIZE
+        # Configure world size in continuous coordinates (meters)
+        self.world_width_meters = WORLD_WIDTH_METERS
+        self.world_height_meters = WORLD_HEIGHT_METERS
+        self.meters_to_pixels = METERS_TO_PIXELS
         self.grid_offset_x = GRID_OFFSET_X
         self.grid_offset_y = GRID_OFFSET_Y
 
         print("Initializing Madrona simulation...")
         
-        # Create a larger grid
-        walls = np.zeros((self.world_height, self.world_width), dtype=bool)
-        rewards = np.zeros((self.world_height, self.world_width), dtype=float)
+        # Create a discrete grid for simulation initialization (legacy support)
+        # We'll use 1 cell per meter resolution
+        discrete_width = int(self.world_width_meters)
+        discrete_height = int(self.world_height_meters)
+        walls = np.zeros((discrete_height, discrete_width), dtype=bool)
+        rewards = np.zeros((discrete_height, discrete_width), dtype=float)
         
         self.sim = madrona_sim.SimpleGridworldSimulator(
             walls=walls,
             rewards=rewards, 
-            start_x=self.world_width // 2,
-            start_y=self.world_height // 2,
+            start_x=self.world_width_meters / 2.0,  # Center of court
+            start_y=self.world_height_meters / 2.0,  # Center of court
             max_episode_length=1000,
             exec_mode=ExecMode.CPU,
             num_worlds=1,
             gpu_id=-1
         )
         
-        print(f"✓ Madrona simulation initialized! World size: {self.world_width}x{self.world_height}")
+        print(f"✓ Madrona simulation initialized! World size: {self.world_width_meters}x{self.world_height_meters} meters")
         self.step_count = 0
         
     def get_simulation_data(self):
@@ -187,37 +190,6 @@ class MadronaPipeline:
 
 
     
-    def draw_grid_boundaries(self):
-        """Draw the world boundaries and grid"""
-        # Draw grid lines
-        for x in range(self.world_width + 1):
-            start_pos = (self.grid_offset_x + x * self.cell_size, self.grid_offset_y)
-            end_pos = (self.grid_offset_x + x * self.cell_size, 
-                      self.grid_offset_y + self.world_height * self.cell_size)
-            pygame.draw.line(self.screen, (100, 100, 100), start_pos, end_pos, 1)
-        
-        for y in range(self.world_height + 1):
-            start_pos = (self.grid_offset_x, self.grid_offset_y + y * self.cell_size)
-            end_pos = (self.grid_offset_x + self.world_width * self.cell_size, 
-                      self.grid_offset_y + y * self.cell_size)
-            pygame.draw.line(self.screen, (100, 100, 100), start_pos, end_pos, 1)
-        
-        # Draw boundary rectangle (thicker)
-        boundary_rect = pygame.Rect(
-            self.grid_offset_x, 
-            self.grid_offset_y, 
-            self.world_width * self.cell_size, 
-            self.world_height * self.cell_size
-        )
-        pygame.draw.rect(self.screen, (200, 200, 200), boundary_rect, 3)
-    
-    def grid_to_screen(self, grid_x, grid_y):
-        """Convert grid coordinates to screen pixels"""
-        screen_x = self.grid_offset_x + (grid_x * self.cell_size) + (self.cell_size // 2)
-        screen_y = self.grid_offset_y + (grid_y * self.cell_size) + (self.cell_size // 2)
-        return int(screen_x), int(screen_y)
-    
-    
     def draw_basketball_court(self):
         """Draws a basketball court that dynamically fits the grid."""
         # Define court colors
@@ -227,16 +199,26 @@ class MadronaPipeline:
         KEY_RED = (139, 0, 0)
         LINE_THICKNESS = 3
 
-        # --- Dynamic Court Dimensions ---
-        margin_cells = 1
-        court_start_x = self.grid_offset_x + margin_cells * self.cell_size
-        court_start_y = self.grid_offset_y + margin_cells * self.cell_size
-        court_width = (self.world_width - 2 * margin_cells) * self.cell_size
-        court_height = (self.world_height - 2 * margin_cells) * self.cell_size
+        # --- Dynamic Court Dimensions in meters ---
+        margin_meters = 2.0  # 1 meter margin
+        court_start_x = self.grid_offset_x + margin_meters * self.meters_to_pixels
+        court_start_y = self.grid_offset_y + margin_meters * self.meters_to_pixels
+        court_width = (self.world_width_meters - 2 * margin_meters) * self.meters_to_pixels # NBA court is 28.65 meters long
+        court_height = (self.world_height_meters - 2 * margin_meters) * self.meters_to_pixels # NBA Court is 15.24 meters wide
 
         if court_width <= 0 or court_height <= 0: return
 
         court_rect = pygame.Rect(court_start_x, court_start_y, court_width, court_height)
+
+        # --- Draw World Boundary ---
+        # Draw world boundary (full world, not just court)
+        world_rect = pygame.Rect(
+            self.grid_offset_x,
+            self.grid_offset_y,
+            self.world_width_meters * self.meters_to_pixels,
+            self.world_height_meters * self.meters_to_pixels
+        )
+        pygame.draw.rect(self.screen, (255, 255, 255), world_rect, 4)  # Yellow, 4px thick
 
         # --- Draw Court Background ---
         pygame.draw.rect(self.screen, COURT_ORANGE, court_rect)
@@ -249,23 +231,25 @@ class MadronaPipeline:
         # Center line
         pygame.draw.line(self.screen, LINE_WHITE, (center_x, court_rect.top), (center_x, court_rect.bottom), LINE_THICKNESS)
 
-        # Center circle
-        center_circle_radius = int(court_height * 0.15)
+        # Center circle (3 meter radius in basketball)
+        center_circle_radius = int(3.0 * self.meters_to_pixels)
         pygame.draw.circle(self.screen, LINE_WHITE, (center_x, center_y), center_circle_radius, LINE_THICKNESS)
         pygame.draw.circle(self.screen, KEY_RED, (center_x, center_y), center_circle_radius - LINE_THICKNESS)
 
         # --- Draw Features for Both Halves ---
         for side in [-1, 1]:  # -1 for left side, 1 for right side
-            # Key (the "paint") - Adjusted height and restored width
-            key_width = int(court_width * 0.25) # Restored from 0.20
-            key_height = int(court_height * 0.25) # Changed from 0.4 to make it shorter
+            # Key (the "paint") - 5.8m x 4.9m in real basketball
+            key_width_meters = 5.8
+            key_height_meters = 4.9
+            key_width = int(key_width_meters * self.meters_to_pixels)
+            key_height = int(key_height_meters * self.meters_to_pixels)
             key_x = court_rect.left if side == -1 else court_rect.right - key_width
             key_y = center_y - key_height / 2
             key_rect = pygame.Rect(key_x, key_y, key_width, key_height)
             pygame.draw.rect(self.screen, KEY_RED, key_rect)
 
-            # Free-throw circle (semi-circle)
-            ft_circle_radius = int(key_height / 2)
+            # Free-throw circle (1.8m radius)
+            ft_circle_radius = int(1.8 * self.meters_to_pixels)
             ft_center_x = court_rect.left + key_width if side == -1 else court_rect.right - key_width
             arc_rect = pygame.Rect(ft_center_x - ft_circle_radius, center_y - ft_circle_radius, ft_circle_radius * 2, ft_circle_radius * 2)
             
@@ -273,22 +257,13 @@ class MadronaPipeline:
             end_angle = np.pi / 2 if side == -1 else 3 * np.pi / 2
             pygame.draw.arc(self.screen, LINE_WHITE, arc_rect, start_angle, end_angle, LINE_THICKNESS)
 
-            # Three-point line (recalculated to align with the key)
-            hoop_offset_x = int(self.cell_size * 1.5)
-            hoop_center_x = court_rect.left + hoop_offset_x if side == -1 else court_rect.right - hoop_offset_x
+            # Three-point line (6.75m from basket in NBA)
+            hoop_offset_meters = 1.5  # 1.5 meters from edge
+            hoop_center_x = court_rect.left + hoop_offset_meters * self.meters_to_pixels if side == -1 else court_rect.right - hoop_offset_meters * self.meters_to_pixels
             
-            # New radius calculation: distance from hoop to the top of the free-throw circle, plus a small gap.
-            dist_hoop_to_ft_line = abs(ft_center_x - hoop_center_x)
-            three_pt_radius = dist_hoop_to_ft_line + ft_circle_radius + int(self.cell_size * 0.5)
-
+            three_pt_radius = int(6.75 * self.meters_to_pixels)
             three_pt_arc_rect = pygame.Rect(hoop_center_x - three_pt_radius, center_y - three_pt_radius, three_pt_radius * 2, three_pt_radius * 2)
             pygame.draw.arc(self.screen, LINE_WHITE, three_pt_arc_rect, start_angle, end_angle, LINE_THICKNESS)
-
-            # # Backboard and Hoop
-            # backboard_x = court_rect.left + hoop_offset_x if side == -1 else court_rect.right - hoop_offset_x
-            # pygame.draw.line(self.screen, LINE_WHITE, (backboard_x, center_y - 30), (backboard_x, center_y + 30), LINE_THICKNESS + 2)
-            # pygame.draw.circle(self.screen, COURT_ORANGE, (backboard_x, center_y), 8, 0) # The hoop
-            # pygame.draw.circle(self.screen, LINE_WHITE, (backboard_x, center_y), 8, 2) # Hoop rim
     
 
 
@@ -299,13 +274,13 @@ class MadronaPipeline:
             
         self.screen.fill(BACKGROUND_COLOR)
         self.draw_basketball_court()
-        self.draw_grid_boundaries()
+        # self.draw_grid_boundaries()  # Removed: no more grid lines
         
         # Display info text
         y_offset = 20
         info_texts = [
             f"Madrona Basketball Simulation - Step {self.step_count}",
-            f"World Size: {self.world_width}x{self.world_height}",
+            f"World Size: {self.world_width_meters:.1f}x{self.world_height_meters:.1f} meters",
             "",
             "Controls: WASD/Arrow Keys, SPACE=manual step, R=reset, ESC=quit"
         ]
@@ -314,7 +289,10 @@ class MadronaPipeline:
         if 'actions' in data:
             actions = data['actions'][0]  # Get first world, shape: (num_agents, N)
             for i, action_components in enumerate(actions):
-                if len(action_components) >= 6:
+                if len(action_components) >= 8:
+                    move_speed, move_angle, rotate, grab, pass_ball, shoot_ball, steal, contest = action_components[:8]
+                    info_texts.append(f"Agent {i}: Speed={int(move_speed)} Angle={int(move_angle)} Rotate={int(rotate)} Grab={int(grab)} Pass={int(pass_ball)} Shoot={int(shoot_ball)} Steal={int(steal)} Contest={int(contest)}")
+                elif len(action_components) >= 6:
                     move_speed, move_angle, rotate, grab, pass_ball, shoot_ball = action_components[:6]
                     info_texts.append(f"Agent {i}: Speed={int(move_speed)} Angle={int(move_angle)} Rotate={int(rotate)} Grab={int(grab)} Pass={int(pass_ball)} Shoot={int(shoot_ball)}")
                 else:
@@ -344,7 +322,7 @@ class MadronaPipeline:
             
             for i, pos in enumerate(positions):
                 if len(pos) >= 2:  # Use x,y from the 3-component position (x,y,z)
-                    screen_x, screen_y = self.grid_to_screen(pos[0], pos[1])
+                    screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
                     color = colors[i % len(colors)]
                     pygame.draw.circle(self.screen, color, (screen_x, screen_y), 12)
                     # Add basketball pattern
@@ -362,7 +340,7 @@ class MadronaPipeline:
             
             for i, pos in enumerate(positions):
                 if len(pos) >= 2:  # Use x,y from the 3-component position (x,y,z)
-                    screen_x, screen_y = self.grid_to_screen(pos[0], pos[1])
+                    screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
                     
                     # Draw backboard (vertical line behind hoop)
                     backboard_color = (255, 255, 255)  # White backboard
@@ -392,7 +370,7 @@ class MadronaPipeline:
             
             for i, pos in enumerate(positions):
                 if len(pos) >= 2:  # Use x,y from the 3-component position (x,y,z)
-                    screen_x, screen_y = self.grid_to_screen(pos[0], pos[1])
+                    screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
                     
                     # Extract team color from team data (teamIndex, then RGB components)
                     if i < len(team_data) and len(team_data[i]) >= 4:
@@ -447,12 +425,13 @@ class MadronaPipeline:
                     dx = direction_3d[0]
                     dy = direction_3d[1]
                     
-                    # Set the screen length of the orientation line
-                    arrow_length = self.cell_size * 0.3
+                    # Set the screen length of the orientation line (0.8 meters)
+                    arrow_length_meters = 0.8
+                    arrow_length_pixels = arrow_length_meters * self.meters_to_pixels
                     
                     # Calculate the end point of the orientation line
-                    arrow_end = (screen_x + arrow_length * dx,
-                                 screen_y + arrow_length * dy)
+                    arrow_end = (screen_x + arrow_length_pixels * dx,
+                                 screen_y + arrow_length_pixels * dy)
                     
                     # Draw the yellow line that now correctly represents the agent's orientation
                     pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 3)
@@ -659,6 +638,12 @@ class MadronaPipeline:
         
         pygame.quit()
         print(f"Pipeline ended after {self.step_count} steps")
+
+    def meters_to_screen(self, meter_x, meter_y):
+        """Convert meter coordinates to screen pixels"""
+        screen_x = self.grid_offset_x + (meter_x * self.meters_to_pixels)
+        screen_y = self.grid_offset_y + (meter_y * self.meters_to_pixels)
+        return int(screen_x), int(screen_y)
 
 if __name__ == "__main__":
     try:

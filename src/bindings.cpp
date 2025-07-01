@@ -60,22 +60,28 @@ NB_MODULE(_madrona_simple_example_cpp, m) {
                                 nb::c_contig, nb::device::cpu> walls,
                             nb::ndarray<float, nb::shape<-1, -1>,
                                 nb::c_contig, nb::device::cpu> rewards,
-                            int64_t start_x,
-                            int64_t start_y,
+                            float start_x,  // Changed to float
+                            float start_y,  // Changed to float
                             int64_t max_episode_length,
                             madrona::py::PyExecMode exec_mode,
                             int64_t num_worlds,
                             int64_t gpu_id) {
-            int64_t grid_y = (int64_t)walls.shape(0);
-            int64_t grid_x = (int64_t)walls.shape(1);
+            int64_t discrete_y = (int64_t)walls.shape(0);
+            int64_t discrete_x = (int64_t)walls.shape(1);
 
-            if ((int64_t)rewards.shape(0) != grid_y ||
-                (int64_t)rewards.shape(1) != grid_x) {
+            if ((int64_t)rewards.shape(0) != discrete_y ||
+                (int64_t)rewards.shape(1) != discrete_x) {
                 throw std::runtime_error("walls and rewards shapes don't match");
             }
 
             Cell *cells =
-                setupCellData(walls, rewards, grid_x, grid_y); 
+                setupCellData(walls, rewards, discrete_x, discrete_y); 
+
+            // Convert discrete grid to continuous dimensions
+            // Assuming 1 cell per meter resolution
+            int32_t cells_per_meter = 1;
+            float width_meters = (float)discrete_x / cells_per_meter;
+            float height_meters = (float)discrete_y / cells_per_meter;
 
             new (self) Manager(Manager::Config {
                 .maxEpisodeLength = (uint32_t)max_episode_length,
@@ -84,10 +90,13 @@ NB_MODULE(_madrona_simple_example_cpp, m) {
                 .gpuID = (int)gpu_id,
             }, GridState {
                 .cells = cells,
-                .startX = (int32_t)start_x,
-                .startY = (int32_t)start_y,
-                .width = (int32_t)grid_x,
-                .height = (int32_t)grid_y,
+                .startX = start_x,
+                .startY = start_y,
+                .width = width_meters,
+                .height = height_meters,
+                .cellsPerMeter = cells_per_meter,
+                .discreteWidth = (int32_t)discrete_x,
+                .discreteHeight = (int32_t)discrete_y,
             });
 
             delete[] cells;
