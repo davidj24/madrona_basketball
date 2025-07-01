@@ -4,9 +4,44 @@
 #include <cstdlib>
 #include <vector>
 #include <random>
+#include <cmath> // For acosf
+
 
 using namespace madrona;
 using namespace madrona::math;
+
+
+
+// This helper function computes the rotation needed to align the 'start' vector with the 'target' vector.
+inline Quat findRotationBetweenVectors(Vector3 start, Vector3 target) {
+    // Ensure the vectors are normalized (unit length)
+    start.normalize();
+    target.normalize();
+
+    float dot_product = dot(start, target);
+
+    // Case 1: If the vectors are already aligned, no rotation is needed.
+    if (dot_product > 0.999999f) {
+        return Quat::id();
+    }
+
+    // Case 2: If the vectors are in opposite directions, we need a 180-degree rotation.
+    // For a 2D game, the most stable axis for a 180-degree turn is the Z-axis.
+    if (dot_product < -0.999999f) {
+        return Quat::angleAxis(pi, Vector3{0.f, 0.f, 1.f});
+    }
+
+    // Case 3: The general case.
+    // The axis of rotation is the cross product of the two vectors.
+    Vector3 rotation_axis = cross(start, target);
+    rotation_axis.normalize();
+
+    // The angle is the arccosine of the dot product.
+    float rotation_angle = acosf(dot_product);
+
+    return Quat::angleAxis(rotation_angle, rotation_axis);
+}
+
 
 namespace madsimple {
 
@@ -242,7 +277,7 @@ inline void passSystem(Engine &ctx,
 inline void shootSystem(Engine &ctx,
                         Entity agent_entity,
                         Action &action,
-                        GridPos &agent_pos,
+                        GridPos agent_pos,
                         Orientation &agent_orientation,
                         Inbounding &inbounding,
                         InPossession &in_possession,
@@ -254,7 +289,7 @@ inline void shootSystem(Engine &ctx,
     auto hoop_query = ctx.query<Entity, GridPos, ScoringZone>();
     GridPos attacking_hoop_pos = {0, 0, 0};
     ctx.iterateQuery(hoop_query, [&](Entity hoop_entity, GridPos &hoop_pos, ScoringZone &scoring_zone) {
-        if ((uint32_t)hoop_entity.id != team.defendingHoopID) 
+        if ((uint32_t)hoop_entity.id != team.defendingHoopID)
         {
             attacking_hoop_pos = hoop_pos;
             return;
@@ -274,21 +309,27 @@ inline void shootSystem(Engine &ctx,
     // Calculate intended angle
     float intended_direction = std::atan2(shot_vector.x, shot_vector.y); // This points in the direction of the hoop
 
-    // Add random deviation based on distance
-    float direction_deviation_per_meter = 0.0f; // radians per unit distance (tune as desired)
+    float direction_deviation_per_meter = 0.0f;
     float stddev = direction_deviation_per_meter * distance_to_hoop;
-    static thread_local std::mt19937 rng(std::random_device{}()); // Creates random number generator
-    std::normal_distribution<float> dist(0.0f, stddev); // Creates the normal distribution
-    float direction_deviation = dist(rng); // Samples from distribution to get the deviation
+    static thread_local std::mt19937 rng(std::random_device{}());
+    std::normal_distribution<float> dist(0.0f, stddev);
+    float direction_deviation = dist(rng);
     float shot_direction = intended_direction + direction_deviation;
 
-    // Set agent orientation with deviation
-    agent_orientation.orientation = madrona::math::Quat::angleAxis(
-            shot_direction - (pi / 2.0f), // Adjust target angle by -PI/2
-            Vector3{0.f, 0.f, 1.f} // Correct axis of rotation (Z-axis)
-        );
-    // Shoot the ball in the (possibly deviated) direction
+    // This is the final, correct trajectory vector for the ball
     Vector3 final_shot_vec = Vector3{std::sin(shot_direction), std::cos(shot_direction), 0.f};
+
+    // --- Set Agent Orientation using the new method ---
+
+    // 1. Define the agent's base "forward" direction to match your working passSystem.
+    //    We use a unit vector for the direction.
+    const Vector3 base_forward = {0.0f, 1.0f, 0.0f};
+
+    // 2. Find the rotation that aligns the agent's "forward" direction
+    //    with the final shot direction vector.
+    agent_orientation.orientation = findRotationBetweenVectors(base_forward, final_shot_vec);
+
+    // --- Release the ball (This part remains the same) ---
     auto held_ball_query = ctx.query<Grabbed, BallPhysics>();
     ctx.iterateQuery(held_ball_query, [&] (Grabbed &grabbed, BallPhysics &ball_physics)
     {
@@ -299,7 +340,7 @@ inline void shootSystem(Engine &ctx,
             in_possession.hasBall = false;
             in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
             inbounding.imInbounding = false;
-            ball_physics.velocity = final_shot_vec * 2.0f; // 2.0f matches passSystem's speed
+            ball_physics.velocity = final_shot_vec * 2.0f;
             ball_physics.inFlight = true;
         }
     });

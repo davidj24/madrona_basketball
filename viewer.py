@@ -51,29 +51,33 @@ except ImportError as e:
     print("Make sure you've built the project first with 'cmake --build build'")
     sys.exit(1)
 
-def rotate_vector_by_quaternion(q, v):
+def rotate_vec(q, v):
     """
-    Rotates a 3D vector v by a quaternion q.
-    q: [w, x, y, z] scalar_first
-    v: [vx, vy, vz]
-    Returns: rotated_vector [rx, ry, rz]
-    """
-    q_w, q_x, q_y, q_z = q
-    v_x, v_y, v_z = v
-
-    # Simplified quaternion-vector multiplication for a purely rotational quaternion
-    # where v_quat = (0, v_x, v_y, v_z)
-    # t = 2 * cross(q_xyz, v)
-    # rotated_v = v + q_w * t + cross(q_xyz, t)
-    # (where q_xyz = (q_x, q_y, q_z))
-
-    # This is often the most numerically stable and direct way for rotation:
-    # Components of the rotated vector (equivalent to R_matrix @ v)
-    rx = v_x*(1 - 2*q_y**2 - 2*q_z**2) + v_y*(2*q_x*q_y - 2*q_w*q_z) + v_z*(2*q_x*q_z + 2*q_w*q_y)
-    ry = v_x*(2*q_x*q_y + 2*q_w*q_z) + v_y*(1 - 2*q_x**2 - 2*q_z**2) + v_z*(2*q_y*q_z - 2*q_w*q_x)
-    rz = v_x*(2*q_x*q_z - 2*q_w*q_y) + v_y*(2*q_y*q_z + 2*q_w*q_x) + v_z*(1 - 2*q_x**2 - 2*q_y**2)
+    A direct Python translation of the C++ Quat::rotateVec function.
+    Rotates a vector v by a quaternion q.
     
-    return np.array([rx, ry, rz])
+    Args:
+        q (list or np.array): The quaternion in [w, x, y, z] order.
+        v (list or np.array): The 3D vector [x, y, z] to rotate.
+    
+    Returns:
+        np.array: The rotated 3D vector.
+    """
+    # Extract scalar and vector ('pure') parts of the quaternion
+    scalar = q[0]
+    pure = np.array([q[1], q[2], q[3]])
+    
+    # Ensure v is a numpy array
+    v_vec = np.asarray(v)
+
+    # C++: Vector3 pure_x_v = cross(pure, v);
+    pure_x_v = np.cross(pure, v_vec)
+    
+    # C++: Vector3 pure_x_pure_x_v = cross(pure, pure_x_v);
+    pure_x_pure_x_v = np.cross(pure, pure_x_v)
+    
+    # C++: return v + 2.f * ((pure_x_v * scalar) + pure_x_pure_x_v);
+    return v_vec + 2.0 * ((pure_x_v * scalar) + pure_x_pure_x_v)
 
 class MadronaPipeline:
     """
@@ -425,25 +429,36 @@ class MadronaPipeline:
                         team_text = font_small.render(f"T{int(team_data[i][0])}", True, (255, 255, 255))
                         self.screen.blit(team_text, (screen_x - 8, screen_y + 10))
                     
-                    q = orientations[i] # Agent's orientation quaternion from C++
 
-                    # Define the agent's "forward" vector in its LOCAL coordinate system.
-                    # Based on your passSystem using Vector3{0, 2, 0}, local (0,1,0) is forward.
-                    local_forward_vec = np.array([0.0, 1.0, 0.0]) # Unit vector along local +Y
 
-                    # Rotate the local forward vector to get its world-space direction
-                    world_forward_vec = rotate_vector_by_quaternion(q, local_forward_vec)
+                    # Drawing the yellow orientation line
+                    # Get the current agent's orientation quaternion from the data
+                    q = orientations[i]
+                    
+                    # Define the single, consistent "forward" vector for the agent model.
+                    # This MUST match the vector used in your C++ passSystem: Vector3{1, 0, 0}
+                    BASE_FORWARD_VECTOR = np.array([0.0, 2.0, 0.0])
 
-                    # Now, calculate the angle of this world-space forward vector
-                    # np.arctan2(y, x) gives angle from +X axis counter-clockwise
-                    # Assuming we only care about 2D heading (X,Y plane)
-                    agent_forward_heading = np.arctan2(world_forward_vec[1], world_forward_vec[0]) # Use Y, X components
-
-                    arrow_length = 24  # pixels
-                    dx = arrow_length * np.cos(agent_forward_heading) # This angle is now the true heading
-                    dy = arrow_length * np.sin(agent_forward_heading) # This angle is now the true heading
-                    arrow_end = (int(screen_x + dx), int(screen_y + dy))
+                    # Calculate the current direction vector by rotating the base vector
+                    # using the function you provided.
+                    direction_3d = rotate_vec(q, BASE_FORWARD_VECTOR)
+                    
+                    # We only need the x and y components for our 2D visualization
+                    dx = direction_3d[0]
+                    dy = direction_3d[1]
+                    
+                    # Set the screen length of the orientation line
+                    arrow_length = self.cell_size * 0.3
+                    
+                    # Calculate the end point of the orientation line
+                    arrow_end = (screen_x + arrow_length * dx,
+                                 screen_y + arrow_length * dy)
+                    
+                    # Draw the yellow line that now correctly represents the agent's orientation
                     pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 3)
+
+
+                    
 
 
         if 'ball_physics' in data:
