@@ -223,12 +223,28 @@ class MadronaPipeline:
                 hoop_x = baseline_x + HOOP_CENTER_FROM_BASELINE * scale
                 backboard_x = baseline_x + BACKBOARD_TO_BASELINE * scale
                 three_pt_arc_center_x = hoop_x
+                arc_restricted_start = math.radians(270)
+                arc_restricted_end = math.radians(90)
+                arc_ft_start = math.radians(270)
+                arc_ft_end = math.radians(90)
+                arc_3pt_start = math.radians(292)
+                arc_3pt_end = math.radians(68)
+                three_pt_line_x = court_rect.left
+                arc_sign = 1
             else:
                 baseline_x = court_rect.right
                 key_x = baseline_x - KEY_HEIGHT * scale
                 hoop_x = baseline_x - HOOP_CENTER_FROM_BASELINE * scale
                 backboard_x = baseline_x - BACKBOARD_TO_BASELINE * scale
                 three_pt_arc_center_x = hoop_x
+                arc_restricted_start = math.radians(90)
+                arc_restricted_end = math.radians(270)
+                arc_ft_start = math.radians(90)
+                arc_ft_end = math.radians(270)
+                arc_3pt_start = math.radians(112)
+                arc_3pt_end = math.radians(248)
+                three_pt_line_x = court_rect.right
+                arc_sign = -1
 
             # Key (paint)
             key_top = center_y - KEY_WIDTH / 2 * scale
@@ -236,12 +252,22 @@ class MadronaPipeline:
             pygame.draw.rect(self.screen, (139, 0, 0), key_rect)
             pygame.draw.rect(self.screen, (255, 255, 255), key_rect, LINE_THICKNESS)
 
-            # Free throw circle
+            # Free throw semicircle (only the half facing center court)
             ft_circle_center = (key_x + KEY_HEIGHT * scale if side == -1 else key_x, center_y)
-            pygame.draw.circle(self.screen, (255, 255, 255), (int(key_x + KEY_HEIGHT * scale if side == -1 else key_x), int(center_y)), int(FT_CIRCLE_RADIUS * scale), LINE_THICKNESS)
+            ft_circle_rect = pygame.Rect(
+                ft_circle_center[0] - FT_CIRCLE_RADIUS * scale,
+                center_y - FT_CIRCLE_RADIUS * scale,
+                2 * FT_CIRCLE_RADIUS * scale,
+                2 * FT_CIRCLE_RADIUS * scale)
+            pygame.draw.arc(self.screen, (255, 255, 255), ft_circle_rect, arc_ft_start, arc_ft_end, LINE_THICKNESS)
 
-            # Restricted area
-            pygame.draw.circle(self.screen, (255, 255, 255), (int(hoop_x), int(center_y)), int(RESTRICTED_RADIUS * scale), LINE_THICKNESS)
+            # Restricted area semicircle (only the half facing center court)
+            restricted_rect = pygame.Rect(
+                hoop_x - RESTRICTED_RADIUS * scale,
+                center_y - RESTRICTED_RADIUS * scale,
+                2 * RESTRICTED_RADIUS * scale,
+                2 * RESTRICTED_RADIUS * scale)
+            pygame.draw.arc(self.screen, (255, 255, 255), restricted_rect, arc_restricted_start, arc_restricted_end, LINE_THICKNESS)
 
             # Backboard
             pygame.draw.line(self.screen, (255, 255, 255), (backboard_x, center_y - 0.91 * scale), (backboard_x, center_y + 0.91 * scale), LINE_THICKNESS)
@@ -252,21 +278,20 @@ class MadronaPipeline:
 
             # Three-point arc
             arc_rect = pygame.Rect(three_pt_arc_center_x - THREE_PT_RADIUS * scale, center_y - THREE_PT_RADIUS * scale, 2 * THREE_PT_RADIUS * scale, 2 * THREE_PT_RADIUS * scale)
-            if side == -1:
-                start_angle, end_angle = math.radians(292), math.radians(68)
-            else:
-                start_angle, end_angle = math.radians(112), math.radians(248)
-            pygame.draw.arc(self.screen, (255, 255, 255), arc_rect, start_angle, end_angle, LINE_THICKNESS)
+            pygame.draw.arc(self.screen, (255, 255, 255), arc_rect, arc_3pt_start, arc_3pt_end, LINE_THICKNESS)
 
-            # Three-point straight lines (corners)
-            corner_y1 = center_y - THREE_PT_LINE_DIST * scale
-            corner_y2 = center_y + THREE_PT_LINE_DIST * scale
+            # Three-point straight lines (corners) - extend to meet arc smoothly
+            y1 = center_y - THREE_PT_LINE_DIST * scale
+            y2 = center_y + THREE_PT_LINE_DIST * scale
+            # Find arc endpoints for smooth join
+            arc_y1 = center_y - math.sin(math.radians(68)) * THREE_PT_RADIUS * scale if side == -1 else center_y - math.sin(math.radians(112)) * THREE_PT_RADIUS * scale
+            arc_y2 = center_y + math.sin(math.radians(68)) * THREE_PT_RADIUS * scale if side == -1 else center_y + math.sin(math.radians(112)) * THREE_PT_RADIUS * scale
             if side == -1:
-                pygame.draw.line(self.screen, (255, 255, 255), (hoop_x + RESTRICTED_RADIUS * scale, corner_y1), (court_rect.left, corner_y1))
-                pygame.draw.line(self.screen, (255, 255, 255), (hoop_x + RESTRICTED_RADIUS * scale, corner_y2), (court_rect.left, corner_y2))
+                pygame.draw.line(self.screen, (255, 255, 255), (three_pt_line_x, y1), (three_pt_arc_center_x + math.cos(math.radians(68)) * THREE_PT_RADIUS * scale, arc_y1))
+                pygame.draw.line(self.screen, (255, 255, 255), (three_pt_line_x, y2), (three_pt_arc_center_x + math.cos(math.radians(68)) * THREE_PT_RADIUS * scale, arc_y2))
             else:
-                pygame.draw.line(self.screen, (255, 255, 255), (hoop_x - RESTRICTED_RADIUS * scale, corner_y1), (court_rect.right, corner_y1))
-                pygame.draw.line(self.screen, (255, 255, 255), (hoop_x - RESTRICTED_RADIUS * scale, corner_y2), (court_rect.right, corner_y2))
+                pygame.draw.line(self.screen, (255, 255, 255), (three_pt_line_x, y1), (three_pt_arc_center_x - math.cos(math.radians(68)) * THREE_PT_RADIUS * scale, arc_y1))
+                pygame.draw.line(self.screen, (255, 255, 255), (three_pt_line_x, y2), (three_pt_arc_center_x - math.cos(math.radians(68)) * THREE_PT_RADIUS * scale, arc_y2))
 
         # Draw world border (larger than the court)
         world_border_rect = pygame.Rect(self.world_offset_x, self.world_offset_y, self.world_width_px, self.world_height_px)
