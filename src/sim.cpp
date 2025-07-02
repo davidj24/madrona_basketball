@@ -704,7 +704,9 @@ namespace madsimple {
             .team1Hoop = 1.0f,  // Team 1 attacks hoop 1  
             .team1Score = 0.0f,
             .gameClock = 720.0f,
-            .shotClock = 24.0f
+            .shotClock = 24.0f,
+            .scoredBaskets = 0.f,
+            .outOfBoundsCount = 0.f
         };
 
         std::vector<Vector3> team_colors = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};

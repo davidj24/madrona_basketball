@@ -79,32 +79,70 @@ class MadronaPipeline:
     Simple pipeline that connects to your Madrona simulation and displays the data
     """
     
+    def handle_audio_events(self, data):
+        """Checks for new audio events from the simulation and plays sounds."""
+        if data is None or 'game_state' not in data:
+            return
+
+        game_state = data['game_state'][0]
+        
+        # NOTE: These indices MUST match the order in your C++ GameState struct.
+        # Based on our previous discussion, we assume scoreCount is the 11th field (index 10)
+        # and outOfBoundsCount is the 12th field (index 11).
+        # Adjust these indices if your struct is different.
+        current_score_count = int(game_state[12])
+        current_oob_count = int(game_state[13])
+
+        # Check if the score count has increased since the last frame
+        if self.score_sound and current_score_count > self.last_score_count:
+            self.score_sound.play()
+        
+        # Check if the out-of-bounds count has increased
+        if self.whistle_sound and current_oob_count > self.last_oob_count:
+            self.whistle_sound.play()
+
+        # Update the last known counts for the next frame
+        self.last_score_count = current_score_count
+        self.last_oob_count = current_oob_count
+
     def __init__(self):
         pygame.init()
+        pygame.mixer.init()  # Initialize the audio mixer
+
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         pygame.display.set_caption("Madrona Simulation Pipeline")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 24)
-        
-        # --- Centralized Coordinate System Setup ---
-        self.pixels_per_meter = PIXELS_PER_METER
 
-        # --- World is slightly larger than the court ---
-        margin_factor = 1.10  # 10% larger in each dimension
+        # --- Load Sound Effects ---
+        try:
+            self.score_sound = pygame.mixer.Sound("assets/swish.wav")
+            self.whistle_sound = pygame.mixer.Sound("assets/whistle.wav")
+            print("✓ Audio files loaded successfully.")
+        except pygame.error as e:
+            print(f"⚠ Warning: Could not load audio files from 'assets/' folder. Error: {e}")
+            self.score_sound = None
+            self.whistle_sound = None
+
+        # Keep track of the last count to detect when a new event occurs
+        self.last_score_count = 0
+        self.last_oob_count = 0
+        
+        # --- Centralized Coordinate System Setup (your existing code is preserved) ---
+        self.pixels_per_meter = PIXELS_PER_METER
+        margin_factor = 1.10
+        NBA_COURT_WIDTH = 28.65
+        NBA_COURT_HEIGHT = 15.24
         self.world_width_meters = NBA_COURT_WIDTH * margin_factor
         self.world_height_meters = NBA_COURT_HEIGHT * margin_factor
-
-        # Calculate all pixel dimensions from the meter values and the single scale factor
         self.world_width_px = self.world_width_meters * self.pixels_per_meter
         self.world_height_px = self.world_height_meters * self.pixels_per_meter
-        
-        # Calculate the offset needed to center the entire world in the window
         self.world_offset_x = (WINDOW_WIDTH - self.world_width_px) / 2
         self.world_offset_y = (WINDOW_HEIGHT - self.world_height_px) / 2
 
         print("Initializing Madrona simulation...")
         
-        # Use math.ceil to ensure the grid fully covers the world size
+        import math
         self.world_discrete_width = math.ceil(self.world_width_meters)
         self.world_discrete_height = math.ceil(self.world_height_meters)
         walls = np.zeros((self.world_discrete_height, self.world_discrete_width), dtype=bool)
@@ -120,7 +158,6 @@ class MadronaPipeline:
             num_worlds=1,
             gpu_id=-1
         )
-        # For all world border and coordinate calculations, use the discrete grid size
         self.world_width_px = self.world_discrete_width * self.pixels_per_meter
         self.world_height_px = self.world_discrete_height * self.pixels_per_meter
         self.world_offset_x = (WINDOW_WIDTH - self.world_width_px) / 2
@@ -295,50 +332,87 @@ class MadronaPipeline:
 
     def draw_score_display(self, data):
         """Draw the team scores and game info at the bottom center of the screen"""
-        if data is None or 'game_state' not in data: return
+        if data is None or 'game_state' not in data:
+            return
+
         game_state = data['game_state'][0]
-        team0_score, team1_score = int(game_state[5]), int(game_state[7])
-        game_clock, shot_clock, period = float(game_state[8]), float(game_state[9]), int(game_state[2])
+        
+        # --- CORRECTED INDICES ---
+        # These now match the C++ GameState struct order
+        period = int(game_state[4])
+        team0_score = int(game_state[7])
+        team1_score = int(game_state[9])
+        game_clock = float(game_state[10])
+        shot_clock = float(game_state[11])
+
+        # Get team colors - this part of your code is fine
         team_colors = { 0: (0, 100, 255), 1: (255, 50, 50) }
-        display_width, display_height = 600, 120
-        display_x, display_y = (WINDOW_WIDTH - display_width) // 2, WINDOW_HEIGHT - display_height - 50
+        if 'agent_teams' in data:
+            agent_teams = data['agent_teams'][0]
+            for i, team_data in enumerate(agent_teams):
+                if len(team_data) >= 4:
+                    team_index = int(team_data[0])
+                    if team_index not in team_colors:
+                        import struct
+                        color_r = max(0, min(255, int(struct.unpack('f', struct.pack('I', np.uint32(team_data[1])))[0])))
+                        color_g = max(0, min(255, int(struct.unpack('f', struct.pack('I', np.uint32(team_data[2])))[0])))
+                        color_b = max(0, min(255, int(struct.unpack('f', struct.pack('I', np.uint32(team_data[3])))[0])))
+                        team_colors[team_index] = (color_r, color_g, color_b)
+
+        # Score display dimensions and positioning (your code is fine)
+        display_width = 600
+        display_height = 120
+        display_x = (WINDOW_WIDTH - display_width) // 2
+        display_y = WINDOW_HEIGHT - display_height - 50
+
+        # Draw main score display background (your code is fine)
         score_bg_rect = pygame.Rect(display_x, display_y, display_width, display_height)
         pygame.draw.rect(self.screen, (30, 30, 30), score_bg_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), score_bg_rect, 3)
+
+        # Team score sections (your code is fine)
         team_section_width = display_width // 3
         team0_rect = pygame.Rect(display_x, display_y, team_section_width, display_height)
-        team1_rect = pygame.Rect(display_x + 2 * team_section_width, display_y, team_section_width, display_height)
-        middle_rect = pygame.Rect(display_x + team_section_width, display_y, team_section_width, display_height)
         pygame.draw.rect(self.screen, team_colors.get(0, (0,100,255)), team0_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), team0_rect, 2)
+        team1_rect = pygame.Rect(display_x + 2 * team_section_width, display_y, team_section_width, display_height)
         pygame.draw.rect(self.screen, team_colors.get(1, (255,0,100)), team1_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), team1_rect, 2)
+        middle_rect = pygame.Rect(display_x + team_section_width, display_y, team_section_width, display_height)
         pygame.draw.rect(self.screen, (60, 60, 60), middle_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), middle_rect, 2)
+
+        # Fonts (your code is fine)
         score_font = pygame.font.Font(None, 64)
         label_font = pygame.font.Font(None, 24)
         time_font = pygame.font.Font(None, 36)
+
+        # Draw team scores (your code is fine)
         team0_score_text = score_font.render(str(team0_score), True, (255, 255, 255))
         team0_score_rect = team0_score_text.get_rect(center=(team0_rect.centerx, team0_rect.centery - 10))
         self.screen.blit(team0_score_text, team0_score_rect)
         team1_score_text = score_font.render(str(team1_score), True, (255, 255, 255))
         team1_score_rect = team1_score_text.get_rect(center=(team1_rect.centerx, team1_rect.centery - 10))
         self.screen.blit(team1_score_text, team1_score_rect)
+
+        # Draw team labels (your code is fine)
         team0_label = label_font.render("TEAM 0", True, (255, 255, 255))
         team0_label_rect = team0_label.get_rect(center=(team0_rect.centerx, team0_rect.bottom - 15))
         self.screen.blit(team0_label, team0_label_rect)
         team1_label = label_font.render("TEAM 1", True, (255, 255, 255))
         team1_label_rect = team1_label.get_rect(center=(team1_rect.centerx, team1_rect.bottom - 15))
         self.screen.blit(team1_label, team1_label_rect)
+
+        # Draw period, game clock, and shot clock (your code is fine)
         period_text = time_font.render(f"Q{period}", True, (255, 255, 255))
         period_rect = period_text.get_rect(center=(middle_rect.centerx, middle_rect.top + 25))
         self.screen.blit(period_text, period_rect)
         game_minutes = int(game_clock // 60)
         game_seconds = int(game_clock % 60)
-        shot_clock_seconds = int(shot_clock)
         game_time_text = time_font.render(f"{game_minutes:02d}:{game_seconds:02d}", True, (255, 255, 255))
         game_time_rect = game_time_text.get_rect(center=(middle_rect.centerx, middle_rect.centery))
         self.screen.blit(game_time_text, game_time_rect)
+        shot_clock_seconds = int(shot_clock)
         shot_clock_text = label_font.render(f"Shot: {shot_clock_seconds}", True, (255, 255, 0))
         shot_clock_rect = shot_clock_text.get_rect(center=(middle_rect.centerx, middle_rect.bottom - 20))
         self.screen.blit(shot_clock_text, shot_clock_rect)
@@ -459,8 +533,11 @@ class MadronaPipeline:
                     if event.key == pygame.K_f: auto_step = not auto_step
             self.handle_input()
             if auto_step: self.step_simulation()
+            
             data = self.get_simulation_data()
+            self.handle_audio_events(data)  # Call the new audio handler
             self.draw_simulation_data(data)
+
             pygame.display.flip()
             self.clock.tick(60)
         pygame.quit()

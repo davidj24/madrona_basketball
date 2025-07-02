@@ -61,8 +61,8 @@ namespace madsimple {
         float gameClock; // Time left, figure out if this is in seconds or timesteps, and how it should work with tickSystem
         float shotClock;
 
-        uint32_t scoredBaskets;
-        uint32_t outOfBoundsCount;
+        float scoredBaskets;
+        float outOfBoundsCount;
     };
 
 

@@ -318,7 +318,7 @@ namespace madsimple {
     Tensor Manager::gameStateTensor() const
     {
         return impl_->exportTensor(ExportID::GameState, TensorElementType::Float32,
-            {impl_->cfg.numWorlds, 10}); // 10 fields: inboundingInProgress, liveBall, period, teamInPossession, team0Hoop, team0Score, team1Hoop, team1Score, gameClock, shotClock
+            {impl_->cfg.numWorlds, 14}); // 10 fields: inboundingInProgress, liveBall, period, teamInPossession, team0Hoop, team0Score, team1Hoop, team1Score, gameClock, shotClock
     }
 
 
