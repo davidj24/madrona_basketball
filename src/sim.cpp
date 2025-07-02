@@ -241,7 +241,7 @@ namespace madsimple {
                 grabbed.isGrabbed = true;
                 ball_physics.inFlight = false; // Make it so the ball isn't "in flight" anymore
                 ball_physics.velocity = Vector3::zero(); // And change its velocity to be zero
-                gameState.teamInPossession = team.teamIndex; // Update the team in possession
+                gameState.teamInPossession = (float)team.teamIndex; // Update the team in possession
             }
         });
 
@@ -275,7 +275,7 @@ namespace madsimple {
                 inbounding.imInbounding = false;
                 ball_physics.velocity = agent_orientation.orientation.rotateVec(Vector3{0.f, 0.5f, 0.f}); // Setting the ball's velocity to have the same direction as the agent's orientation
                                                                                                 // Note: we use 0, 2, 0 because that's forward in our simulation specifically
-                gameState.inboundingInProgress = false;
+                gameState.inboundingInProgress = 0.0f;
             }
         });
     }
@@ -433,9 +433,9 @@ namespace madsimple {
             if (distance_to_hoop <= scoring_zone.radius && ball_physics.inFlight) 
             {
                 // Ball is within scoring zone, score a point
-                if (hoop_entity.id == gameState.team0Hoop) {gameState.team0Score += 2;}
-                else{gameState.team1Score += 2;}
-                
+                if ((float)hoop_entity.id == gameState.team0Hoop) {gameState.team0Score += 2.0f;}
+                else{gameState.team1Score += 2.0f;}
+
                 // Reset the ball position and state
                 ball_physics.inFlight = false;
                 ball_pos = hoop_pos;
@@ -478,12 +478,14 @@ namespace madsimple {
             // Reset singleton GameState
             GameState &gameState = ctx.singleton<GameState>();
             gameState = GameState{
-                .inboundingInProgress = false,
-                .liveBall = true,
-                .period = 1,
-                .teamInPossession = 0,
-                .team0Score = 0,
-                .team1Score = 0,
+                .inboundingInProgress = 0.0f,
+                .liveBall = 1.0f,
+                .period = 1.0f,
+                .teamInPossession = 0.0f,
+                .team0Hoop = 0.0f,
+                .team0Score = 0.0f,
+                .team1Hoop = 1.0f,
+                .team1Score = 0.0f,
                 .gameClock = 720.0f,
                 .shotClock = 24.0f
             };
@@ -614,16 +616,16 @@ namespace madsimple {
                     in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
                 }
 
-                if (agent_team.teamIndex != ball_physics.lastTouchedByID && !gameState.inboundingInProgress)
+                if (agent_team.teamIndex != ball_physics.lastTouchedByID && gameState.inboundingInProgress < 0.5f)
                 {
                     inbounding.imInbounding = true;
-                    gameState.inboundingInProgress = true;
+                    gameState.inboundingInProgress = 1.0f;
                     agent_pos = ball_pos;
                     grabbed.isGrabbed = true;
                     grabbed.holderEntityID = agent_entity.id;
                     in_possession.hasBall = true;
                     in_possession.ballEntityID = ball_entity.id;
-                    gameState.teamInPossession = agent_team.teamIndex;
+                    gameState.teamInPossession = (float)agent_team.teamIndex;
                 }
             });
         }
@@ -678,12 +680,14 @@ namespace madsimple {
     {
         ctx.singleton<GameState>() = GameState 
         {
-            .inboundingInProgress = false,
-            .liveBall = true,
-            .period = 1,
-            .teamInPossession = 0,
-            .team0Score = 0,
-            .team1Score = 0,
+            .inboundingInProgress = 0.0f,
+            .liveBall = 1.0f,
+            .period = 1.0f,
+            .teamInPossession = 0.0f,
+            .team0Hoop = 0.0f,  // Team 0 attacks hoop 0
+            .team0Score = 0.0f,
+            .team1Hoop = 1.0f,  // Team 1 attacks hoop 1  
+            .team1Score = 0.0f,
             .gameClock = 720.0f,
             .shotClock = 24.0f
         };

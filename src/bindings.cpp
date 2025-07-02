@@ -118,7 +118,7 @@ NB_MODULE(_madrona_simple_example_cpp, m) {
              nb::arg("move_angle"), nb::arg("rotate"), nb::arg("grab"), nb::arg("pass"), nb::arg("shoot"))
         .def("trigger_reset", &Manager::triggerReset)
         .def("reset_tensor", &Manager::resetTensor)
-        .def("game_state_inbounding_tensor", &Manager::gameStateInboundingTensor)
+        .def("game_state_tensor", &Manager::gameStateTensor)
 
 
         //=================================================== Agent Tensors ===================================================

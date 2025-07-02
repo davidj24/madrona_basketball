@@ -139,8 +139,7 @@ class MadronaPipeline:
             ball_grabbed_tensor = self.sim.ball_grabbed_tensor()
             agent_entity_id_tensor = self.sim.agent_entity_id_tensor()
             ball_entity_id_tensor = self.sim.ball_entity_id_tensor()
-            agent_team_tensor = self.sim.agent_team_tensor()
-            game_state_inbounding_tensor = self.sim.game_state_inbounding_tensor()
+            game_state_tensor = self.sim.game_state_tensor()
             orientation_tensor = self.sim.orientation_tensor()
 
             
@@ -153,17 +152,17 @@ class MadronaPipeline:
             reset_data = reset_tensor.to_torch().detach().cpu().numpy()   # Reset flags
             basketball_pos_data = basketball_pos_tensor.to_torch().detach().cpu().numpy()  # Basketball position
             ball_physics_data = ball_physics_tensor.to_torch().detach().cpu().numpy()
-            hoop_pos_data = hoop_pos_tensor.to_torch().detach().cpu().numpy()  # Basketball position
+            hoop_pos_data = hoop_pos_tensor.to_torch().detach().cpu().numpy()  # Hoop positions
             agent_possession_data = agent_possession_tensor.to_torch().detach().cpu().numpy()  # Agent possession
             ball_grabbed_data = ball_grabbed_tensor.to_torch().detach().cpu().numpy()  # Ball grabbed status
             agent_entity_id_data = agent_entity_id_tensor.to_torch().detach().cpu().numpy()  # Agent entity IDs
             ball_entity_id_data = ball_entity_id_tensor.to_torch().detach().cpu().numpy()  # Ball entity IDs
-            game_state_inbounding_data = game_state_inbounding_tensor.to_torch().detach().cpu().numpy()
+            game_state_data = game_state_tensor.to_torch().detach().cpu().numpy()
             orientation_data = orientation_tensor.to_torch().detach().cpu().numpy()  # Orientation data
             
             return {
                 'observations': obs_data,
-                'agent_team': agent_team_data,
+                'agent_teams': agent_team_data,  # Use consistent naming
                 'actions': action_data,
                 'rewards': reward_data,
                 'done': done_data,
@@ -175,9 +174,8 @@ class MadronaPipeline:
                 'ball_grabbed': ball_grabbed_data,
                 'agent_entity_ids': agent_entity_id_data,
                 'ball_entity_ids': ball_entity_id_data,
-                'agent_teams': agent_team_data,
-                'game_state_inbounding' : game_state_inbounding_data,
-                'orientation': orientation_data
+                'orientation': orientation_data,
+                'game_state': game_state_data
             }
             
         except Exception as e:
@@ -303,7 +301,7 @@ class MadronaPipeline:
 
     
     def draw_basketball_court(self):
-        """Draws a basketball court that dynamically fits the grid."""
+        """Draws a basketball court centered in the window."""
         # --- NBA standard dimensions (meters) ---
         NBA_COURT_W = 28.65
         NBA_COURT_H = 15.24
@@ -314,29 +312,24 @@ class MadronaPipeline:
         HOOP_OFFSET = 1.575  # Distance from baseline to hoop center
         LINE_THICKNESS = 3
 
-        # --- Dynamic Court Rectangle ---
-        margin_meters = 2.0
-        court_start_x = self.grid_offset_x + margin_meters * self.meters_to_pixels
-        court_start_y = self.grid_offset_y + margin_meters * self.meters_to_pixels
-        court_width = (self.world_width_meters - 2 * margin_meters) * self.meters_to_pixels
-        court_height = (self.world_height_meters - 2 * margin_meters) * self.meters_to_pixels
-        if court_width <= 0 or court_height <= 0: return
-        court_rect = pygame.Rect(court_start_x, court_start_y, court_width, court_height)
-
-        # --- Calculate scale: pixels per meter for this court rectangle ---
-        px_per_meter_x = court_width / NBA_COURT_W
-        px_per_meter_y = court_height / NBA_COURT_H
-        px_per_meter = min(px_per_meter_x, px_per_meter_y)  # Use min to avoid overflow
-
-        # --- Draw World Boundary ---
-        # Draw world boundary (full world, not just court)
-        world_rect = pygame.Rect(
-            self.grid_offset_x,
-            self.grid_offset_y,
-            self.world_width_meters * self.meters_to_pixels,
-            self.world_height_meters * self.meters_to_pixels
-        )
-        pygame.draw.rect(self.screen, (255, 255, 255), world_rect, 4)  # Yellow, 4px thick
+        # --- Center the court in the window ---
+        # Calculate the court size in pixels based on the smaller dimension to maintain aspect ratio
+        max_court_width = WINDOW_WIDTH - 400  # Leave space for UI
+        max_court_height = WINDOW_HEIGHT - 300  # Leave space for score display and UI
+        
+        # Calculate scale to fit court in available space
+        scale_x = max_court_width / NBA_COURT_W
+        scale_y = max_court_height / NBA_COURT_H
+        scale = min(scale_x, scale_y) * 0.8  # Use 80% of available space
+        
+        court_width_px = NBA_COURT_W * scale
+        court_height_px = NBA_COURT_H * scale
+        
+        # Center the court in the window
+        court_start_x = (WINDOW_WIDTH - court_width_px) // 2
+        court_start_y = (WINDOW_HEIGHT - court_height_px - 150) // 2  # Leave space for score display
+        
+        court_rect = pygame.Rect(court_start_x, court_start_y, court_width_px, court_height_px)
 
         # --- Draw Court Background ---
         pygame.draw.rect(self.screen, (205, 133, 63), court_rect)
@@ -350,22 +343,22 @@ class MadronaPipeline:
         pygame.draw.line(self.screen, (255, 255, 255), (center_x, court_rect.top), (center_x, court_rect.bottom), LINE_THICKNESS)
 
         # Center circle (3 meter radius in basketball)
-        center_circle_radius = int(3.0 * px_per_meter)
+        center_circle_radius = int(3.0 * scale)
         pygame.draw.circle(self.screen, (255, 255, 255), (center_x, center_y), center_circle_radius, LINE_THICKNESS)
         pygame.draw.circle(self.screen, (139, 0, 0), (center_x, center_y), center_circle_radius - LINE_THICKNESS)
 
         # --- Draw Features for Both Halves ---
         for side in [-1, 1]:  # -1 for left side, 1 for right side
             # Key (the "paint") - 5.8m x 4.9m in real basketball
-            key_w = KEY_W * px_per_meter
-            key_h = KEY_H * px_per_meter
+            key_w = KEY_W * scale
+            key_h = KEY_H * scale
             key_x = court_rect.left if side == -1 else court_rect.right - key_w
             key_y = center_y - key_h / 2
             key_rect = pygame.Rect(key_x, key_y, key_w, key_h)
             pygame.draw.rect(self.screen, (139, 0, 0), key_rect)
 
             # Free-throw circle (1.8m radius)
-            ft_circle_radius = int(FT_CIRCLE_R * px_per_meter)
+            ft_circle_radius = int(FT_CIRCLE_R * scale)
             ft_center_x = key_x + key_w if side == -1 else key_x
             arc_rect = pygame.Rect(ft_center_x - ft_circle_radius, center_y - ft_circle_radius, ft_circle_radius * 2, ft_circle_radius * 2)
             
@@ -374,13 +367,139 @@ class MadronaPipeline:
             pygame.draw.arc(self.screen, (255, 255, 255), arc_rect, start_angle, end_angle, LINE_THICKNESS)
 
             # Three-point line (6.75m from basket in NBA)
-            hoop_center_x = court_rect.left + HOOP_OFFSET * px_per_meter if side == -1 else court_rect.right - HOOP_OFFSET * px_per_meter
+            hoop_center_x = court_rect.left + HOOP_OFFSET * scale if side == -1 else court_rect.right - HOOP_OFFSET * scale
             
-            three_pt_radius = int(THREE_PT_R * px_per_meter)
+            three_pt_radius = int(THREE_PT_R * scale)
             three_pt_arc_rect = pygame.Rect(hoop_center_x - three_pt_radius, center_y - three_pt_radius, three_pt_radius * 2, three_pt_radius * 2)
             pygame.draw.arc(self.screen, (255, 255, 255), three_pt_arc_rect, start_angle, end_angle, LINE_THICKNESS)
+        
+        # --- Draw World Border (larger than the court) ---
+        # Calculate the world border based on the world dimensions 
+        world_width_px = WORLD_WIDTH_METERS * scale
+        world_height_px = WORLD_HEIGHT_METERS * scale
+        
+        # Center the world border
+        world_start_x = (WINDOW_WIDTH - world_width_px) // 2
+        world_start_y = (WINDOW_HEIGHT - world_height_px - 150) // 2  # Leave space for score display
+        
+        world_border_rect = pygame.Rect(world_start_x, world_start_y, world_width_px, world_height_px)
+        pygame.draw.rect(self.screen, (255, 255, 255), world_border_rect, 3)  # White border, 3px thick
     
 
+
+    def draw_score_display(self, data):
+        """Draw the team scores and game info at the bottom center of the screen"""
+        if data is None or 'game_state' not in data or 'agent_teams' not in data:
+            return
+
+        # Get game state data (shape: (num_worlds, 10))
+        game_state = data['game_state'][0]  # Get first world
+        # GameState fields: inboundingInProgress, liveBall, period, teamInPossession, team0Hoop, team0Score, team1Hoop, team1Score, gameClock, shotClock
+        inbounding_in_progress = bool(game_state[0])
+        live_ball = bool(game_state[1])
+        period = int(game_state[2])
+        team_in_possession = int(game_state[3])
+        team0_hoop = int(game_state[4])
+        team0_score = int(game_state[5])
+        team1_hoop = int(game_state[6])
+        team1_score = int(game_state[7])
+        game_clock = float(game_state[8])
+        shot_clock = float(game_state[9])
+
+        # Get team colors from agent team data
+        agent_teams = data['agent_teams'][0]  # Shape: (num_agents, 4) - teamIndex, colorR, colorG, colorB
+        team_colors = {}
+        
+        for i, team_data in enumerate(agent_teams):
+            if len(team_data) >= 4:
+                team_index = int(team_data[0])
+                if team_index not in team_colors:
+                    # Convert float colors to RGB (same as in agent drawing)
+                    import struct
+                    color_r_float = struct.unpack('f', struct.pack('I', np.uint32(team_data[1])))[0]
+                    color_g_float = struct.unpack('f', struct.pack('I', np.uint32(team_data[2])))[0]
+                    color_b_float = struct.unpack('f', struct.pack('I', np.uint32(team_data[3])))[0]
+                    
+                    color_r = max(0, min(255, int(color_r_float)))
+                    color_g = max(0, min(255, int(color_g_float)))
+                    color_b = max(0, min(255, int(color_b_float)))
+                    team_colors[team_index] = (color_r, color_g, color_b)
+
+        # Fallback colors if not found
+        if 0 not in team_colors:
+            team_colors[0] = (0, 100, 255)  # Blue
+        if 1 not in team_colors:
+            team_colors[1] = (255, 0, 100)  # Pink/Red
+
+        # Score display dimensions and positioning
+        display_width = 600
+        display_height = 120
+        display_x = (WINDOW_WIDTH - display_width) // 2
+        display_y = WINDOW_HEIGHT - display_height - 50  # 50px from bottom
+
+        # Draw main score display background
+        score_bg_rect = pygame.Rect(display_x, display_y, display_width, display_height)
+        pygame.draw.rect(self.screen, (30, 30, 30), score_bg_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), score_bg_rect, 3)
+
+        # Team score sections
+        team_section_width = display_width // 3
+        
+        # Team 0 section
+        team0_rect = pygame.Rect(display_x, display_y, team_section_width, display_height)
+        pygame.draw.rect(self.screen, team_colors[0], team0_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), team0_rect, 2)
+
+        # Team 1 section  
+        team1_rect = pygame.Rect(display_x + 2 * team_section_width, display_y, team_section_width, display_height)
+        pygame.draw.rect(self.screen, team_colors[1], team1_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), team1_rect, 2)
+
+        # Middle section for period and clocks
+        middle_rect = pygame.Rect(display_x + team_section_width, display_y, team_section_width, display_height)
+        pygame.draw.rect(self.screen, (60, 60, 60), middle_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), middle_rect, 2)
+
+        # Fonts
+        score_font = pygame.font.Font(None, 64)
+        label_font = pygame.font.Font(None, 24)
+        time_font = pygame.font.Font(None, 36)
+
+        # Draw team scores
+        team0_score_text = score_font.render(str(team0_score), True, (255, 255, 255))
+        team0_score_rect = team0_score_text.get_rect(center=(team0_rect.centerx, team0_rect.centery - 10))
+        self.screen.blit(team0_score_text, team0_score_rect)
+
+        team1_score_text = score_font.render(str(team1_score), True, (255, 255, 255))
+        team1_score_rect = team1_score_text.get_rect(center=(team1_rect.centerx, team1_rect.centery - 10))
+        self.screen.blit(team1_score_text, team1_score_rect)
+
+        # Draw team labels
+        team0_label = label_font.render("TEAM 0", True, (255, 255, 255))
+        team0_label_rect = team0_label.get_rect(center=(team0_rect.centerx, team0_rect.bottom - 15))
+        self.screen.blit(team0_label, team0_label_rect)
+
+        team1_label = label_font.render("TEAM 1", True, (255, 255, 255))
+        team1_label_rect = team1_label.get_rect(center=(team1_rect.centerx, team1_rect.bottom - 15))
+        self.screen.blit(team1_label, team1_label_rect)
+
+        # Draw period/quarter
+        period_text = time_font.render(f"Q{period}", True, (255, 255, 255))
+        period_rect = period_text.get_rect(center=(middle_rect.centerx, middle_rect.top + 25))
+        self.screen.blit(period_text, period_rect)
+
+        # Draw game clock (time left in period)
+        game_minutes = int(game_clock // 60)
+        game_seconds = int(game_clock % 60)
+        game_time_text = time_font.render(f"{game_minutes:02d}:{game_seconds:02d}", True, (255, 255, 255))
+        game_time_rect = game_time_text.get_rect(center=(middle_rect.centerx, middle_rect.centery))
+        self.screen.blit(game_time_text, game_time_rect)
+
+        # Draw shot clock
+        shot_clock_seconds = int(shot_clock)
+        shot_clock_text = label_font.render(f"Shot: {shot_clock_seconds}", True, (255, 255, 0))
+        shot_clock_rect = shot_clock_text.get_rect(center=(middle_rect.centerx, middle_rect.bottom - 20))
+        self.screen.blit(shot_clock_text, shot_clock_rect)
 
     def draw_simulation_data(self, data):
         """Draw whatever data your simulation produces"""
@@ -390,6 +509,9 @@ class MadronaPipeline:
         self.screen.fill(BACKGROUND_COLOR)
         self.draw_basketball_court()
         # self.draw_grid_boundaries()  # Removed: no more grid lines
+        
+        # Draw score display
+        self.draw_score_display(data)
         
         # Display info text
         y_offset = 20
@@ -746,6 +868,7 @@ class MadronaPipeline:
             # Get and display data
             data = self.get_simulation_data()
             self.draw_simulation_data(data)
+            self.draw_score_display(data)  # Draw the score display
             
             # Update display
             pygame.display.flip()
@@ -755,9 +878,33 @@ class MadronaPipeline:
         print(f"Pipeline ended after {self.step_count} steps")
 
     def meters_to_screen(self, meter_x, meter_y):
-        """Convert meter coordinates to screen pixels"""
-        screen_x = self.grid_offset_x + (meter_x * self.meters_to_pixels)
-        screen_y = self.grid_offset_y + (meter_y * self.meters_to_pixels)
+        """Convert meter coordinates to screen pixels, centered with the basketball court"""
+        # Calculate world centering parameters (matching draw_basketball_court)
+        max_court_width = WINDOW_WIDTH - 400  # Leave space for UI
+        max_court_height = WINDOW_HEIGHT - 300  # Leave space for score display and UI
+        
+        # Calculate scale to fit court in available space
+        NBA_COURT_W = 28.65
+        NBA_COURT_H = 15.24
+        scale_x = max_court_width / NBA_COURT_W
+        scale_y = max_court_height / NBA_COURT_H
+        scale = min(scale_x, scale_y) * 0.8  # Use 80% of available space
+        
+        # Calculate the world border dimensions
+        world_width_px = WORLD_WIDTH_METERS * scale
+        world_height_px = WORLD_HEIGHT_METERS * scale
+        
+        # Center the world border in the window
+        world_start_x = (WINDOW_WIDTH - world_width_px) // 2
+        world_start_y = (WINDOW_HEIGHT - world_height_px - 150) // 2  # Leave space for score display
+        
+        # Convert world coordinates to screen coordinates
+        world_x_ratio = meter_x / WORLD_WIDTH_METERS
+        world_y_ratio = meter_y / WORLD_HEIGHT_METERS
+        
+        screen_x = world_start_x + (world_x_ratio * world_width_px)
+        screen_y = world_start_y + (world_y_ratio * world_height_px)
+        
         return int(screen_x), int(screen_y)
 
 if __name__ == "__main__":

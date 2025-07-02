@@ -315,10 +315,10 @@ namespace madsimple {
                                 {impl_->cfg.numWorlds, 1});
     }
 
-    Tensor Manager::gameStateInboundingTensor() const
+    Tensor Manager::gameStateTensor() const
     {
-        return impl_->exportTensor(ExportID::GameStateInbounding, TensorElementType::Int32,
-            {impl_->cfg.numWorlds, 1});
+        return impl_->exportTensor(ExportID::GameState, TensorElementType::Float32,
+            {impl_->cfg.numWorlds, 10}); // 10 fields: inboundingInProgress, liveBall, period, teamInPossession, team0Hoop, team0Score, team1Hoop, team1Score, gameClock, shotClock
     }
 
 

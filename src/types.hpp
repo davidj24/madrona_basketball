@@ -17,7 +17,6 @@ namespace madsimple {
         // General Exports
         Reset,
         GameState,
-        GameStateInbounding,
 
         // Agent Exports
         Action,
@@ -47,15 +46,15 @@ namespace madsimple {
 // ================================================ Singletons ================================================
     struct GameState
     {
-        bool inboundingInProgress;
-        bool liveBall; // 0 if dead ball, 1 if live ball
+        float inboundingInProgress; // 0.0f if false, 1.0f if true
+        float liveBall; // 0.0f if dead ball, 1.0f if live ball
 
-        uint32_t period;
-        uint32_t teamInPossession; // The index of the team that is currently in possession of the ball
-        uint32_t team0Hoop; // Entity id of team 0's hoop (will switch at half time)
-        uint32_t team0Score;
-        uint32_t team1Hoop;
-        uint32_t team1Score;
+        float period;
+        float teamInPossession; // The index of the team that is currently in possession of the ball
+        float team0Hoop; // Entity id of team 0's hoop (will switch at half time)
+        float team0Score;
+        float team1Hoop;
+        float team1Score;
 
         float gameClock; // Time left, figure out if this is in seconds or timesteps, and how it should work with tickSystem
         float shotClock;

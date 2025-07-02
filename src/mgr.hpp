@@ -39,7 +39,7 @@ public:
 
     //=================================================== General Tensors ===================================================
     MGR_EXPORT madrona::py::Tensor resetTensor() const;
-    MGR_EXPORT madrona::py::Tensor gameStateInboundingTensor() const;
+    MGR_EXPORT madrona::py::Tensor gameStateTensor() const;
 
 
     //=================================================== Agent Tensors ===================================================
