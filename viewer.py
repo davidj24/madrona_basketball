@@ -21,6 +21,7 @@ TEXT_COLOR = (255, 255, 255)     # White
 # World/court dimensions in meters (NBA standard)
 NBA_COURT_WIDTH = 28.65
 NBA_COURT_HEIGHT = 15.24
+NBA_3_POINT_LINE = 7.24
 COURT_MARGIN_FACTOR = 1.1  # World area will be 1.1x the court area
 PIXELS_PER_METER = 80      # This is the single source of truth for scaling. Change this to zoom in/out.
 

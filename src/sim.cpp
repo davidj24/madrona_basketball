@@ -12,7 +12,7 @@ using namespace madrona::math;
 
 
 
-// This helper function computes the rotation needed to align the 'start' vector with the 'target' vector.
+// Computes the rotation needed to align the 'start' vector with the 'target' vector.
 inline Quat findRotationBetweenVectors(Vector3 start, Vector3 target) {
     // Ensure the vectors are normalized (unit length)
     start.normalize();
@@ -278,7 +278,7 @@ namespace madsimple {
                 in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER; // Whoever passed the ball is no longer in possession of it
                 inbounding.imInbounding = false;
                 ball_physics.velocity = agent_orientation.orientation.rotateVec(Vector3{0.f, 0.1f, 0.f}); // Setting the ball's velocity to have the same direction as the agent's orientation
-                                                                                                // Note: we use 0, 2, 0 because that's forward in our simulation specifically
+                                                                                                          // Note: we use 0, 0.1, 0 because that's forward in our simulation specifically
                 gameState.inboundingInProgress = 0.0f;
             }
         });
@@ -318,30 +318,38 @@ namespace madsimple {
 
         float distance_to_hoop = shot_vector.length();
 
-        // Calculate intended angle
-        float intended_direction = std::atan2(shot_vector.x, shot_vector.y); // This points in the direction of the hoop
+        // Calculate intended angle towards hoop
+        float intended_direction = std::atan2(shot_vector.x, shot_vector.y);
 
-        float direction_deviation_per_meter = 0.0f; // radians per meter distance
+        // Mess up angle based on distance
+        float direction_deviation_per_meter = 0.002f; // radians per meter distance
         float stddev = direction_deviation_per_meter * distance_to_hoop;
         static thread_local std::mt19937 rng(std::random_device{}());
         std::normal_distribution<float> dist(0.0f, stddev);
         float direction_deviation = dist(rng);
         float shot_direction = intended_direction + direction_deviation;
 
+
+        // Mess up angle based on contest level (how close nearest defender is)
+
+
+        // Mess up angle based on agent velocity
+
+
+
+
         // This is the final, correct trajectory vector for the ball
         Vector3 final_shot_vec = Vector3{std::sin(shot_direction), std::cos(shot_direction), 0.f};
 
-        // --- Set Agent Orientation using the new method ---
 
-        // 1. Define the agent's base "forward" direction to match your working passSystem.
-        //    We use a unit vector for the direction.
         const Vector3 base_forward = {0.0f, 1.0f, 0.0f};
 
-        // 2. Find the rotation that aligns the agent's "forward" direction
-        //    with the final shot direction vector.
+
+        // Find the rotation that aligns the agent's orientation with the final shot direction vector.
         agent_orientation.orientation = findRotationBetweenVectors(base_forward, final_shot_vec);
 
-        // --- Release the ball (This part remains the same) ---
+
+        // Shoot the damn ball
         auto held_ball_query = ctx.query<Grabbed, BallPhysics>();
         ctx.iterateQuery(held_ball_query, [&] (Grabbed &grabbed, BallPhysics &ball_physics)
         {
@@ -352,7 +360,7 @@ namespace madsimple {
                 in_possession.hasBall = false;
                 in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
                 inbounding.imInbounding = false;
-                ball_physics.velocity = final_shot_vec * .5f; // 5 m/s shot speed
+                ball_physics.velocity = final_shot_vec * .15f;
                 ball_physics.inFlight = true;
             }
         });
@@ -451,14 +459,11 @@ namespace madsimple {
 
     //=================================================== General Systems ===================================================
     inline void tick(Engine &ctx,
-                    Entity agent_entity,
                     Reset &reset,
                     Position &position,
                     Reward &reward, //add later
                     Done &done,
                     CurStep &episode_step,
-                    InPossession &in_possession,
-                    Inbounding &inbounding,
                     GrabCooldown &grab_cooldown)
     {
         const GridState *grid = ctx.data().grid;
@@ -650,7 +655,7 @@ namespace madsimple {
             Action, Position, Orientation>>({});
 
         auto tickNode = builder.addToGraph<ParallelForNode<Engine, tick,
-            Entity, Reset, Position, Reward, Done, CurStep, InPossession, Inbounding, GrabCooldown>>({});
+            Reset, Position, Reward, Done, CurStep, GrabCooldown>>({});
         
         // builder.addToGraph<ParallelForNode<Engine, moveBallRandomly,
         //     Position, RandomMovement>>({});
@@ -802,18 +807,18 @@ namespace madsimple {
             ctx.get<ImAHoop>(hoop) = ImAHoop{};
             ctx.get<ScoringZone>(hoop) = ScoringZone 
             {
-                1.0f, // Radius of scoring zone (1 meter)
+                .3f, // Radius of scoring zone (1 meter)
                 2.0f, // Height of scoring zone (2 meters)
                 Vector3{hoop_pos.x, hoop_pos.y, hoop_pos.z} // Center of the scoring zone
             };
             
 
-            // Keep random movement commented out as requested
+            // Keep random movement commented out
             // ctx.get<RandomMovement>(basketball) = RandomMovement {
             //     0.f,
             //     1.f + i * 2.f  // Different movement intervals: 1s, 3s, 5s...
             // };
         }
 
-    } // namespace madsimple
+    }
 }
