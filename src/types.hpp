@@ -137,6 +137,10 @@ namespace madsimple {
         uint32_t defendingHoopID; // The ID of the hoop that the agent is defending
     };
 
+    struct GrabCooldown
+    {
+        float cooldown;
+    };
 
 // ======================================================================================================= Ball Components =======================================================================================================
 
@@ -176,6 +180,7 @@ namespace madsimple {
     struct Agent : public madrona::Archetype<
         Reset,
         Action,
+        GrabCooldown,
         Position,
         Reward,
         Done,

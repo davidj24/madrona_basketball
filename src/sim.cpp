@@ -70,6 +70,7 @@ namespace madsimple {
         registry.registerComponent<InPossession>();
         registry.registerComponent<Orientation>();
         registry.registerComponent<Team>();
+        registry.registerComponent<GrabCooldown>();
 
 
         // ================================================== Ball Components ==================================================
@@ -192,18 +193,21 @@ namespace madsimple {
 
 
     //=================================================== Agent Systems ===================================================
-    inline void processGrab(Engine &ctx,
+    inline void grabSystem(Engine &ctx,
                             Entity agent_entity,
                             Action &action,
                             Position &agent_pos,
                             InPossession &in_possession,
-                            Team &team)
+                            Team &team,
+                            GrabCooldown &grab_cooldown)
     {
         GameState &gameState = ctx.singleton<GameState>();
         auto basketball_query = ctx.query<Entity, Position, Grabbed, BallPhysics>();
         ctx.iterateQuery(basketball_query, [&](Entity ball_entity, Position &basketball_pos, Grabbed &grabbed, BallPhysics &ball_physics) 
         {
             if (action.grab == 0) {return;}
+            if (grab_cooldown.cooldown > 0.f) {return;}
+            grab_cooldown.cooldown = 10.f;
 
             bool agent_is_holding_this_ball = (in_possession.hasBall == true &&
                                                 grabbed.isGrabbed &&
@@ -377,7 +381,7 @@ namespace madsimple {
         {
             // Treat moveSpeed as a velocity in meters/second, not a distance.
             // Let's say a moveSpeed of 1 corresponds to 1 m/s.
-            float agent_velocity_magnitude = action.moveSpeed * 8;
+            float agent_velocity_magnitude = action.moveSpeed * 5;
 
             constexpr float angle_between_directions = pi / 4.f;
             float move_angle = action.moveAngle * angle_between_directions;
@@ -454,11 +458,13 @@ namespace madsimple {
                     Done &done,
                     CurStep &episode_step,
                     InPossession &in_possession,
-                    Inbounding &inbounding)
+                    Inbounding &inbounding,
+                    GrabCooldown &grab_cooldown)
     {
         const GridState *grid = ctx.data().grid;
 
         Position new_pos = position;
+        grab_cooldown.cooldown = std::max(0.f, grab_cooldown.cooldown - 1.f); // Decrease cooldown if it's greater than 0
 
         bool episode_done = false;
         if (reset.resetNow != 0) 
@@ -505,6 +511,7 @@ namespace madsimple {
                 curstep.step = 0;
                 inpos = {false, ENTITY_ID_PLACEHOLDER};
                 orient = Orientation{Quat::id()};
+                grab_cooldown = GrabCooldown{0.f};
                 agent_i++;
             });
 
@@ -643,19 +650,19 @@ namespace madsimple {
             Action, Position, Orientation>>({});
 
         auto tickNode = builder.addToGraph<ParallelForNode<Engine, tick,
-            Entity, Reset, Position, Reward, Done, CurStep, InPossession, Inbounding>>({});
+            Entity, Reset, Position, Reward, Done, CurStep, InPossession, Inbounding, GrabCooldown>>({});
         
         // builder.addToGraph<ParallelForNode<Engine, moveBallRandomly,
         //     Position, RandomMovement>>({});
 
-        auto processGrabNode = builder.addToGraph<ParallelForNode<Engine, processGrab,
-            Entity, Action, Position, InPossession, Team>>({});
+        auto grabSystemNode = builder.addToGraph<ParallelForNode<Engine, grabSystem,
+            Entity, Action, Position, InPossession, Team, GrabCooldown>>({});
 
         auto passSystemNode = builder.addToGraph<ParallelForNode<Engine, passSystem,
             Entity, Action, Orientation, InPossession, Inbounding>>({});
 
         auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
-            Position, BallPhysics, Grabbed>>({processGrabNode});
+            Position, BallPhysics, Grabbed>>({grabSystemNode});
 
         auto outOfBoundsSystemNode = builder.addToGraph<ParallelForNode<Engine, outOfBoundsSystem,
             Entity, Position, Grabbed, BallPhysics>>({passSystemNode, moveBallSystemNode});
@@ -710,6 +717,7 @@ namespace madsimple {
             ctx.get<CurStep>(agent).step = 0;
             ctx.get<InPossession>(agent) = {false, ENTITY_ID_PLACEHOLDER};
             ctx.get<Orientation>(agent) = Orientation {Quat::id()};
+            ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
             
             // Set defending hoop based on team
             uint32_t defending_hoop_id = (i % 2 == 0) ? 1 : 0; // Team 0 defends hoop 1, Team 1 defends hoop 0
