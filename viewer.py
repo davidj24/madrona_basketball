@@ -21,7 +21,12 @@ TEXT_COLOR = (255, 255, 255)     # White
 # World/court dimensions in meters (NBA standard)
 NBA_COURT_WIDTH = 28.65
 NBA_COURT_HEIGHT = 15.24
-NBA_3_POINT_LINE = 7.24
+NBA_3_POINT_LINE = 7.24 # The 3 point line in the corner is a stright line,and the distnace is shorter, roughly 6.71m
+NBA_KEY_WIDTH = 5.79
+NBA_KEY_HEIGHT = 4.88
+NBA_TOP_OF_KEY_RADIUS = 1.22
+NBA_HALFCOURT_CIRCLE_RADIUS = 1.33
+
 COURT_MARGIN_FACTOR = 1.1  # World area will be 1.1x the court area
 PIXELS_PER_METER = 80      # This is the single source of truth for scaling. Change this to zoom in/out.
 
@@ -170,61 +175,100 @@ class MadronaPipeline:
             return None
 
     def draw_basketball_court(self):
-        """Draws a basketball court centered in the window, scaled by pixels_per_meter."""
+        """Draws a basketball court centered in the window, scaled by pixels_per_meter, in horizontal (landscape) orientation."""
         # --- NBA standard dimensions (meters) ---
-        NBA_COURT_W = 28.65
-        NBA_COURT_H = 15.24
-        KEY_W = 4.88
-        KEY_H = 5.79
-        FT_CIRCLE_R = 1.8
-        THREE_PT_R = 6.75
-        HOOP_OFFSET = 1.575
+        COURT_LENGTH = 28.65  # x-axis
+        COURT_WIDTH = 15.24   # y-axis
+        KEY_WIDTH = 4.88      # y-axis
+        KEY_HEIGHT = 5.79     # x-axis
+        FT_CIRCLE_RADIUS = 1.80
+        HALFCOURT_CIRCLE_RADIUS = 1.33
+        THREE_PT_RADIUS = 7.24
+        THREE_PT_LINE_DIST = 6.71
+        BACKBOARD_TO_BASELINE = 1.22
+        BASKET_DIAMETER = 0.45
+        RESTRICTED_RADIUS = 1.22
+        HOOP_CENTER_FROM_BASELINE = 1.575
         LINE_THICKNESS = 3
 
-        # --- Use the single scaling factor from __init__ ---
         scale = self.pixels_per_meter
-        
-        # --- Calculate court dimensions and center it in the world view ---
-        court_width_px = NBA_COURT_W * scale
-        court_height_px = NBA_COURT_H * scale
-        court_offset_x = self.world_offset_x + (self.world_width_px - court_width_px) / 2
-        court_offset_y = self.world_offset_y + (self.world_height_px - court_height_px) / 2
-        
-        court_rect = pygame.Rect(court_offset_x, court_offset_y, court_width_px, court_height_px)
-        
-        # --- Draw Court Background ---
+
+        # Calculate court dimensions in pixels
+        court_length_px = COURT_LENGTH * scale
+        court_width_px = COURT_WIDTH * scale
+        court_offset_x = self.world_offset_x + (self.world_width_px - court_length_px) / 2
+        court_offset_y = self.world_offset_y + (self.world_height_px - court_width_px) / 2
+        court_rect = pygame.Rect(court_offset_x, court_offset_y, court_length_px, court_width_px)
+
+        # Draw court background
         pygame.draw.rect(self.screen, (205, 133, 63), court_rect)
         playable_rect = court_rect.inflate(-LINE_THICKNESS * 2, -LINE_THICKNESS * 2)
         pygame.draw.rect(self.screen, (20, 40, 80), playable_rect)
 
-        # --- Draw Court Markings ---
-        center_x, center_y = court_rect.centerx, court_rect.centery
+        # Center line (vertical, at half court)
+        center_x = court_rect.left + court_rect.width / 2
         pygame.draw.line(self.screen, (255, 255, 255), (center_x, court_rect.top), (center_x, court_rect.bottom), LINE_THICKNESS)
-        center_circle_radius = int(3.0 * scale)
-        pygame.draw.circle(self.screen, (255, 255, 255), (center_x, center_y), center_circle_radius, LINE_THICKNESS)
-        pygame.draw.circle(self.screen, (139, 0, 0), (center_x, center_y), center_circle_radius - LINE_THICKNESS)
 
-        # --- Draw Features for Both Halves ---
+        # Halfcourt circle
+        center_y = court_rect.top + court_rect.height / 2
+        halfcourt_radius_px = HALFCOURT_CIRCLE_RADIUS * scale
+        pygame.draw.circle(self.screen, (255, 255, 255), (int(center_x), int(center_y)), int(halfcourt_radius_px), LINE_THICKNESS)
+
+        # Keys, free throw circles, restricted areas, backboards, hoops, three-point lines
         for side in [-1, 1]:
-            key_w = KEY_W * scale
-            key_h = KEY_H * scale
-            key_x = court_rect.left if side == -1 else court_rect.right - key_w
-            key_y = center_y - key_h / 2
-            key_rect = pygame.Rect(key_x, key_y, key_w, key_h)
-            pygame.draw.rect(self.screen, (139, 0, 0), key_rect)
+            # Baseline x
+            if side == -1:
+                baseline_x = court_rect.left
+                key_x = baseline_x
+                hoop_x = baseline_x + HOOP_CENTER_FROM_BASELINE * scale
+                backboard_x = baseline_x + BACKBOARD_TO_BASELINE * scale
+                three_pt_arc_center_x = hoop_x
+            else:
+                baseline_x = court_rect.right
+                key_x = baseline_x - KEY_HEIGHT * scale
+                hoop_x = baseline_x - HOOP_CENTER_FROM_BASELINE * scale
+                backboard_x = baseline_x - BACKBOARD_TO_BASELINE * scale
+                three_pt_arc_center_x = hoop_x
 
-            ft_circle_radius = int(FT_CIRCLE_R * scale)
-            ft_center_x = key_x + key_w if side == -1 else key_x
-            arc_rect = pygame.Rect(ft_center_x - ft_circle_radius, center_y - ft_circle_radius, ft_circle_radius * 2, ft_circle_radius * 2)
-            start_angle, end_angle = (-np.pi / 2, np.pi / 2) if side == -1 else (np.pi / 2, 3 * np.pi / 2)
+            # Key (paint)
+            key_top = center_y - KEY_WIDTH / 2 * scale
+            key_rect = pygame.Rect(key_x if side == -1 else key_x, key_top, KEY_HEIGHT * scale, KEY_WIDTH * scale)
+            pygame.draw.rect(self.screen, (139, 0, 0), key_rect)
+            pygame.draw.rect(self.screen, (255, 255, 255), key_rect, LINE_THICKNESS)
+
+            # Free throw circle
+            ft_circle_center = (key_x + KEY_HEIGHT * scale if side == -1 else key_x, center_y)
+            pygame.draw.circle(self.screen, (255, 255, 255), (int(key_x + KEY_HEIGHT * scale if side == -1 else key_x), int(center_y)), int(FT_CIRCLE_RADIUS * scale), LINE_THICKNESS)
+
+            # Restricted area
+            pygame.draw.circle(self.screen, (255, 255, 255), (int(hoop_x), int(center_y)), int(RESTRICTED_RADIUS * scale), LINE_THICKNESS)
+
+            # Backboard
+            pygame.draw.line(self.screen, (255, 255, 255), (backboard_x, center_y - 0.91 * scale), (backboard_x, center_y + 0.91 * scale), LINE_THICKNESS)
+
+            # Hoop
+            pygame.draw.circle(self.screen, (255, 140, 0), (int(hoop_x), int(center_y)), int(BASKET_DIAMETER * scale / 2), 0)
+            pygame.draw.circle(self.screen, (220, 20, 20), (int(hoop_x), int(center_y)), int(BASKET_DIAMETER * scale / 2), LINE_THICKNESS)
+
+            # Three-point arc
+            arc_rect = pygame.Rect(three_pt_arc_center_x - THREE_PT_RADIUS * scale, center_y - THREE_PT_RADIUS * scale, 2 * THREE_PT_RADIUS * scale, 2 * THREE_PT_RADIUS * scale)
+            if side == -1:
+                start_angle, end_angle = math.radians(292), math.radians(68)
+            else:
+                start_angle, end_angle = math.radians(112), math.radians(248)
             pygame.draw.arc(self.screen, (255, 255, 255), arc_rect, start_angle, end_angle, LINE_THICKNESS)
 
-            hoop_center_x = court_rect.left + HOOP_OFFSET * scale if side == -1 else court_rect.right - HOOP_OFFSET * scale
-            three_pt_radius = int(THREE_PT_R * scale)
-            three_pt_arc_rect = pygame.Rect(hoop_center_x - three_pt_radius, center_y - three_pt_radius, three_pt_radius * 2, three_pt_radius * 2)
-            pygame.draw.arc(self.screen, (255, 255, 255), three_pt_arc_rect, start_angle, end_angle, LINE_THICKNESS)
-        
-        # --- Draw World Border (larger than the court) ---
+            # Three-point straight lines (corners)
+            corner_y1 = center_y - THREE_PT_LINE_DIST * scale
+            corner_y2 = center_y + THREE_PT_LINE_DIST * scale
+            if side == -1:
+                pygame.draw.line(self.screen, (255, 255, 255), (hoop_x + RESTRICTED_RADIUS * scale, corner_y1), (court_rect.left, corner_y1))
+                pygame.draw.line(self.screen, (255, 255, 255), (hoop_x + RESTRICTED_RADIUS * scale, corner_y2), (court_rect.left, corner_y2))
+            else:
+                pygame.draw.line(self.screen, (255, 255, 255), (hoop_x - RESTRICTED_RADIUS * scale, corner_y1), (court_rect.right, corner_y1))
+                pygame.draw.line(self.screen, (255, 255, 255), (hoop_x - RESTRICTED_RADIUS * scale, corner_y2), (court_rect.right, corner_y2))
+
+        # Draw world border (larger than the court)
         world_border_rect = pygame.Rect(self.world_offset_x, self.world_offset_y, self.world_width_px, self.world_height_px)
         pygame.draw.rect(self.screen, (255, 255, 255), world_border_rect, 3)
 
