@@ -8,6 +8,7 @@ import pygame
 import sys
 import numpy as np
 import os
+import math
 
 
 
@@ -17,10 +18,11 @@ WINDOW_HEIGHT = 1750
 BACKGROUND_COLOR = (50, 50, 50)  # Dark gray
 TEXT_COLOR = (255, 255, 255)     # White
 
-# World dimensions in meters (continuous coordinates)
-WORLD_WIDTH_METERS = 71.0  
-WORLD_HEIGHT_METERS = 51.0  
-PIXELS_PER_METER = 100      # This is the single source of truth for scaling. Change this to zoom in/out.
+# World/court dimensions in meters (NBA standard)
+NBA_COURT_WIDTH = 28.65
+NBA_COURT_HEIGHT = 15.24
+COURT_MARGIN_FACTOR = 1.1  # World area will be 1.1x the court area
+PIXELS_PER_METER = 80      # This is the single source of truth for scaling. Change this to zoom in/out.
 
 
 # Disable CUDA before importing anything else to avoid version conflicts
@@ -79,9 +81,16 @@ class MadronaPipeline:
         self.font = pygame.font.Font(None, 24)
         
         # --- Centralized Coordinate System Setup ---
-        self.world_width_meters = WORLD_WIDTH_METERS
-        self.world_height_meters = WORLD_HEIGHT_METERS
         self.pixels_per_meter = PIXELS_PER_METER
+
+        # --- Court dimensions (do not change these) ---
+        court_width_m = 28.65
+        court_height_m = 15.24
+
+        # --- World is slightly larger than the court ---
+        margin_factor = 1.10  # 10% larger in each dimension
+        self.world_width_meters = court_width_m * margin_factor
+        self.world_height_meters = court_height_m * margin_factor
 
         # Calculate all pixel dimensions from the meter values and the single scale factor
         self.world_width_px = self.world_width_meters * self.pixels_per_meter
@@ -93,23 +102,28 @@ class MadronaPipeline:
 
         print("Initializing Madrona simulation...")
         
-        discrete_width = int(self.world_width_meters)
-        discrete_height = int(self.world_height_meters)
-        walls = np.zeros((discrete_height, discrete_width), dtype=bool)
-        rewards = np.zeros((discrete_height, discrete_width), dtype=float)
+        # Use math.ceil to ensure the grid fully covers the world size
+        self.world_discrete_width = math.ceil(self.world_width_meters)
+        self.world_discrete_height = math.ceil(self.world_height_meters)
+        walls = np.zeros((self.world_discrete_height, self.world_discrete_width), dtype=bool)
+        rewards = np.zeros((self.world_discrete_height, self.world_discrete_width), dtype=float)
         
         self.sim = madrona_sim.SimpleGridworldSimulator(
             walls=walls,
             rewards=rewards, 
-            start_x=self.world_width_meters / 2.0,
-            start_y=self.world_height_meters / 2.0,
+            start_x=self.world_discrete_width / 2.0,
+            start_y=self.world_discrete_height / 2.0,
             max_episode_length=10000,
             exec_mode=ExecMode.CPU,
             num_worlds=1,
             gpu_id=-1
         )
-        
-        print(f"✓ Madrona simulation initialized! World size: {self.world_width_meters}x{self.world_height_meters} meters")
+        # For all world border and coordinate calculations, use the discrete grid size
+        self.world_width_px = self.world_discrete_width * self.pixels_per_meter
+        self.world_height_px = self.world_discrete_height * self.pixels_per_meter
+        self.world_offset_x = (WINDOW_WIDTH - self.world_width_px) / 2
+        self.world_offset_y = (WINDOW_HEIGHT - self.world_height_px) / 2
+        print(f"✓ Madrona simulation initialized! World size: {self.world_discrete_width}x{self.world_discrete_height} meters (discrete grid)")
         self.step_count = 0
         
     def get_simulation_data(self):
@@ -255,10 +269,10 @@ class MadronaPipeline:
         self.screen.blit(period_text, period_rect)
         game_minutes = int(game_clock // 60)
         game_seconds = int(game_clock % 60)
+        shot_clock_seconds = int(shot_clock)
         game_time_text = time_font.render(f"{game_minutes:02d}:{game_seconds:02d}", True, (255, 255, 255))
         game_time_rect = game_time_text.get_rect(center=(middle_rect.centerx, middle_rect.centery))
         self.screen.blit(game_time_text, game_time_rect)
-        shot_clock_seconds = int(shot_clock)
         shot_clock_text = label_font.render(f"Shot: {shot_clock_seconds}", True, (255, 255, 0))
         shot_clock_rect = shot_clock_text.get_rect(center=(middle_rect.centerx, middle_rect.bottom - 20))
         self.screen.blit(shot_clock_text, shot_clock_rect)

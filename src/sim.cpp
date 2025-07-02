@@ -277,7 +277,7 @@ namespace madsimple {
                 in_possession.hasBall = false; // Since agents can only hold 1 ball at a time, if they pass it they can't be holding one anymore
                 in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER; // Whoever passed the ball is no longer in possession of it
                 inbounding.imInbounding = false;
-                ball_physics.velocity = agent_orientation.orientation.rotateVec(Vector3{0.f, 0.5f, 0.f}); // Setting the ball's velocity to have the same direction as the agent's orientation
+                ball_physics.velocity = agent_orientation.orientation.rotateVec(Vector3{0.f, 0.1f, 0.f}); // Setting the ball's velocity to have the same direction as the agent's orientation
                                                                                                 // Note: we use 0, 2, 0 because that's forward in our simulation specifically
                 gameState.inboundingInProgress = 0.0f;
             }
@@ -372,7 +372,7 @@ namespace madsimple {
         if (action.rotate != 0)
         {
             // Rotation logic is fine as it is
-            float turn_angle = (pi/180.f) * action.rotate * 4;
+            float turn_angle = (pi/180.f) * action.rotate * 3;
             Quat turn = Quat::angleAxis(turn_angle, Vector3{0, 0, 1});
             agent_orientation.orientation = turn * agent_orientation.orientation;
         }
