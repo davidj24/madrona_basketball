@@ -470,6 +470,17 @@ class MadronaPipeline:
                 arrow_end = (screen_x + arrow_len_px * dx, screen_y + arrow_len_px * dy)
                 pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 3)
 
+        # --- Ball Physics Debug Info ---
+        if 'ball_physics' in data:
+            ball_physics = data['ball_physics'][0]
+            for i, ball in enumerate(ball_physics):
+                # ball: [inFlight, vx, vy, vz, lastTouchedByID, pointsWorth] (may be shorter)
+                in_flight = ball[0] if len(ball) > 0 else None
+                velocity = tuple(ball[1:4]) if len(ball) > 3 else (None, None, None)
+                last_touched = int(ball[4]) if len(ball) > 4 else None
+                points_worth = int(ball[5]) if len(ball) > 5 else None
+                info_texts.append(f"Ball {i}: inFlight={in_flight}, velocity={velocity}, lastTouchedByID={last_touched}, pointsWorth={points_worth}")
+
         # Display all the info text at the end
         for text in info_texts:
             if text: self.screen.blit(self.font.render(text, True, TEXT_COLOR), (20, y_offset)); y_offset += 20

@@ -16,8 +16,8 @@ using namespace madrona::math;
 inline Quat findRotationBetweenVectors(Vector3 start, Vector3 target) 
 {
     // Ensure the vectors are normalized (unit length)
-    start.normalize();
-    target.normalize();
+    start = start.normalize();
+    target = target.normalize();
 
     float dot_product = dot(start, target);
 
@@ -35,7 +35,7 @@ inline Quat findRotationBetweenVectors(Vector3 start, Vector3 target)
     // Case 3: The general case.
     // The axis of rotation is the cross product of the two vectors.
     Vector3 rotation_axis = cross(start, target);
-    rotation_axis.normalize();
+    rotation_axis = rotation_axis.normalize();
 
     // The angle is the arccosine of the dot product.
     float rotation_angle = acosf(dot_product);
@@ -61,19 +61,19 @@ inline int32_t getShotPointValue(madsimple::Position shot_pos, madsimple::Positi
     // --- Logic ---
 
     // 1. Check if the shot is in the corner lane, relative to the court's position.
-    bool isInCornerLane = (shot_pos.y < court_min_y + CORNER_3_FROM_SIDELINE_M || 
-                           shot_pos.y > court_min_y + COURT_WIDTH_M - CORNER_3_FROM_SIDELINE_M);
+    bool isInCornerLane = (shot_pos.position.y < court_min_y + CORNER_3_FROM_SIDELINE_M || 
+                           shot_pos.position.y > court_min_y + COURT_WIDTH_M - CORNER_3_FROM_SIDELINE_M);
 
     if (isInCornerLane) {
         // 2. If so, check if the shot is within the corner's length, relative to the court's position.
-        bool isShootingAtLeftHoop = hoop_pos.x < WORLD_WIDTH_M / 2.0f;
+        bool isShootingAtLeftHoop = hoop_pos.position.x < WORLD_WIDTH_M / 2.0f;
         
         if (isShootingAtLeftHoop) {
-            if (shot_pos.x <= court_min_x + CORNER_3_LENGTH_FROM_BASELINE_M) {
+            if (shot_pos.position.x <= court_min_x + CORNER_3_LENGTH_FROM_BASELINE_M) {
                 return 3;
             }
         } else { // Shooting at the right hoop
-            if (shot_pos.x >= court_min_x + COURT_LENGTH_M - CORNER_3_LENGTH_FROM_BASELINE_M) {
+            if (shot_pos.position.x >= court_min_x + COURT_LENGTH_M - CORNER_3_LENGTH_FROM_BASELINE_M) {
                 return 3;
             }
         }
@@ -177,14 +177,14 @@ namespace madsimple {
             float dx = ((rand() % 3) - 1) * 0.1f; // -0.1, 0, or 0.1 meters
             float dy = ((rand() % 3) - 1) * 0.1f; // -0.1, 0, or 0.1 meters
 
-            float new_x = ball_pos.x + dx;
-            float new_y = ball_pos.y + dy;
+            float new_x = ball_pos.position.x + dx;
+            float new_y = ball_pos.position.y + dy;
 
             new_x = std::clamp(new_x, 0.f, grid->width);
             new_y = std::clamp(new_y, 0.f, grid->height);
 
-            ball_pos.x = new_x;
-            ball_pos.y = new_y;
+            ball_pos.position.x = new_x;
+            ball_pos.position.y = new_y;
         } 
     }
 
@@ -212,9 +212,9 @@ namespace madsimple {
         if (ball_physics.velocity.length() == 0 || grabbed.isGrabbed) {return;}
 
         const GridState* grid = ctx.data().grid; // To clamp later
-        float new_x = ball_pos.x + ball_physics.velocity[0];
-        float new_y = ball_pos.y + ball_physics.velocity[1];
-        float new_z = ball_pos.z + ball_physics.velocity[2];
+        float new_x = ball_pos.position.x + ball_physics.velocity[0];
+        float new_y = ball_pos.position.y + ball_physics.velocity[1];
+        float new_z = ball_pos.position.z + ball_physics.velocity[2];
 
         new_x = std::clamp(new_x, 0.f, grid->width);
         new_y = std::clamp(new_y, 0.f, grid->height);
@@ -229,9 +229,9 @@ namespace madsimple {
         const Cell &new_cell = grid->cells[discrete_y * grid->discreteWidth + discrete_x];
         
         if (!(new_cell.flags & CellFlag::Wall)) {
-            ball_pos.x = new_x;
-            ball_pos.y = new_y;
-            ball_pos.z = new_z;
+            ball_pos.position.x = new_x;
+            ball_pos.position.y = new_y;
+            ball_pos.position.z = new_z;
         }
     }
 
@@ -269,8 +269,8 @@ namespace madsimple {
             }
 
             // Check if ball is within grab range (0.5 meters)
-            float distance_between_ball_and_player = sqrt((basketball_pos.x - agent_pos.x) * (basketball_pos.x - agent_pos.x) +
-                                (basketball_pos.y - agent_pos.y) * (basketball_pos.y - agent_pos.y));
+            float distance_between_ball_and_player = sqrt((basketball_pos.position.x - agent_pos.position.x) * (basketball_pos.position.x - agent_pos.position.x) +
+                                (basketball_pos.position.y - agent_pos.position.y) * (basketball_pos.position.y - agent_pos.position.y));
             
             if (distance_between_ball_and_player <= 0.5f)
             {
@@ -356,19 +356,18 @@ namespace madsimple {
 
         // Calculate vector to attacking hoop
         Vector3 shot_vector = Vector3{
-            attacking_hoop_pos.x - agent_pos.x,
-            attacking_hoop_pos.y - agent_pos.y,
+            attacking_hoop_pos.position.x - agent_pos.position.x,
+            attacking_hoop_pos.position.y - agent_pos.position.y,
             0.f
         };
 
-
-        float distance_to_hoop = shot_vector.length();
 
         // Calculate intended angle towards hoop
         float intended_direction = std::atan2(shot_vector.x, shot_vector.y);
 
         // Mess up angle based on distance
-        float direction_deviation_per_meter = 0.002f; // radians per meter distance
+        float distance_to_hoop = shot_vector.length();
+        float direction_deviation_per_meter = 0.004f; // radians per meter distance
         float stddev = direction_deviation_per_meter * distance_to_hoop;
         static thread_local std::mt19937 rng(std::random_device{}());
         std::normal_distribution<float> dist(0.0f, stddev);
@@ -376,8 +375,22 @@ namespace madsimple {
         float shot_direction = intended_direction + direction_deviation;
 
 
-        // Mess up angle based on contest level (how close nearest defender is)
+        // // Mess up angle based on contest level (how close nearest defender is)
+        // float distance_to_nearest_defender;
+        // auto nearest_defender_query = ctx.query<Position, Team>();
+        // ctx.iterateQuery(nearest_defender_query, [&] (Posiiton &agent_pos, Team &agent_team)
+        // {
+        //     if (agent_team.teamIndex != team.teamIndex)
+        //     {distance_to_nearest_defender = }  
+        // })
 
+
+        // float direction_deviation_per_meter = 0.002f; // radians per meter distance
+        // float stddev = direction_deviation_per_meter * distance_to_nearest_defender;
+        // static thread_local std::mt19937 rng(std::random_device{}());
+        // std::normal_distribution<float> dist(0.0f, stddev);
+        // float direction_deviation = dist(rng);
+        // float shot_direction = intended_direction + direction_deviation;
 
         // Mess up angle based on agent velocity
 
@@ -452,8 +465,8 @@ namespace madsimple {
             float dy = vel_y * agent_velocity_magnitude * delta_time;
 
             // Update position (now using floats)
-            float new_x = agent_pos.x + dx;
-            float new_y = agent_pos.y + dy;
+            float new_x = agent_pos.position.x + dx;
+            float new_y = agent_pos.position.y + dy;
 
             // Boundary checking in continuous space
             new_x = std::clamp(new_x, 0.f, grid->width);
@@ -468,8 +481,8 @@ namespace madsimple {
             const Cell &new_cell = grid->cells[discrete_y * grid->discreteWidth + discrete_x];
             
             if (!(new_cell.flags & CellFlag::Wall)) {
-                agent_pos.x = new_x;
-                agent_pos.y = new_y;
+                agent_pos.position.x = new_x;
+                agent_pos.position.y = new_y;
             }
         }
     }
@@ -489,8 +502,8 @@ namespace madsimple {
         auto ball_query = ctx.query<Position, BallPhysics>();
         ctx.iterateQuery(ball_query, [&] (Position &ball_pos, BallPhysics &ball_physics)
         {
-            float distance_to_hoop = std::sqrt((ball_pos.x - hoop_pos.x) * (ball_pos.x - hoop_pos.x) + 
-                                               (ball_pos.y - hoop_pos.y) * (ball_pos.y - hoop_pos.y));
+            float distance_to_hoop = std::sqrt((ball_pos.position.x - hoop_pos.position.x) * (ball_pos.position.x - hoop_pos.position.x) + 
+                                               (ball_pos.position.y - hoop_pos.position.y) * (ball_pos.position.y - hoop_pos.position.y));
             if (distance_to_hoop <= scoring_zone.radius && ball_physics.inFlight) 
             {
                 // Ball is within scoring zone, score a point
@@ -558,7 +571,7 @@ namespace madsimple {
             ctx.iterateQuery(agent_query, [&](Action &action, Position &pos, Reset &reset, Inbounding &inbounding, Reward &reward, Done &done, CurStep &curstep, InPossession &inpos, Orientation &orient, Team &team) {
                 action = Action{0, 0, 0, 0, 0, 0, 0, 0};
                 float x = (agent_i < 4) ? agent_start_x[agent_i] : grid->startX;
-                pos = Position{x, grid->startY, 0.f};
+                pos = Position{Vector3{x, grid->startY, 0.f}};
                 reset = Reset{0};
                 inbounding = Inbounding{false, true};
                 reward.r = 0.f;
@@ -573,7 +586,7 @@ namespace madsimple {
             // Reset all basketballs
             auto basketball_query = ctx.query<Position, Reset, Done, CurStep, Grabbed, BallPhysics>();
             ctx.iterateQuery(basketball_query, [&](Position &pos, Reset &reset, Done &done, CurStep &curstep, Grabbed &grabbed, BallPhysics &ballphys) {
-                pos = Position{grid->startX, grid->startY, 0.f};
+                pos = Position{Vector3{grid->startX, grid->startY, 0.f}};
                 reset = Reset{0};
                 done.episodeDone = 0.f;
                 curstep.step = 0;
@@ -586,20 +599,20 @@ namespace madsimple {
             int hoop_i = 0;
             ctx.iterateQuery(hoop_query, [&](Position &pos, Reset &reset, Done &done, CurStep &curstep, ImAHoop &, ScoringZone &zone) {
                 if (hoop_i == 0)
-                    pos = Position{3.0f, grid->height / 2.0f, 0.f};
+                    pos = Position{Vector3{3.0f, grid->height / 2.0f, 0.f}};
                 else if (hoop_i == 1)
-                    pos = Position{grid->width - 3.0f, grid->height / 2.0f, 0.f};
+                    pos = Position{Vector3{grid->width - 3.0f, grid->height / 2.0f, 0.f}};
                 else
-                    pos = Position{grid->startX + 10.0f + hoop_i * 5.0f, grid->startY + 10.0f, 0.f};
+                    pos = Position{Vector3{grid->startX + 10.0f + hoop_i * 5.0f, grid->startY + 10.0f, 0.f}};
                 reset = Reset{0};
                 done.episodeDone = 0.f;
                 curstep.step = 0;
-                zone = ScoringZone{1.0f, 2.0f, Vector3{pos.x, pos.y, pos.z}};
+                zone = ScoringZone{1.0f, 2.0f, Vector3{pos.position.x, pos.position.y, pos.position.z}};
                 hoop_i++;
             });
 
             // Reset this agent's position
-            new_pos = Position{grid->startX, grid->startY, 0.f};
+            new_pos = Position{Vector3{grid->startX, grid->startY, 0.f}};
             episode_step.step = 0;
         }
         else 
@@ -611,8 +624,8 @@ namespace madsimple {
         position = new_pos;
 
         // Calculate reward based on current position (convert to discrete for cell lookup)
-        int32_t discrete_x = (int32_t)(position.x * grid->cellsPerMeter);
-        int32_t discrete_y = (int32_t)(position.y * grid->cellsPerMeter);
+        int32_t discrete_x = (int32_t)(position.position.x * grid->cellsPerMeter);
+        int32_t discrete_y = (int32_t)(position.position.y * grid->cellsPerMeter);
         discrete_x = std::clamp(discrete_x, 0, grid->discreteWidth - 1);
         discrete_y = std::clamp(discrete_y, 0, grid->discreteHeight - 1);
         
@@ -630,9 +643,9 @@ namespace madsimple {
         ctx.iterateQuery(touched_agent_query, [&] (Position &agent_pos, Team &team)
         {
             // Check if agent is within touch distance (0.5 meters)
-            float distance = sqrt((ball_pos.x - agent_pos.x) * (ball_pos.x - agent_pos.x) +
-                                (ball_pos.y - agent_pos.y) * (ball_pos.y - agent_pos.y) +
-                                (ball_pos.z - agent_pos.z) * (ball_pos.z - agent_pos.z));
+            float distance = sqrt((ball_pos.position.x - agent_pos.position.x) * (ball_pos.position.x - agent_pos.position.x) +
+                                (ball_pos.position.y - agent_pos.position.y) * (ball_pos.position.y - agent_pos.position.y) +
+                                (ball_pos.position.z - agent_pos.position.z) * (ball_pos.position.z - agent_pos.position.z));
             
             if (distance <= 0.5f) 
             {
@@ -664,8 +677,8 @@ namespace madsimple {
     const float court_max_y = court_min_y + COURT_WIDTH_M;
 
     // Check if the ball's center has crossed the court boundaries
-    if (ball_pos.x < court_min_x || ball_pos.x > court_max_x ||
-        ball_pos.y < court_min_y || ball_pos.y > court_max_y)
+    if (ball_pos.position.x < court_min_x || ball_pos.position.x > court_max_x ||
+        ball_pos.position.y < court_min_y || ball_pos.position.y > court_max_y)
     {
         // Reset the ball physics
         ball_physics.inFlight = false;
@@ -773,9 +786,11 @@ namespace madsimple {
             ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0, 0, 0}; // Initialize with no action - fixed field count
             ctx.get<Position>(agent) = Position 
             {
-                grid->startX + (i - 2) * 1.0f, // Space agents 1 meter apart
-                grid->startY,
-                0.f
+                Vector3{
+                    grid->startX + (i - 2) * 1.0f, // Space agents 1 meter apart
+                    grid->startY,
+                    0.f
+                }
             };
             ctx.get<Reset>(agent) = Reset{0}; // Initialize reset component
             ctx.get<Inbounding>(agent) = Inbounding{false, true}; // Fixed field initialization
@@ -799,9 +814,11 @@ namespace madsimple {
             Entity basketball = ctx.makeEntity<Basketball>();
             ctx.get<Position>(basketball) = Position 
             {
-                grid->startX,   
-                grid->startY,  
-                0.f
+                Vector3{
+                    grid->startX,   
+                    grid->startY,  
+                    0.f
+                }
             };
             ctx.get<Reset>(basketball) = Reset{0}; // Initialize reset component
             ctx.get<Done>(basketball).episodeDone = 0.f;
@@ -838,9 +855,11 @@ namespace madsimple {
                 gameState.team0Hoop = hoop.id;
                 // Left hoop - positioned at left baseline + offset, center court vertically
                 hoop_pos = Position { 
-                    court_start_x + HOOP_OFFSET_FROM_BASELINE, 
-                    court_center_y, 
-                    0.f 
+                    Vector3{
+                        court_start_x + HOOP_OFFSET_FROM_BASELINE, 
+                        court_center_y, 
+                        0.f 
+                    }
                 };
             } 
             else if (i == 1) 
@@ -848,9 +867,11 @@ namespace madsimple {
                 gameState.team1Hoop = hoop.id;
                 // Right hoop - positioned at right baseline - offset, center court vertically
                 hoop_pos = Position { 
-                    court_start_x + NBA_COURT_WIDTH - HOOP_OFFSET_FROM_BASELINE, 
-                    court_center_y, 
-                    0.f 
+                    Vector3{
+                        court_start_x + NBA_COURT_WIDTH - HOOP_OFFSET_FROM_BASELINE, 
+                        court_center_y, 
+                        0.f 
+                    }
                 };
             } 
             else 
@@ -858,9 +879,11 @@ namespace madsimple {
                 // Additional hoops (if NUM_HOOPS > 2) - fallback positioning
                 hoop_pos = Position 
                 { 
-                    grid->startX + 10.0f + i * 5.0f,   
-                    grid->startY + 10.0f,  
-                    0.f
+                    Vector3{
+                        grid->startX + 10.0f + i * 5.0f,   
+                        grid->startY + 10.0f,  
+                        0.f
+                    }
                 };
             }
 
@@ -873,7 +896,7 @@ namespace madsimple {
             {
                 .3f, // Radius of scoring zone (1 meter)
                 2.0f, // Height of scoring zone (2 meters)
-                Vector3{hoop_pos.x, hoop_pos.y, hoop_pos.z} // Center of the scoring zone
+                Vector3{hoop_pos.position.x, hoop_pos.position.y, hoop_pos.position.z} // Center of the scoring zone
             };
             
 

@@ -74,9 +74,7 @@ namespace madsimple {
 
     struct Position 
     {
-        float x;
-        float y;
-        float z;
+        Vector3 position;
     };
 
     struct RandomMovement 
