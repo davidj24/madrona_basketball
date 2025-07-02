@@ -203,12 +203,12 @@ namespace madsimple {
     {
         GameState &gameState = ctx.singleton<GameState>();
         auto basketball_query = ctx.query<Entity, Position, Grabbed, BallPhysics>();
+        if (action.grab == 0) {return;}
+        if (grab_cooldown.cooldown > 0.f) {return;}
+        grab_cooldown.cooldown = 10.f;
+
         ctx.iterateQuery(basketball_query, [&](Entity ball_entity, Position &basketball_pos, Grabbed &grabbed, BallPhysics &ball_physics) 
         {
-            if (action.grab == 0) {return;}
-            if (grab_cooldown.cooldown > 0.f) {return;}
-            grab_cooldown.cooldown = 10.f;
-
             bool agent_is_holding_this_ball = (in_possession.hasBall == true &&
                                                 grabbed.isGrabbed &&
                                                 grabbed.holderEntityID == (uint32_t)agent_entity.id);
@@ -223,11 +223,11 @@ namespace madsimple {
                 return;
             }
 
-            // Check if ball is within grab distance (0.5 meters)
-            float distance = sqrt((basketball_pos.x - agent_pos.x) * (basketball_pos.x - agent_pos.x) +
+            // Check if ball is within grab range (0.5 meters)
+            float distance_between_ball_and_player = sqrt((basketball_pos.x - agent_pos.x) * (basketball_pos.x - agent_pos.x) +
                                 (basketball_pos.y - agent_pos.y) * (basketball_pos.y - agent_pos.y));
             
-            if (distance <= 0.5f) // 0.5 meter grab radius
+            if (distance_between_ball_and_player <= 0.5f)
             {
                 auto agent_query = ctx.query<InPossession>();
                 ctx.iterateQuery(agent_query, [&] (InPossession &other_in_possession)
@@ -277,6 +277,7 @@ namespace madsimple {
                 in_possession.hasBall = false; // Since agents can only hold 1 ball at a time, if they pass it they can't be holding one anymore
                 in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER; // Whoever passed the ball is no longer in possession of it
                 inbounding.imInbounding = false;
+                ball_physics.inFlight = true;
                 ball_physics.velocity = agent_orientation.orientation.rotateVec(Vector3{0.f, 0.1f, 0.f}); // Setting the ball's velocity to have the same direction as the agent's orientation
                                                                                                           // Note: we use 0, 0.1, 0 because that's forward in our simulation specifically
                 gameState.inboundingInProgress = 0.0f;
@@ -447,6 +448,7 @@ namespace madsimple {
                 // Ball is within scoring zone, score a point
                 if ((float)hoop_entity.id == gameState.team0Hoop) {gameState.team1Score += 2.0f;}
                 else{gameState.team0Score += 2.0f;}
+                gameState.scoredBaskets++;
 
                 // Reset the ball position and state
                 ball_physics.inFlight = false;
@@ -612,6 +614,7 @@ namespace madsimple {
             // Reset the ball physics
             ball_physics.inFlight = false;
             ball_physics.velocity = Vector3::zero();
+            gameState.outOfBoundsCount++;
 
             auto agent_query = ctx.query<Entity, Team, InPossession, Position, Inbounding>();
             ctx.iterateQuery(agent_query, [&] (Entity agent_entity, Team &agent_team, InPossession &in_possession, Position &agent_pos, Inbounding &inbounding)

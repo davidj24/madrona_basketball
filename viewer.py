@@ -89,14 +89,10 @@ class MadronaPipeline:
         # --- Centralized Coordinate System Setup ---
         self.pixels_per_meter = PIXELS_PER_METER
 
-        # --- Court dimensions (do not change these) ---
-        court_width_m = 28.65
-        court_height_m = 15.24
-
         # --- World is slightly larger than the court ---
         margin_factor = 1.10  # 10% larger in each dimension
-        self.world_width_meters = court_width_m * margin_factor
-        self.world_height_meters = court_height_m * margin_factor
+        self.world_width_meters = NBA_COURT_WIDTH * margin_factor
+        self.world_height_meters = NBA_COURT_HEIGHT * margin_factor
 
         # Calculate all pixel dimensions from the meter values and the single scale factor
         self.world_width_px = self.world_width_meters * self.pixels_per_meter
@@ -394,7 +390,7 @@ class MadronaPipeline:
                 BASE_FORWARD_VECTOR = np.array([0.0, 2.0, 0.0])
                 direction_3d = rotate_vec(q, BASE_FORWARD_VECTOR)
                 dx, dy = direction_3d[0], direction_3d[1]
-                arrow_length_pixels = 0.5 * self.pixels_per_meter
+                arrow_length_pixels = 0.2 * self.pixels_per_meter
                 arrow_end = (screen_x + arrow_length_pixels * dx, screen_y + arrow_length_pixels * dy)
                 pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 3)
         for text in info_texts:

@@ -48,6 +48,8 @@ namespace madsimple {
     {
         float inboundingInProgress; // 0.0f if false, 1.0f if true
         float liveBall; // 0.0f if dead ball, 1.0f if live ball
+        float shotIsUp; // booelean that tells whether a shot is currently in progress? To signal people to box out or rebound
+        float shotFromDistance; // Will be used in BrickSystem to partially determine how far ball bounces out
 
         float period;
         float teamInPossession; // The index of the team that is currently in possession of the ball
@@ -58,6 +60,9 @@ namespace madsimple {
 
         float gameClock; // Time left, figure out if this is in seconds or timesteps, and how it should work with tickSystem
         float shotClock;
+
+        uint32_t scoredBaskets;
+        uint32_t outOfBoundsCount;
     };
 
 
