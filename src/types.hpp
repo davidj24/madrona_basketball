@@ -48,8 +48,6 @@ namespace madsimple {
     {
         float inboundingInProgress; // 0.0f if false, 1.0f if true
         float liveBall; // 0.0f if dead ball, 1.0f if live ball
-        float shotIsUp; // booelean that tells whether a shot is currently in progress? To signal people to box out or rebound
-        float shotFromDistance; // Will be used in BrickSystem to partially determine how far ball bounces out
 
         float period;
         float teamInPossession; // The index of the team that is currently in possession of the ball
@@ -160,6 +158,7 @@ namespace madsimple {
         bool inFlight;
         Vector3 velocity;
         uint32_t lastTouchedByID; // This is a team ID of which entity last touched the ball 
+        int32_t pointsWorth; // The amount of points the ball is worth (2 or 3)
     };
 
     

@@ -13,7 +13,8 @@ using namespace madrona::math;
 
 
 // Computes the rotation needed to align the 'start' vector with the 'target' vector.
-inline Quat findRotationBetweenVectors(Vector3 start, Vector3 target) {
+inline Quat findRotationBetweenVectors(Vector3 start, Vector3 target) 
+{
     // Ensure the vectors are normalized (unit length)
     start.normalize();
     target.normalize();
@@ -42,6 +43,50 @@ inline Quat findRotationBetweenVectors(Vector3 start, Vector3 target) {
     return Quat::angleAxis(rotation_angle, rotation_axis);
 }
 
+inline int32_t getShotPointValue(madsimple::Position shot_pos, madsimple::Position hoop_pos, float distance_to_hoop) 
+{
+    const float COURT_LENGTH_M = 28.65f;
+    const float COURT_WIDTH_M = 15.24f;
+    const float WORLD_WIDTH_M = 31.515f;  // 28.65 * 1.1
+    const float WORLD_HEIGHT_M = 16.764f; // 15.24 * 1.1
+
+    const float ARC_RADIUS_M = 7.24f;
+    const float CORNER_3_FROM_SIDELINE_M = 0.91f;
+    const float CORNER_3_LENGTH_FROM_BASELINE_M = 4.27f;
+
+    // --- Calculate Court's Position within the World (The crucial fix) ---
+    const float court_min_x = (WORLD_WIDTH_M - COURT_LENGTH_M) / 2.0f;
+    const float court_min_y = (WORLD_HEIGHT_M - COURT_WIDTH_M) / 2.0f;
+
+    // --- Logic ---
+
+    // 1. Check if the shot is in the corner lane, relative to the court's position.
+    bool isInCornerLane = (shot_pos.y < court_min_y + CORNER_3_FROM_SIDELINE_M || 
+                           shot_pos.y > court_min_y + COURT_WIDTH_M - CORNER_3_FROM_SIDELINE_M);
+
+    if (isInCornerLane) {
+        // 2. If so, check if the shot is within the corner's length, relative to the court's position.
+        bool isShootingAtLeftHoop = hoop_pos.x < WORLD_WIDTH_M / 2.0f;
+        
+        if (isShootingAtLeftHoop) {
+            if (shot_pos.x <= court_min_x + CORNER_3_LENGTH_FROM_BASELINE_M) {
+                return 3;
+            }
+        } else { // Shooting at the right hoop
+            if (shot_pos.x >= court_min_x + COURT_LENGTH_M - CORNER_3_LENGTH_FROM_BASELINE_M) {
+                return 3;
+            }
+        }
+    }
+
+    // 3. If not a valid corner 3, check the distance against the arc.
+    if (distance_to_hoop > ARC_RADIUS_M) {
+        return 3;
+    }
+
+    // 4. If none of the 3-point conditions are met, it is a 2-point shot.
+    return 2;
+}
 
 namespace madsimple {
 
@@ -361,6 +406,7 @@ namespace madsimple {
                 in_possession.hasBall = false;
                 in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
                 inbounding.imInbounding = false;
+                ball_physics.pointsWorth = getShotPointValue(agent_pos, attacking_hoop_pos, distance_to_hoop);
                 ball_physics.velocity = final_shot_vec * .15f;
                 ball_physics.inFlight = true;
             }
@@ -371,6 +417,7 @@ namespace madsimple {
     inline void moveAgentSystem(Engine &ctx,
                             Action &action,
                             Position &agent_pos, // Note: This should now store floats
+                            InPossession &in_possession,
                             Orientation &agent_orientation)
     {
         // Define the duration of a single simulation step.
@@ -391,6 +438,7 @@ namespace madsimple {
             // Treat moveSpeed as a velocity in meters/second, not a distance.
             // Let's say a moveSpeed of 1 corresponds to 1 m/s.
             float agent_velocity_magnitude = action.moveSpeed * 5;
+            if (in_possession.hasBall ==1) {agent_velocity_magnitude *= .8;}
 
             constexpr float angle_between_directions = pi / 4.f;
             float move_angle = action.moveAngle * angle_between_directions;
@@ -446,8 +494,8 @@ namespace madsimple {
             if (distance_to_hoop <= scoring_zone.radius && ball_physics.inFlight) 
             {
                 // Ball is within scoring zone, score a point
-                if ((float)hoop_entity.id == gameState.team0Hoop) {gameState.team1Score += 2.0f;}
-                else{gameState.team0Score += 2.0f;}
+                if ((float)hoop_entity.id == gameState.team0Hoop) {gameState.team1Score += ball_physics.pointsWorth;}
+                else{gameState.team0Score += ball_physics.pointsWorth;}
                 gameState.scoredBaskets++;
 
                 // Reset the ball position and state
@@ -655,7 +703,7 @@ namespace madsimple {
         TaskGraphBuilder &builder = taskgraph_mgr.init(0);
 
         auto moveAgentSystemNode = builder.addToGraph<ParallelForNode<Engine, moveAgentSystem,
-            Action, Position, Orientation>>({});
+            Action, Position, InPossession, Orientation>>({});
 
         auto tickNode = builder.addToGraph<ParallelForNode<Engine, tick,
             Reset, Position, Reward, Done, CurStep, GrabCooldown>>({});
