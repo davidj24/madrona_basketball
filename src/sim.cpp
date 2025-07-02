@@ -648,51 +648,60 @@ namespace madsimple {
                                 Position &ball_pos,
                                 Grabbed &grabbed,
                                 BallPhysics &ball_physics)
+{
+    GameState &gameState = ctx.singleton<GameState>();
+
+    // --- Define Court/World Dimensions (These MUST MATCH your Python viewer.py) ---
+    const float COURT_LENGTH_M = 28.65f;
+    const float COURT_WIDTH_M = 15.24f;
+    const float WORLD_WIDTH_M = 28.65f * 1.1f;
+    const float WORLD_HEIGHT_M = 15.24f * 1.1f;
+
+    // --- Calculate the court's actual boundaries within the world ---
+    const float court_min_x = (WORLD_WIDTH_M - COURT_LENGTH_M) / 2.0f;
+    const float court_max_x = court_min_x + COURT_LENGTH_M;
+    const float court_min_y = (WORLD_HEIGHT_M - COURT_WIDTH_M) / 2.0f;
+    const float court_max_y = court_min_y + COURT_WIDTH_M;
+
+    // Check if the ball's center has crossed the court boundaries
+    if (ball_pos.x < court_min_x || ball_pos.x > court_max_x ||
+        ball_pos.y < court_min_y || ball_pos.y > court_max_y)
     {
-        const GridState *grid = ctx.data().grid;
-        GameState &gameState = ctx.singleton<GameState>();
-        
+        // Reset the ball physics
+        ball_physics.inFlight = false;
+        ball_physics.velocity = Vector3::zero();
+        gameState.outOfBoundsCount++;
 
-        // Check if the ball is out of bounds (1 meter sideline)
-        constexpr float COURT_SIDELINE_WIDTH = 1.0f; // 1 meter sideline
-        if (ball_pos.x < COURT_SIDELINE_WIDTH || ball_pos.x >= grid->width - COURT_SIDELINE_WIDTH ||
-            ball_pos.y < COURT_SIDELINE_WIDTH || ball_pos.y >= grid->height - COURT_SIDELINE_WIDTH)
-            // ball_pos.z < 0 || ball_pos.z >= grid->depth) for when we're in 3D later
+        auto agent_query = ctx.query<Entity, Team, InPossession, Position, Inbounding>();
+        ctx.iterateQuery(agent_query, [&] (Entity agent_entity, Team &agent_team, InPossession &in_possession, Position &agent_pos, Inbounding &inbounding)
         {
-            // Reset the ball physics
-            ball_physics.inFlight = false;
-            ball_physics.velocity = Vector3::zero();
-            gameState.outOfBoundsCount++;
-
-            auto agent_query = ctx.query<Entity, Team, InPossession, Position, Inbounding>();
-            ctx.iterateQuery(agent_query, [&] (Entity agent_entity, Team &agent_team, InPossession &in_possession, Position &agent_pos, Inbounding &inbounding)
+            // If an agent has the ball, we need to reset their position
+            if (in_possession.ballEntityID == ball_entity.id && agent_team.teamIndex == ball_physics.lastTouchedByID && inbounding.imInbounding == false)
             {
-                // If an agent has the ball, we need to reset their position
-                if (in_possession.ballEntityID == ball_entity.id && agent_team.teamIndex == ball_physics.lastTouchedByID && inbounding.imInbounding == false)
-                {
-                    agent_pos = Position {
-                        grid->startX,
-                        grid->startY,
-                        0.f
-                    };
-                    in_possession.hasBall = false;
-                    in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
-                }
+                // Note: Using a generic centered start position instead of the old grid->startX
+                agent_pos = Position {
+                    WORLD_WIDTH_M / 2.0f,
+                    WORLD_HEIGHT_M / 2.0f,
+                    0.f
+                };
+                in_possession.hasBall = false;
+                in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
+            }
 
-                if (agent_team.teamIndex != ball_physics.lastTouchedByID && gameState.inboundingInProgress < 0.5f)
-                {
-                    inbounding.imInbounding = true;
-                    gameState.inboundingInProgress = 1.0f;
-                    agent_pos = ball_pos;
-                    grabbed.isGrabbed = true;
-                    grabbed.holderEntityID = agent_entity.id;
-                    in_possession.hasBall = true;
-                    in_possession.ballEntityID = ball_entity.id;
-                    gameState.teamInPossession = (float)agent_team.teamIndex;
-                }
-            });
-        }
+            if (agent_team.teamIndex != ball_physics.lastTouchedByID && gameState.inboundingInProgress < 0.5f)
+            {
+                inbounding.imInbounding = true;
+                gameState.inboundingInProgress = 1.0f;
+                agent_pos = ball_pos;
+                grabbed.isGrabbed = true;
+                grabbed.holderEntityID = agent_entity.id;
+                in_possession.hasBall = true;
+                in_possession.ballEntityID = ball_entity.id;
+                gameState.teamInPossession = (float)agent_team.teamIndex;
+            }
+        });
     }
+}
 
 
 
@@ -808,7 +817,7 @@ namespace madsimple {
             // };
         }
 
-
+        GameState &gameState = ctx.singleton<GameState>();
         for (int i = 0; i < NUM_HOOPS; i++) 
         {
             Entity hoop = ctx.makeEntity<Hoop>();
@@ -826,6 +835,7 @@ namespace madsimple {
             
             if (i == 0) 
             {
+                gameState.team0Hoop = hoop.id;
                 // Left hoop - positioned at left baseline + offset, center court vertically
                 hoop_pos = Position { 
                     court_start_x + HOOP_OFFSET_FROM_BASELINE, 
@@ -835,6 +845,7 @@ namespace madsimple {
             } 
             else if (i == 1) 
             {
+                gameState.team1Hoop = hoop.id;
                 // Right hoop - positioned at right baseline - offset, center court vertically
                 hoop_pos = Position { 
                     court_start_x + NBA_COURT_WIDTH - HOOP_OFFSET_FROM_BASELINE, 

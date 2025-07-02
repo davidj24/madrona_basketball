@@ -216,7 +216,7 @@ class MadronaPipeline:
         COURT_BLUE = (10, 30, 70)
         PAINT_RED = (120, 20, 20)
         LINE_WHITE = (255, 255, 255)
-        ORANGE_BORDER = (205, 133, 63)
+        ORANGE_BORDER = (255, 255, 255)
         
         COURT_LENGTH_M = 28.65
         COURT_WIDTH_M = 15.24
@@ -399,9 +399,12 @@ class MadronaPipeline:
         self.draw_basketball_court()
         self.draw_score_display(data)
         y_offset = 20
-        info_texts = [f"Madrona Basketball Simulation - Step {self.step_count}", f"World Size: {self.world_width_meters:.1f}x{self.world_height_meters:.1f} meters", "", "Controls: WASD/Arrow Keys, SPACE=manual step, R=reset, ESC=quit"]
+        info_texts = [f"Madrona Basketball Simulation - Step {self.step_count}"]
+
+        # --- Info Text (Preserved from your file) ---
         if 'actions' in data:
-            for i, action_components in enumerate(data['actions'][0]):
+            actions = data['actions'][0]
+            for i, action_components in enumerate(actions):
                 if len(action_components) >= 8:
                     info_texts.append(f"Agent {i}: Speed={int(action_components[0])} Angle={int(action_components[1])} Rotate={int(action_components[2])} Grab={int(action_components[3])} Pass={int(action_components[4])} Shoot={int(action_components[5])} Steal={int(action_components[6])} Contest={int(action_components[7])}")
                 elif len(action_components) >= 6:
@@ -410,38 +413,64 @@ class MadronaPipeline:
             for i, reward in enumerate(data['rewards'][0]): info_texts.append(f"Agent {i} Reward: {reward:.2f}")
         if 'done' in data:
             for i, done in enumerate(data['done'][0]): info_texts.append(f"Agent {i} Done: {done}")
+
+        # --- Basketball Rendering (Preserved from your file) ---
         if 'basketball_pos' in data:
             for i, pos in enumerate(data['basketball_pos'][0]):
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
                 pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), 12)
                 pygame.draw.circle(self.screen, (200, 50, 0), (screen_x, screen_y), 12, 2)
                 self.screen.blit(pygame.font.Font(None, 16).render(f"B{i + 1}", True, (255, 255, 255)), (screen_x - 8, screen_y - 5))
+
+        # --- Hoop Rendering (Preserved from your file) ---
         if 'hoop_pos' in data:
+            BACKBOARD_WIDTH_M, RIM_DIAMETER_M = 1.829, 0.4572
             for i, pos in enumerate(data['hoop_pos'][0]):
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
-                pygame.draw.line(self.screen, (255, 255, 255), (screen_x - 2, screen_y - 15), (screen_x - 2, screen_y + 15), 4)
-                pygame.draw.circle(self.screen, (255, 140, 0), (screen_x, screen_y), 10, 0)
-                pygame.draw.circle(self.screen, (220, 20, 20), (screen_x, screen_y), 10, 3)
-                self.screen.blit(pygame.font.Font(None, 16).render(f"H{i + 1}", True, (255, 255, 255)), (screen_x - 8, screen_y + 15))
+                backboard_width_px = BACKBOARD_WIDTH_M * self.pixels_per_meter
+                rim_radius_px = (RIM_DIAMETER_M / 2) * self.pixels_per_meter
+                rim_thickness_px = max(2, int(self.pixels_per_meter * 0.02))
+                backboard_thickness_px = max(3, int(self.pixels_per_meter * 0.05))
+                backboard_offset_px = (1.575 - 1.22) * self.pixels_per_meter
+                backboard_x = screen_x - backboard_offset_px if pos[0] < self.world_width_meters / 2 else screen_x + backboard_offset_px
+                pygame.draw.line(self.screen, (255, 255, 255), (backboard_x, screen_y - backboard_width_px / 2), (backboard_x, screen_y + backboard_width_px / 2), backboard_thickness_px)
+                pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), rim_radius_px, rim_thickness_px)
+        
+        # --- Agent Rendering (Corrected Colors and Text) ---
         if 'observations' in data and 'agent_teams' in data and 'orientation' in data:
             positions, team_data, orientations = data['observations'][0], data['agent_teams'][0], data['orientation'][0]
-            team_colors = { 0: (0, 100, 255), 1: (255, 50, 50) }
+            
+            # Use a consistent color map matching your scoreboard
+            team_colors = { 0: (0, 100, 255), 1: (255, 50, 50) } 
+            
             for i, pos in enumerate(positions):
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+                
+                # Get team index reliably from the simulation data
                 team_index = int(team_data[i][0]) if i < len(team_data) else 0
-                agent_color = team_colors.get(team_index, (128, 128, 128))
-                pygame.draw.rect(self.screen, agent_color, (screen_x - 8, screen_y - 8, 16, 16))
-                pygame.draw.rect(self.screen, (255, 255, 255), (screen_x - 8, screen_y - 8, 16, 16), 2)
-                font_small = pygame.font.Font(None, 16)
-                self.screen.blit(font_small.render(f"A{i + 1}", True, (255, 255, 255)), (screen_x - 8, screen_y - 20))
-                self.screen.blit(font_small.render(f"T{team_index}", True, (255, 255, 255)), (screen_x - 8, screen_y + 10))
+                agent_color = team_colors.get(team_index, (128, 128, 128)) # Use team color, fallback to gray
+                
+                # Draw the agent's body
+                agent_size_px = self.pixels_per_meter * 0.2
+                agent_rect = pygame.Rect(screen_x - agent_size_px / 2, screen_y - agent_size_px / 2, agent_size_px, agent_size_px)
+                pygame.draw.rect(self.screen, agent_color, agent_rect)
+                pygame.draw.rect(self.screen, (255, 255, 255), agent_rect, 1) # White outline
+
+                # Draw the agent's number (not team ID) inside the rectangle
+                font_small = pygame.font.Font(None, int(agent_size_px * 0.8))
+                text_surface = font_small.render(str(i), True, (255, 255, 255))
+                self.screen.blit(text_surface, text_surface.get_rect(center=agent_rect.center))
+                
+                # Draw orientation line
                 q = orientations[i]
-                BASE_FORWARD_VECTOR = np.array([0.0, 2.0, 0.0])
+                BASE_FORWARD_VECTOR = np.array([0.0, 1.0, 0.0])
                 direction_3d = rotate_vec(q, BASE_FORWARD_VECTOR)
                 dx, dy = direction_3d[0], direction_3d[1]
-                arrow_length_pixels = 0.2 * self.pixels_per_meter
-                arrow_end = (screen_x + arrow_length_pixels * dx, screen_y + arrow_length_pixels * dy)
+                arrow_len_px = self.pixels_per_meter * 0.5
+                arrow_end = (screen_x + arrow_len_px * dx, screen_y + arrow_len_px * dy)
                 pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 3)
+
+        # Display all the info text at the end
         for text in info_texts:
             if text: self.screen.blit(self.font.render(text, True, TEXT_COLOR), (20, y_offset)); y_offset += 20
     
