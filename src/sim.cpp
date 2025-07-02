@@ -429,12 +429,12 @@ namespace madsimple {
         ctx.iterateQuery(ball_query, [&] (Position &ball_pos, BallPhysics &ball_physics)
         {
             float distance_to_hoop = std::sqrt((ball_pos.x - hoop_pos.x) * (ball_pos.x - hoop_pos.x) + 
-                                    (ball_pos.y - hoop_pos.y) * (ball_pos.y - hoop_pos.y));
+                                               (ball_pos.y - hoop_pos.y) * (ball_pos.y - hoop_pos.y));
             if (distance_to_hoop <= scoring_zone.radius && ball_physics.inFlight) 
             {
                 // Ball is within scoring zone, score a point
-                if ((float)hoop_entity.id == gameState.team0Hoop) {gameState.team0Score += 2.0f;}
-                else{gameState.team1Score += 2.0f;}
+                if ((float)hoop_entity.id == gameState.team0Hoop) {gameState.team1Score += 2.0f;}
+                else{gameState.team0Score += 2.0f;}
 
                 // Reset the ball position and state
                 ball_physics.inFlight = false;
@@ -747,19 +747,38 @@ namespace madsimple {
         {
             Entity hoop = ctx.makeEntity<Hoop>();
             Position hoop_pos;
+            
+            // Define NBA court dimensions (same as in viewer)
+            const float NBA_COURT_WIDTH = 28.65f;  // meters
+            const float NBA_COURT_HEIGHT = 15.24f; // meters
+            const float HOOP_OFFSET_FROM_BASELINE = 1.575f; // Distance from baseline to hoop center
+            
+            // Calculate court position within the world (centered)
+            float court_start_x = (grid->width - NBA_COURT_WIDTH) / 2.0f;
+            float court_start_y = (grid->height - NBA_COURT_HEIGHT) / 2.0f;
+            float court_center_y = grid->height / 2.0f;
+            
             if (i == 0) 
             {
-                // Left hoop (3 meters from left edge, center court)
-                hoop_pos = Position { 3.0f, grid->height / 2.0f, 0.f };
+                // Left hoop - positioned at left baseline + offset, center court vertically
+                hoop_pos = Position { 
+                    court_start_x + HOOP_OFFSET_FROM_BASELINE, 
+                    court_center_y, 
+                    0.f 
+                };
             } 
             else if (i == 1) 
             {
-                // Right hoop (3 meters from right edge, center court)  
-                hoop_pos = Position { grid->width - 3.0f, grid->height / 2.0f, 0.f };
+                // Right hoop - positioned at right baseline - offset, center court vertically
+                hoop_pos = Position { 
+                    court_start_x + NBA_COURT_WIDTH - HOOP_OFFSET_FROM_BASELINE, 
+                    court_center_y, 
+                    0.f 
+                };
             } 
             else 
             {
-                // Additional hoops (if NUM_HOOPS > 2)
+                // Additional hoops (if NUM_HOOPS > 2) - fallback positioning
                 hoop_pos = Position 
                 { 
                     grid->startX + 10.0f + i * 5.0f,   
