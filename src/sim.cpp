@@ -141,6 +141,7 @@ namespace madsimple {
 
 
         // ================================================= Tensor Exports For Viewer =================================================
+        registry.exportColumn<Agent, Reset>((uint32_t)ExportID::Reset);
         registry.exportColumn<Agent, Action>((uint32_t)ExportID::Action);
         registry.exportColumn<Agent, Position>((uint32_t)ExportID::AgentPos);
         registry.exportColumn<Agent, Reward>((uint32_t)ExportID::Reward);

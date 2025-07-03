@@ -295,13 +295,17 @@ namespace madsimple {
 
     void Manager::triggerReset(int32_t world_idx)
     {
-        // Get the reset tensor and trigger reset for the specified world
+        // Get the reset tensor and trigger reset for ALL agents in the specified world
         Tensor reset_tensor = resetTensor();
         int32_t *reset_data = static_cast<int32_t *>(reset_tensor.devicePtr());
         
         if (world_idx >= 0 && world_idx < (int32_t)impl_->cfg.numWorlds) 
         {
-            reset_data[world_idx] = 1;  // Set reset flag
+            // Set reset flag for all agents in this world (tensor is numWorlds x NUM_AGENTS x 1)
+            for (int32_t agent_idx = 0; agent_idx < NUM_AGENTS; agent_idx++) {
+                int32_t global_idx = (world_idx * NUM_AGENTS + agent_idx) * 1; // *1 because Reset has 1 field
+                reset_data[global_idx] = 1;
+            }
         }
     }
 
@@ -312,7 +316,7 @@ namespace madsimple {
     Tensor Manager::resetTensor() const
     {
         return impl_->exportTensor(ExportID::Reset, TensorElementType::Int32,
-                                {impl_->cfg.numWorlds, 1});
+                                {impl_->cfg.numWorlds, NUM_AGENTS, 1}); // Reset component has 1 int32_t field
     }
 
     Tensor Manager::gameStateTensor() const
@@ -376,7 +380,7 @@ namespace madsimple {
     Tensor Manager::agentTeamTensor() const
     {
         return impl_->exportTensor(ExportID::TeamData, TensorElementType::Int32,
-            {impl_->cfg.numWorlds, NUM_AGENTS, 4});  // team id, and 3 vector components
+            {impl_->cfg.numWorlds, NUM_AGENTS, 5});  // teamIndex, teamColor (3 components), defendingHoopID
     }
 
 
