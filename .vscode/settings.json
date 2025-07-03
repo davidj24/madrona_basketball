@@ -82,7 +82,9 @@
         "variant": "cpp",
         "vector": "cpp",
         "algorithm": "cpp",
-        "cuda_std_post": "cpp"
+        "cuda_std_post": "cpp",
+        "__string": "cpp",
+        "regex": "cpp"
     },
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
     "github.copilot.enable": {

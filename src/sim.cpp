@@ -364,41 +364,60 @@ namespace madsimple {
 
         // Calculate intended angle towards hoop
         float intended_direction = std::atan2(shot_vector.x, shot_vector.y);
-
-        // Mess up angle based on distance
-        float distance_to_hoop = shot_vector.length();
-        float direction_deviation_per_meter = 0.004f; // radians per meter distance
-        float stddev = direction_deviation_per_meter * distance_to_hoop;
+        // Create a single random number generator for all deviations
         static thread_local std::mt19937 rng(std::random_device{}());
-        std::normal_distribution<float> dist(0.0f, stddev);
-        float direction_deviation = dist(rng);
-        float shot_direction = intended_direction + direction_deviation;
 
 
-        // // Mess up angle based on contest level (how close nearest defender is)
-        // float distance_to_nearest_defender;
-        // auto nearest_defender_query = ctx.query<Position, Team>();
-        // ctx.iterateQuery(nearest_defender_query, [&] (Posiiton &agent_pos, Team &agent_team)
-        // {
-        //     if (agent_team.teamIndex != team.teamIndex)
-        //     {distance_to_nearest_defender = }  
-        // })
+        float dist_deviation_per_meter = 0.1f;
+        float def_deviation_per_meter = .00f; // Tuning knob for defender pressure
+        float vel_deviation_factor = 1.f; // Tuning knob for moving shots
 
 
-        // float direction_deviation_per_meter = 0.002f; // radians per meter distance
-        // float stddev = direction_deviation_per_meter * distance_to_nearest_defender;
-        // static thread_local std::mt19937 rng(std::random_device{}());
-        // std::normal_distribution<float> dist(0.0f, stddev);
-        // float direction_deviation = dist(rng);
-        // float shot_direction = intended_direction + direction_deviation;
-
-        // Mess up angle based on agent velocity
+        // 1. Mess up angle based on distance
+        float distance_to_hoop = shot_vector.length();
+        float dist_stddev = dist_deviation_per_meter/100 * distance_to_hoop;
+        std::normal_distribution<float> dist_dist(0.0f, dist_stddev);
+        float deviation_from_distance = dist_dist(rng);
 
 
+        // 2. Mess up angle based on contest level (how close nearest defender is)
+        float deviation_from_defender = 0.0f;
+        float distance_to_nearest_defender = std::numeric_limits<float>::infinity();
+        auto nearest_defender_query = ctx.query<Position, Team>();
+        ctx.iterateQuery(nearest_defender_query, [&](Position &defender_pos, Team &defender_team) 
+        {
+            if (defender_team.teamIndex != team.teamIndex) 
+            {
+                Vector3 diff = agent_pos.position - defender_pos.position;
+                float dist_to_def = diff.length();
+                if (dist_to_def < distance_to_nearest_defender) 
+                {
+                    distance_to_nearest_defender = dist_to_def;
+                }
+            }
+        });
+
+        if (distance_to_nearest_defender < 2.0f) { // Only apply pressure if defender is  close
+            float def_stddev = (def_deviation_per_meter/100) / (distance_to_nearest_defender + 0.1f);
+            std::normal_distribution<float> def_dist(0.0f, def_stddev);
+            deviation_from_defender = def_dist(rng);
+        }
 
 
-        // This is the final, correct trajectory vector for the ball
-        Vector3 final_shot_vec = Vector3{std::sin(shot_direction), std::cos(shot_direction), 0.f};
+        // 3. Mess up angle based on agent velocity
+        float deviation_from_velocity = 0.0f;
+        if (action.moveSpeed > 0) {
+            float vel_stddev = vel_deviation_factor/10 * action.moveSpeed;
+            std::normal_distribution<float> vel_dist(0.0f, vel_stddev);
+            deviation_from_velocity = vel_dist(rng);
+        }
+
+        // Combine all deviations and apply to the final shot direction
+        float total_deviation = deviation_from_distance + deviation_from_defender + deviation_from_velocity;
+        float shot_direction = intended_direction + total_deviation;
+
+        // This is the final, correct trajectory vector for the ball - Preserved from your code
+        Vector3 final_shot_vec = {sinf(shot_direction), cosf(shot_direction), 0.f};
 
 
         const Vector3 base_forward = {0.0f, 1.0f, 0.0f};
@@ -894,8 +913,8 @@ namespace madsimple {
             ctx.get<ImAHoop>(hoop) = ImAHoop{};
             ctx.get<ScoringZone>(hoop) = ScoringZone 
             {
-                .3f, // Radius of scoring zone (1 meter)
-                2.0f, // Height of scoring zone (2 meters)
+                .2f, // Radius of scoring zone
+                .1f, // Height of scoring zone (2 meters)
                 Vector3{hoop_pos.position.x, hoop_pos.position.y, hoop_pos.position.z} // Center of the scoring zone
             };
             
