@@ -412,13 +412,24 @@ class MadronaPipeline:
         if 'done' in data:
             for i, done in enumerate(data['done'][0]): info_texts.append(f"Agent {i} Done: {done}")
 
-        # --- Basketball Rendering (Preserved from your file) ---
+        # --- Basketball Rendering (Scaled to Real Size) ---
         if 'basketball_pos' in data:
+            # Real basketball diameter and radius in meters
+            BALL_DIAMETER_M = 0.242
+            BALL_RADIUS_M = BALL_DIAMETER_M / 2.0
+            # Use the pipeline's pixels_per_meter for scaling
+            ball_radius_px = BALL_RADIUS_M * self.pixels_per_meter
             for i, pos in enumerate(data['basketball_pos'][0]):
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
-                pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), 12)
-                pygame.draw.circle(self.screen, (200, 50, 0), (screen_x, screen_y), 12, 2)
-                self.screen.blit(pygame.font.Font(None, 16).render(f"B{i + 1}", True, (255, 255, 255)), (screen_x - 8, screen_y - 5))
+                # Draw filled orange ball
+                pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), int(ball_radius_px))
+                # Draw a darker orange outline
+                pygame.draw.circle(self.screen, (200, 50, 0), (screen_x, screen_y), int(ball_radius_px), max(2, int(ball_radius_px * 0.15)))
+                # Optionally, draw a label for the ball (small, centered)
+                font_ball = pygame.font.Font(None, max(12, int(ball_radius_px * 0.7)))
+                label_surface = font_ball.render(f"B{i + 1}", True, (255, 255, 255))
+                label_rect = label_surface.get_rect(center=(screen_x, screen_y))
+                self.screen.blit(label_surface, label_rect)
 
         # --- Hoop Rendering (Preserved from your file) ---
         if 'hoop_pos' in data:
