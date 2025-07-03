@@ -88,6 +88,9 @@ inline int32_t getShotPointValue(madsimple::Position shot_pos, madsimple::Positi
     return 2;
 }
 
+constexpr float SIMULATION_HZ = 60.0f;
+constexpr float G_DELTA_TIME = 1.0f / SIMULATION_HZ;
+
 namespace madsimple {
 
     void Sim::registerTypes(ECSRegistry &registry, const Config &)
@@ -652,7 +655,30 @@ namespace madsimple {
         reward.r = cur_cell.reward;
     }
 
+    // This system is responsible for updating all game clocks.
+    inline void clockSystem(Engine &ctx)
+    {
+        GameState &gameState = ctx.singleton<GameState>();
 
+        // Only count down if the clock is running.
+        // We can use the liveBall flag to pause the clock during dead ball situations.
+        if (gameState.liveBall && gameState.gameClock > 0.f) {
+            // Decrement the clocks by the fixed time step
+            gameState.gameClock -= G_DELTA_TIME;
+            gameState.shotClock -= G_DELTA_TIME;
+        }
+
+        // Ensure clocks don't go below zero
+        if (gameState.gameClock < 0.f) {
+            gameState.gameClock = 0.f;
+            // NOTE: In the future, you could add logic here to end the period.
+        }
+
+        if (gameState.shotClock < 0.f) {
+            gameState.shotClock = 0.f;
+            // NOTE: In the future, you could add logic here for a shot clock violation.
+        }
+    }
 
     inline void updateLastTouchSystem(Engine &ctx,
                                     Position &ball_pos,
@@ -748,6 +774,9 @@ namespace madsimple {
 
         auto tickNode = builder.addToGraph<ParallelForNode<Engine, tick,
             Reset, Position, Reward, Done, CurStep, GrabCooldown>>({});
+
+        auto clockSystemNode = builder.addToGraph<ParallelForNode<Engine, clockSystem,
+            madrona::ecs::ExecuteNode>>({});
         
         // builder.addToGraph<ParallelForNode<Engine, moveBallRandomly,
         //     Position, RandomMovement>>({});
