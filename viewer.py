@@ -153,7 +153,7 @@ class MadronaPipeline:
             rewards=rewards, 
             start_x=self.world_discrete_width / 2.0,
             start_y=self.world_discrete_height / 2.0,
-            max_episode_length=10000,
+            max_episode_length=39600, # 6 seconds of real time is roughly 330 timesteps
             exec_mode=ExecMode.CPU,
             num_worlds=1,
             gpu_id=-1
@@ -312,15 +312,13 @@ class MadronaPipeline:
 
         game_state = data['game_state'][0]
         
-        # --- CORRECTED INDICES ---
-        # These now match the C++ GameState struct order
         period = int(game_state[2])
         team0_score = int(game_state[5])
         team1_score = int(game_state[7])
         game_clock = float(game_state[8])
         shot_clock = float(game_state[9])
 
-        # Get team colors - this part of your code is fine
+        # Get team colors 
         team_colors = { 0: (0, 100, 255), 1: (255, 50, 50) }
         if 'agent_teams' in data:
             agent_teams = data['agent_teams'][0]
@@ -334,18 +332,18 @@ class MadronaPipeline:
                         color_b = max(0, min(255, int(struct.unpack('f', struct.pack('I', np.uint32(team_data[3])))[0])))
                         team_colors[team_index] = (color_r, color_g, color_b)
 
-        # Score display dimensions and positioning (your code is fine)
+        # Score display dimensions and positioning
         display_width = 600
         display_height = 120
         display_x = (WINDOW_WIDTH - display_width) // 2
         display_y = WINDOW_HEIGHT - display_height - 50
 
-        # Draw main score display background (your code is fine)
+        # Draw main score display background 
         score_bg_rect = pygame.Rect(display_x, display_y, display_width, display_height)
         pygame.draw.rect(self.screen, (30, 30, 30), score_bg_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), score_bg_rect, 3)
 
-        # Team score sections (your code is fine)
+        # Team score sections 
         team_section_width = display_width // 3
         team0_rect = pygame.Rect(display_x, display_y, team_section_width, display_height)
         pygame.draw.rect(self.screen, team_colors.get(0, (0,100,255)), team0_rect)
@@ -357,12 +355,12 @@ class MadronaPipeline:
         pygame.draw.rect(self.screen, (60, 60, 60), middle_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), middle_rect, 2)
 
-        # Fonts (your code is fine)
+        # Fonts 
         score_font = pygame.font.Font(None, 64)
         label_font = pygame.font.Font(None, 24)
         time_font = pygame.font.Font(None, 36)
 
-        # Draw team scores (your code is fine)
+        # Draw team scores 
         team0_score_text = score_font.render(str(team0_score), True, (255, 255, 255))
         team0_score_rect = team0_score_text.get_rect(center=(team0_rect.centerx, team0_rect.centery - 10))
         self.screen.blit(team0_score_text, team0_score_rect)
@@ -370,7 +368,7 @@ class MadronaPipeline:
         team1_score_rect = team1_score_text.get_rect(center=(team1_rect.centerx, team1_rect.centery - 10))
         self.screen.blit(team1_score_text, team1_score_rect)
 
-        # Draw team labels (your code is fine)
+        # Draw team labels 
         team0_label = label_font.render("TEAM 0", True, (255, 255, 255))
         team0_label_rect = team0_label.get_rect(center=(team0_rect.centerx, team0_rect.bottom - 15))
         self.screen.blit(team0_label, team0_label_rect)
@@ -378,7 +376,7 @@ class MadronaPipeline:
         team1_label_rect = team1_label.get_rect(center=(team1_rect.centerx, team1_rect.bottom - 15))
         self.screen.blit(team1_label, team1_label_rect)
 
-        # Draw period, game clock, and shot clock (your code is fine)
+        # Draw period, game clock, and shot clock 
         period_text = time_font.render(f"Q{period}", True, (255, 255, 255))
         period_rect = period_text.get_rect(center=(middle_rect.centerx, middle_rect.top + 25))
         self.screen.blit(period_text, period_rect)

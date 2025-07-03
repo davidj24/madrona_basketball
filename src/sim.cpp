@@ -259,6 +259,7 @@ namespace madsimple {
 
         ctx.iterateQuery(basketball_query, [&](Entity ball_entity, Position &basketball_pos, Grabbed &grabbed, BallPhysics &ball_physics) 
         {
+            if (ball_physics.inFlight) {return;}
             bool agent_is_holding_this_ball = (in_possession.hasBall == true &&
                                                 grabbed.isGrabbed &&
                                                 grabbed.holderEntityID == (uint32_t)agent_entity.id);
@@ -327,7 +328,6 @@ namespace madsimple {
                 in_possession.hasBall = false; // Since agents can only hold 1 ball at a time, if they pass it they can't be holding one anymore
                 in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER; // Whoever passed the ball is no longer in possession of it
                 inbounding.imInbounding = false;
-                ball_physics.inFlight = true;
                 ball_physics.velocity = agent_orientation.orientation.rotateVec(Vector3{0.f, 0.1f, 0.f}); // Setting the ball's velocity to have the same direction as the agent's orientation
                                                                                                           // Note: we use 0, 0.1, 0 because that's forward in our simulation specifically
                 gameState.inboundingInProgress = 0.0f;
@@ -447,7 +447,7 @@ namespace madsimple {
                 in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
                 inbounding.imInbounding = false;
                 ball_physics.pointsWorth = getShotPointValue(agent_pos, attacking_hoop_pos, distance_to_hoop);
-                ball_physics.velocity = final_shot_vec * .15f;
+                ball_physics.velocity = final_shot_vec * .1f;
                 ball_physics.inFlight = true;
             }
         });
@@ -951,7 +951,7 @@ namespace madsimple {
             ctx.get<ImAHoop>(hoop) = ImAHoop{};
             ctx.get<ScoringZone>(hoop) = ScoringZone
             {
-                .2f, // Radius of scoring zone
+                .1f, // Radius of scoring zone
                 .1f, // Height of scoring zone (2 meters)
                 Vector3{hoop_pos.position.x, hoop_pos.position.y, hoop_pos.position.z} // Center of the scoring zone
             };
