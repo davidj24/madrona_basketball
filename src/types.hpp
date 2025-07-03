@@ -83,6 +83,7 @@ namespace madsimple {
         float moveInterval;
     };
 
+    struct IsWorldClock {};
 
 // ======================================================================================================= Agent Components =======================================================================================================
 
@@ -211,6 +212,10 @@ namespace madsimple {
         // RandomMovement,
         Done,
         CurStep
+    > {};
+
+    struct WorldClock : public madrona::Archetype<
+        IsWorldClock
     > {};
 }
 

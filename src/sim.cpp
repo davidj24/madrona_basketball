@@ -88,7 +88,7 @@ inline int32_t getShotPointValue(madsimple::Position shot_pos, madsimple::Positi
     return 2;
 }
 
-constexpr float SIMULATION_HZ = 60.0f;
+constexpr float SIMULATION_HZ = 62.0f;
 constexpr float G_DELTA_TIME = 1.0f / SIMULATION_HZ;
 
 namespace madsimple {
@@ -109,6 +109,7 @@ namespace madsimple {
         registry.registerComponent<Done>();
         registry.registerComponent<CurStep>();
         registry.registerComponent<RandomMovement>();
+        registry.registerComponent<IsWorldClock>();
 
 
         // ================================================== Agent Components ==================================================
@@ -135,6 +136,7 @@ namespace madsimple {
         registry.registerArchetype<Agent>();
         registry.registerArchetype<Basketball>();
         registry.registerArchetype<Hoop>();
+        registry.registerArchetype<WorldClock>();
 
 
 
@@ -371,9 +373,12 @@ namespace madsimple {
         static thread_local std::mt19937 rng(std::random_device{}());
 
 
-        float dist_deviation_per_meter = 0.1f;
-        float def_deviation_per_meter = .00f; // Tuning knob for defender pressure
-        float vel_deviation_factor = 1.f; // Tuning knob for moving shots
+
+
+        // ======================== DEVIATION TUNERS ==============================
+        float dist_deviation_per_meter = 0.0f;
+        float def_deviation_per_meter = .0f; 
+        float vel_deviation_factor = 1.f;
 
 
         // 1. Mess up angle based on distance
@@ -583,14 +588,16 @@ namespace madsimple {
                 .team1Hoop = 1.0f,
                 .team1Score = 0.0f,
                 .gameClock = 720.0f,
-                .shotClock = 24.0f
+                .shotClock = 24.0f,
+                .scoredBaskets = 0.f
             };
 
             // Reset all agents (no index math)
-            auto agent_query = ctx.query<Action, Position, Reset, Inbounding, Reward, Done, CurStep, InPossession, Orientation, Team>();
+            auto agent_query = ctx.query<Action, Position, Reset, Inbounding, Reward, Done, CurStep, InPossession, Orientation>();
             float agent_start_x[4] = {grid->startX - 2.0f, grid->startX - 1.0f, grid->startX + 0.0f, grid->startX + 1.0f};
             int agent_i = 0;
-            ctx.iterateQuery(agent_query, [&](Action &action, Position &pos, Reset &reset, Inbounding &inbounding, Reward &reward, Done &done, CurStep &curstep, InPossession &inpos, Orientation &orient, Team &team) {
+            ctx.iterateQuery(agent_query, [&](Action &action, Position &pos, Reset &reset, Inbounding &inbounding, Reward &reward, Done &done, CurStep &curstep, InPossession &inpos, Orientation &orient) 
+            {
                 action = Action{0, 0, 0, 0, 0, 0, 0, 0};
                 float x = (agent_i < 4) ? agent_start_x[agent_i] : grid->startX;
                 pos = Position{Vector3{x, grid->startY, 0.f}};
@@ -613,7 +620,7 @@ namespace madsimple {
                 done.episodeDone = 0.f;
                 curstep.step = 0;
                 grabbed = Grabbed{false, ENTITY_ID_PLACEHOLDER};
-                ballphys = BallPhysics{false, Vector3::zero(), ENTITY_ID_PLACEHOLDER};
+                ballphys = BallPhysics{false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, 2};
             });
 
             // Reset all hoops (no index math)
@@ -655,15 +662,14 @@ namespace madsimple {
         reward.r = cur_cell.reward;
     }
 
-    // This system is responsible for updating all game clocks.
-    inline void clockSystem(Engine &ctx)
+    inline void clockSystem(Engine &ctx, IsWorldClock &is_world_clock)
     {
         GameState &gameState = ctx.singleton<GameState>();
 
         // Only count down if the clock is running.
         // We can use the liveBall flag to pause the clock during dead ball situations.
-        if (gameState.liveBall && gameState.gameClock > 0.f) {
-            // Decrement the clocks by the fixed time step
+        if (gameState.liveBall && gameState.gameClock > 0.f) 
+        {
             gameState.gameClock -= G_DELTA_TIME;
             gameState.shotClock -= G_DELTA_TIME;
         }
@@ -776,7 +782,7 @@ namespace madsimple {
             Reset, Position, Reward, Done, CurStep, GrabCooldown>>({});
 
         auto clockSystemNode = builder.addToGraph<ParallelForNode<Engine, clockSystem,
-            madrona::ecs::ExecuteNode>>({});
+            IsWorldClock>>({});
         
         // builder.addToGraph<ParallelForNode<Engine, moveBallRandomly,
         //     Position, RandomMovement>>({});
@@ -826,6 +832,9 @@ namespace madsimple {
             .scoredBaskets = 0.f,
             .outOfBoundsCount = 0.f
         };
+
+        Entity worldClock = ctx.makeEntity<WorldClock>();
+        ctx.get<IsWorldClock>(worldClock) = {};
 
         std::vector<Vector3> team_colors = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
         for (int i = 0; i < NUM_AGENTS; i++) 
@@ -940,7 +949,7 @@ namespace madsimple {
             ctx.get<Done>(hoop).episodeDone = 0.f;
             ctx.get<CurStep>(hoop).step = 0;
             ctx.get<ImAHoop>(hoop) = ImAHoop{};
-            ctx.get<ScoringZone>(hoop) = ScoringZone 
+            ctx.get<ScoringZone>(hoop) = ScoringZone
             {
                 .2f, // Radius of scoring zone
                 .1f, // Height of scoring zone (2 meters)
