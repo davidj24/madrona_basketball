@@ -215,7 +215,8 @@ namespace madsimple {
     > {};
 
     struct WorldClock : public madrona::Archetype<
-        IsWorldClock
+        IsWorldClock,
+        Reset
     > {};
 }
 

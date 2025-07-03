@@ -90,6 +90,8 @@ inline int32_t getShotPointValue(madsimple::Position shot_pos, madsimple::Positi
 
 constexpr float SIMULATION_HZ = 62.0f;
 constexpr float G_DELTA_TIME = 1.0f / SIMULATION_HZ;
+constexpr float HOOP_SCORE_ZONE_SIZE = .1f;
+constexpr float TIME_PER_PERIOD = 6.f;
 
 namespace madsimple {
 
@@ -298,6 +300,7 @@ namespace madsimple {
                 ball_physics.inFlight = false; // Make it so the ball isn't "in flight" anymore
                 ball_physics.velocity = Vector3::zero(); // And change its velocity to be zero
                 gameState.teamInPossession = (float)team.teamIndex; // Update the team in possession
+                gameState.liveBall = 1.f;
             }
         });
 
@@ -532,12 +535,13 @@ namespace madsimple {
         {
             float distance_to_hoop = std::sqrt((ball_pos.position.x - hoop_pos.position.x) * (ball_pos.position.x - hoop_pos.position.x) + 
                                                (ball_pos.position.y - hoop_pos.position.y) * (ball_pos.position.y - hoop_pos.position.y));
-            if (distance_to_hoop <= scoring_zone.radius && ball_physics.inFlight) 
+            if (distance_to_hoop <= scoring_zone.radius && ball_physics.inFlight && gameState.liveBall == 1.f) 
             {
                 // Ball is within scoring zone, score a point
                 if ((float)hoop_entity.id == gameState.team0Hoop) {gameState.team1Score += ball_physics.pointsWorth;}
                 else{gameState.team0Score += ball_physics.pointsWorth;}
                 gameState.scoredBaskets++;
+                gameState.liveBall = 0.f;
 
                 // Reset the ball position and state
                 ball_physics.inFlight = false;
@@ -549,36 +553,32 @@ namespace madsimple {
 
 
     //=================================================== General Systems ===================================================
-    inline void tick(Engine &ctx,
-                    Reset &reset,
-                    Position &position,
-                    Reward &reward, //add later
-                    Done &done,
-                    CurStep &episode_step,
-                    GrabCooldown &grab_cooldown)
+    inline void resetSystem(Engine &ctx, Reset &world_reset, IsWorldClock &)
     {
-        const GridState *grid = ctx.data().grid;
-
-        Position new_pos = position;
-        grab_cooldown.cooldown = std::max(0.f, grab_cooldown.cooldown - 1.f); // Decrease cooldown if it's greater than 0
-
-        bool episode_done = false;
-        if (reset.resetNow != 0) 
-        {
-            reset.resetNow = 0;
-            episode_done = true;
+        // This system only runs if the world clock's reset is triggered.
+        if (world_reset.resetNow == 0) {
+            return;
         }
 
-        uint32_t cur_step = episode_step.step;
-
-        if (cur_step == ctx.data().maxEpisodeLength - 1) {episode_done = true;}
-
-        if (episode_done) 
-        {
-            done.episodeDone = 1.f;
-
-            // Reset singleton GameState
-            GameState &gameState = ctx.singleton<GameState>();
+        GameState &gameState = ctx.singleton<GameState>();
+        const GridState *grid = ctx.data().grid;
+        
+        // Check if the reset was triggered by the end of a period
+        if (gameState.gameClock <= 0.f) {
+            // Check if the game should continue
+            if (gameState.period < 4 || gameState.team0Score == gameState.team1Score) {
+                gameState.period++;
+                gameState.gameClock = TIME_PER_PERIOD;
+                gameState.shotClock = 24.0f;
+                gameState.liveBall = 1.f; // Start the next period
+            } else {
+                // The game is over, freeze the clock and ball
+                gameState.gameClock = 0.f;
+                gameState.shotClock = 0.f;
+                gameState.liveBall = 0.f;
+            }
+        } else { // This was a manual reset (e.g., from Python)
+            // Fully reset the game state to the beginning
             gameState = GameState{
                 .inboundingInProgress = 0.0f,
                 .liveBall = 1.0f,
@@ -588,104 +588,110 @@ namespace madsimple {
                 .team0Score = 0.0f,
                 .team1Hoop = 1.0f,
                 .team1Score = 0.0f,
-                .gameClock = 720.0f,
+                .gameClock = TIME_PER_PERIOD,
                 .shotClock = 24.0f,
-                .scoredBaskets = 0.f
+                .scoredBaskets = 0.f,
+                .outOfBoundsCount = 0.f
             };
-
-            // Reset all agents (no index math)
-            auto agent_query = ctx.query<Action, Position, Reset, Inbounding, Reward, Done, CurStep, InPossession, Orientation>();
-            float agent_start_x[4] = {grid->startX - 2.0f, grid->startX - 1.0f, grid->startX + 0.0f, grid->startX + 1.0f};
-            int agent_i = 0;
-            ctx.iterateQuery(agent_query, [&](Action &action, Position &pos, Reset &reset, Inbounding &inbounding, Reward &reward, Done &done, CurStep &curstep, InPossession &inpos, Orientation &orient) 
-            {
-                action = Action{0, 0, 0, 0, 0, 0, 0, 0};
-                float x = (agent_i < 4) ? agent_start_x[agent_i] : grid->startX;
-                pos = Position{Vector3{x, grid->startY, 0.f}};
-                reset = Reset{0};
-                inbounding = Inbounding{false, true};
-                reward.r = 0.f;
-                done.episodeDone = 0.f;
-                curstep.step = 0;
-                inpos = {false, ENTITY_ID_PLACEHOLDER};
-                orient = Orientation{Quat::id()};
-                grab_cooldown = GrabCooldown{0.f};
-                agent_i++;
-            });
-
-            // Reset all basketballs
-            auto basketball_query = ctx.query<Position, Reset, Done, CurStep, Grabbed, BallPhysics>();
-            ctx.iterateQuery(basketball_query, [&](Position &pos, Reset &reset, Done &done, CurStep &curstep, Grabbed &grabbed, BallPhysics &ballphys) {
-                pos = Position{Vector3{grid->startX, grid->startY, 0.f}};
-                reset = Reset{0};
-                done.episodeDone = 0.f;
-                curstep.step = 0;
-                grabbed = Grabbed{false, ENTITY_ID_PLACEHOLDER};
-                ballphys = BallPhysics{false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, 2};
-            });
-
-            // Reset all hoops (no index math)
-            auto hoop_query = ctx.query<Position, Reset, Done, CurStep, ImAHoop, ScoringZone>();
-            int hoop_i = 0;
-            ctx.iterateQuery(hoop_query, [&](Position &pos, Reset &reset, Done &done, CurStep &curstep, ImAHoop &, ScoringZone &zone) {
-                if (hoop_i == 0)
-                    pos = Position{Vector3{3.0f, grid->height / 2.0f, 0.f}};
-                else if (hoop_i == 1)
-                    pos = Position{Vector3{grid->width - 3.0f, grid->height / 2.0f, 0.f}};
-                else
-                    pos = Position{Vector3{grid->startX + 10.0f + hoop_i * 5.0f, grid->startY + 10.0f, 0.f}};
-                reset = Reset{0};
-                done.episodeDone = 0.f;
-                curstep.step = 0;
-                zone = ScoringZone{1.0f, 2.0f, Vector3{pos.position.x, pos.position.y, pos.position.z}};
-                hoop_i++;
-            });
-
-            // Reset this agent's position
-            new_pos = Position{Vector3{grid->startX, grid->startY, 0.f}};
-            episode_step.step = 0;
         }
-        else 
+
+        // Reset all agents
+        auto agent_query = ctx.query<Action, Position, Reset, Inbounding, Done, CurStep, InPossession, Orientation, GrabCooldown>();
+        float agent_start_x[4] = {grid->startX - 2.0f, grid->startX - 1.0f, grid->startX + 0.0f, grid->startX + 1.0f};
+        int agent_i = 0;
+        ctx.iterateQuery(agent_query, [&](Action &action, Position &pos, Reset &reset, Inbounding &inbounding, Done &done, CurStep &curstep, InPossession &inpos, Orientation &orient, GrabCooldown &cooldown) 
         {
+            action = Action{0, 0, 0, 0, 0, 0, 0, 0};
+            float x = (agent_i < 4) ? agent_start_x[agent_i] : grid->startX;
+            pos = Position{Vector3{x, grid->startY, 0.f}};
+            reset.resetNow = 0; // Clear the flag
+            inbounding = Inbounding{false, true};
+            done.episodeDone = 1.f; // Signal to python that a reset happened
+            curstep.step = 0;
+            inpos = {false, ENTITY_ID_PLACEHOLDER};
+            orient = Orientation{Quat::id()};
+            cooldown = GrabCooldown{0.f};
+            agent_i++;
+        });
+
+        // Reset all basketballs
+        auto basketball_query = ctx.query<Position, Reset, Done, CurStep, Grabbed, BallPhysics>();
+        ctx.iterateQuery(basketball_query, [&](Position &pos, Reset &reset, Done &done, CurStep &curstep, Grabbed &grabbed, BallPhysics &ballphys) {
+            pos = Position{Vector3{grid->startX, grid->startY, 0.f}};
+            reset.resetNow = 0;
+            done.episodeDone = 1.f;
+            curstep.step = 0;
+            grabbed = Grabbed{false, ENTITY_ID_PLACEHOLDER};
+            ballphys = BallPhysics{false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, 2};
+        });
+
+        // Reset all hoops 
+        auto hoop_query = ctx.query<Position, Reset, Done, CurStep, ImAHoop, ScoringZone>();
+        int hoop_i = 0;
+        ctx.iterateQuery(hoop_query, [&](Position &pos, Reset &reset, Done &done, CurStep &curstep, ImAHoop &, ScoringZone &zone) {
+            // This logic can be more sophisticated based on court dimensions
+            if (hoop_i == 0)
+                pos = Position{Vector3{3.0f, grid->height / 2.0f, 0.f}};
+            else if (hoop_i == 1)
+                pos = Position{Vector3{grid->width - 3.0f, grid->height / 2.0f, 0.f}};
+            
+            reset.resetNow = 0;
+            done.episodeDone = 1.f;
+            curstep.step = 0;
+            zone = ScoringZone{HOOP_SCORE_ZONE_SIZE, 2.0f, Vector3{pos.position.x, pos.position.y, pos.position.z}};
+            hoop_i++;
+        });
+
+        // Finally, clear the world's reset flag
+        world_reset.resetNow = 0;
+    }
+    
+    inline void tick(Engine &ctx,
+                    Reset &reset,
+                    Done &done,
+                    CurStep &episode_step,
+                    GrabCooldown &grab_cooldown)
+    {
+        // If a reset has been triggered, mark the agent as done for the learning side.
+        if (reset.resetNow == 1) {
+            done.episodeDone = 1.f;
+            episode_step.step = 0;
+        } else {
             done.episodeDone = 0.f;
-            episode_step.step = cur_step + 1;
+            episode_step.step++;
         }
 
-        position = new_pos;
-
-        // Calculate reward based on current position (convert to discrete for cell lookup)
-        int32_t discrete_x = (int32_t)(position.position.x * grid->cellsPerMeter);
-        int32_t discrete_y = (int32_t)(position.position.y * grid->cellsPerMeter);
-        discrete_x = std::clamp(discrete_x, 0, grid->discreteWidth - 1);
-        discrete_y = std::clamp(discrete_y, 0, grid->discreteHeight - 1);
-        
-        const Cell &cur_cell = grid->cells[discrete_y * grid->discreteWidth + discrete_x];
-        reward.r = cur_cell.reward;
+        // Per-step logic like cooldowns can stay here.
+        grab_cooldown.cooldown = std::max(0.f, grab_cooldown.cooldown - 1.f);
     }
 
-    inline void clockSystem(Engine &ctx, IsWorldClock &is_world_clock)
+
+
+    inline void clockSystem(Engine &ctx, Reset &reset, IsWorldClock &is_world_clock)
     {
         GameState &gameState = ctx.singleton<GameState>();
 
-        // Only count down if the clock is running.
-        // We can use the liveBall flag to pause the clock during dead ball situations.
-        if (gameState.liveBall && gameState.gameClock > 0.f) 
+        if (gameState.liveBall > 0.5f && gameState.gameClock > 0.f) 
         {
             gameState.gameClock -= G_DELTA_TIME;
             gameState.shotClock -= G_DELTA_TIME;
         }
 
-        // Ensure clocks don't go below zero
-        if (gameState.gameClock < 0.f) {
-            gameState.gameClock = 0.f;
-            // NOTE: In the future, you could add logic here to end the period.
+        // If time runs out, just set the reset flag on the WorldClock entity.
+        // The new resetSystem will see this and handle all the complex logic.
+        if (gameState.gameClock <= 0.f && gameState.liveBall > 0.5f)
+        {
+            reset.resetNow = 1;
         }
 
-        if (gameState.shotClock < 0.f) {
+        if (gameState.shotClock < 0.f) 
+        {
             gameState.shotClock = 0.f;
-            // NOTE: In the future, you could add logic here for a shot clock violation.
+            // Future logic for shot clock violation
         }
     }
+
+
 
     inline void updateLastTouchSystem(Engine &ctx,
                                     Position &ball_pos,
@@ -771,52 +777,58 @@ namespace madsimple {
 
 
     // =================================================== Task Graph ===================================================
-    void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
-                        const Config &)
+    void Sim::setupTasks(TaskGraphManager &taskgraph_mgr, const Config &)
     {
         TaskGraphBuilder &builder = taskgraph_mgr.init(0);
-
-        auto moveAgentSystemNode = builder.addToGraph<ParallelForNode<Engine, moveAgentSystem,
-            Action, Position, InPossession, Orientation>>({});
-
-        auto tickNode = builder.addToGraph<ParallelForNode<Engine, tick,
-            Reset, Position, Reward, Done, CurStep, GrabCooldown>>({});
-
-        auto clockSystemNode = builder.addToGraph<ParallelForNode<Engine, clockSystem,
-            IsWorldClock>>({});
         
-        // builder.addToGraph<ParallelForNode<Engine, moveBallRandomly,
-        //     Position, RandomMovement>>({});
+        // The order of operations is important.
+        // We want to handle player actions first, then see what happens (move, score, go out of bounds),
+        // then check the clock, and finally, handle any resets that were triggered.
+
+        builder.addToGraph<ParallelForNode<Engine, moveAgentSystem,
+            Action, Position, InPossession, Orientation>>({});
 
         auto grabSystemNode = builder.addToGraph<ParallelForNode<Engine, grabSystem,
             Entity, Action, Position, InPossession, Team, GrabCooldown>>({});
 
         auto passSystemNode = builder.addToGraph<ParallelForNode<Engine, passSystem,
             Entity, Action, Orientation, InPossession, Inbounding>>({});
-
-        auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
-            Position, BallPhysics, Grabbed>>({grabSystemNode});
-
-        auto outOfBoundsSystemNode = builder.addToGraph<ParallelForNode<Engine, outOfBoundsSystem,
-            Entity, Position, Grabbed, BallPhysics>>({passSystemNode, moveBallSystemNode});
-
-        auto updateLastTouchSystemNode = builder.addToGraph<ParallelForNode<Engine, updateLastTouchSystem,
-            Position, BallPhysics>>({});
-
+        
         auto shootSystemNode = builder.addToGraph<ParallelForNode<Engine, shootSystem,
             Entity, Action, Position, Orientation, Inbounding, InPossession, Team>>({});
 
-        auto scoreSystemNode = builder.addToGraph<ParallelForNode<Engine, scoreSystem,
-            Entity, Position, ScoringZone>>({shootSystemNode});
+        auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
+            Position, BallPhysics, Grabbed>>({grabSystemNode, passSystemNode, shootSystemNode});
+
+        builder.addToGraph<ParallelForNode<Engine, scoreSystem,
+            Entity, Position, ScoringZone>>({moveBallSystemNode});
+
+        builder.addToGraph<ParallelForNode<Engine, outOfBoundsSystem,
+            Entity, Position, Grabbed, BallPhysics>>({moveBallSystemNode});
+        
+        builder.addToGraph<ParallelForNode<Engine, updateLastTouchSystem,
+            Position, BallPhysics>>({moveBallSystemNode});
+
+        // FIX: This now correctly lists only the components the new 'tick' function needs.
+        auto tickNode = builder.addToGraph<ParallelForNode<Engine, tick,
+            Reset, Done, CurStep, GrabCooldown>>({});
+        
+        // This node just updates the clock and sets a reset flag if time runs out.
+        auto clockSystemNode = builder.addToGraph<ParallelForNode<Engine, clockSystem,
+            Reset, IsWorldClock>>({});
+
+        // FIX: The new centralized reset system runs last, after all other checks.
+        builder.addToGraph<ParallelForNode<Engine, resetSystem,
+            Reset, IsWorldClock>>({clockSystemNode, tickNode});
     }
 
     // =================================================== Sim Creation ===================================================
 
     Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
-        : WorldBase(ctx),
-        episodeMgr(init.episodeMgr),
-        grid(init.grid),
-        maxEpisodeLength(cfg.maxEpisodeLength)
+    : WorldBase(ctx),
+    episodeMgr(init.episodeMgr),
+    grid(init.grid),
+    maxEpisodeLength(cfg.maxEpisodeLength)
     {
         ctx.singleton<GameState>() = GameState 
         {
@@ -824,34 +836,37 @@ namespace madsimple {
             .liveBall = 1.0f,
             .period = 1.0f,
             .teamInPossession = 0.0f,
-            .team0Hoop = 0.0f,  // Team 0 attacks hoop 0
+            .team0Hoop = 0.0f,
             .team0Score = 0.0f,
-            .team1Hoop = 1.0f,  // Team 1 attacks hoop 1  
+            .team1Hoop = 1.0f,
             .team1Score = 0.0f,
-            .gameClock = 720.0f,
+            .gameClock = TIME_PER_PERIOD,
             .shotClock = 24.0f,
             .scoredBaskets = 0.f,
             .outOfBoundsCount = 0.f
         };
 
+        // Make sure to add the Reset component to the WorldClock entity
         Entity worldClock = ctx.makeEntity<WorldClock>();
         ctx.get<IsWorldClock>(worldClock) = {};
+        ctx.get<Reset>(worldClock) = {0}; // Initialize resetNow to 0
+
 
         std::vector<Vector3> team_colors = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
         for (int i = 0; i < NUM_AGENTS; i++) 
         {
             Entity agent = ctx.makeEntity<Agent>();
-            ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0, 0, 0}; // Initialize with no action - fixed field count
+            ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0, 0, 0};
             ctx.get<Position>(agent) = Position 
             {
                 Vector3{
-                    grid->startX + (i - 2) * 1.0f, // Space agents 1 meter apart
+                    grid->startX + (i - 2) * 1.0f,
                     grid->startY,
                     0.f
                 }
             };
-            ctx.get<Reset>(agent) = Reset{0}; // Initialize reset component
-            ctx.get<Inbounding>(agent) = Inbounding{false, true}; // Fixed field initialization
+            ctx.get<Reset>(agent) = Reset{0};
+            ctx.get<Inbounding>(agent) = Inbounding{false, true};
             ctx.get<Reward>(agent).r = 0.f;
             ctx.get<Done>(agent).episodeDone = 0.f;
             ctx.get<CurStep>(agent).step = 0;
@@ -859,37 +874,19 @@ namespace madsimple {
             ctx.get<Orientation>(agent) = Orientation {Quat::id()};
             ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
             
-            // Set defending hoop based on team
-            uint32_t defending_hoop_id = (i % 2 == 0) ? 1 : 0; // Team 0 defends hoop 1, Team 1 defends hoop 0
-            
-            ctx.get<Team>(agent) = Team{i % 2, team_colors[i % 2], defending_hoop_id}; // Fixed initialization
+            uint32_t defending_hoop_id = (i % 2 == 0) ? 1 : 0;
+            ctx.get<Team>(agent) = Team{i % 2, team_colors[i % 2], defending_hoop_id};
         };
-
-        
 
         for (int i = 0; i < NUM_BASKETBALLS; i++) 
         {
             Entity basketball = ctx.makeEntity<Basketball>();
-            ctx.get<Position>(basketball) = Position 
-            {
-                Vector3{
-                    grid->startX,   
-                    grid->startY,  
-                    0.f
-                }
-            };
-            ctx.get<Reset>(basketball) = Reset{0}; // Initialize reset component
+            ctx.get<Position>(basketball) = Position { Vector3{grid->startX, grid->startY, 0.f} };
+            ctx.get<Reset>(basketball) = Reset{0};
             ctx.get<Done>(basketball).episodeDone = 0.f;
             ctx.get<CurStep>(basketball).step = 0;
             ctx.get<Grabbed>(basketball) = Grabbed {false, ENTITY_ID_PLACEHOLDER};
-            ctx.get<BallPhysics>(basketball) = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER};
-            
-
-            // Keep random movement commented out as requested
-            // ctx.get<RandomMovement>(basketball) = RandomMovement {
-            //     0.f,
-            //     1.f + i * 2.f  // Different movement intervals: 1s, 3s, 5s...
-            // };
+            ctx.get<BallPhysics>(basketball) = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, 2};
         }
 
         GameState &gameState = ctx.singleton<GameState>();
@@ -898,20 +895,16 @@ namespace madsimple {
             Entity hoop = ctx.makeEntity<Hoop>();
             Position hoop_pos;
             
-            // Define NBA court dimensions (same as in viewer)
-            const float NBA_COURT_WIDTH = 28.65f;  // meters
-            const float NBA_COURT_HEIGHT = 15.24f; // meters
-            const float HOOP_OFFSET_FROM_BASELINE = 1.575f; // Distance from baseline to hoop center
+            const float NBA_COURT_WIDTH = 28.65f;
+            const float NBA_COURT_HEIGHT = 15.24f;
+            const float HOOP_OFFSET_FROM_BASELINE = 1.575f;
             
-            // Calculate court position within the world (centered)
             float court_start_x = (grid->width - NBA_COURT_WIDTH) / 2.0f;
-            float court_start_y = (grid->height - NBA_COURT_HEIGHT) / 2.0f;
             float court_center_y = grid->height / 2.0f;
             
             if (i == 0) 
             {
                 gameState.team0Hoop = hoop.id;
-                // Left hoop - positioned at left baseline + offset, center court vertically
                 hoop_pos = Position { 
                     Vector3{
                         court_start_x + HOOP_OFFSET_FROM_BASELINE, 
@@ -923,7 +916,6 @@ namespace madsimple {
             else if (i == 1) 
             {
                 gameState.team1Hoop = hoop.id;
-                // Right hoop - positioned at right baseline - offset, center court vertically
                 hoop_pos = Position { 
                     Vector3{
                         court_start_x + NBA_COURT_WIDTH - HOOP_OFFSET_FROM_BASELINE, 
@@ -934,7 +926,6 @@ namespace madsimple {
             } 
             else 
             {
-                // Additional hoops (if NUM_HOOPS > 2) - fallback positioning
                 hoop_pos = Position 
                 { 
                     Vector3{
@@ -952,18 +943,10 @@ namespace madsimple {
             ctx.get<ImAHoop>(hoop) = ImAHoop{};
             ctx.get<ScoringZone>(hoop) = ScoringZone
             {
-                .1f, // Radius of scoring zone
-                .1f, // Height of scoring zone (2 meters)
-                Vector3{hoop_pos.position.x, hoop_pos.position.y, hoop_pos.position.z} // Center of the scoring zone
+                HOOP_SCORE_ZONE_SIZE,
+                .1f,
+                Vector3{hoop_pos.position.x, hoop_pos.position.y, hoop_pos.position.z}
             };
-            
-
-            // Keep random movement commented out
-            // ctx.get<RandomMovement>(basketball) = RandomMovement {
-            //     0.f,
-            //     1.f + i * 2.f  // Different movement intervals: 1s, 3s, 5s...
-            // };
         }
-
     }
 }

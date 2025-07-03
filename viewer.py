@@ -13,7 +13,7 @@ import math
 
 
 # ================================ Config Constants ================================
-WINDOW_WIDTH = 3000
+WINDOW_WIDTH = 3500
 WINDOW_HEIGHT = 1750
 BACKGROUND_COLOR = (50, 50, 50)  # Dark gray
 TEXT_COLOR = (255, 255, 255)     # White
@@ -28,7 +28,7 @@ NBA_TOP_OF_KEY_RADIUS = 1.22
 NBA_HALFCOURT_CIRCLE_RADIUS = 1.33
 
 COURT_MARGIN_FACTOR = 1.1  # World area will be 1.1x the court area
-PIXELS_PER_METER = 80      # This is the single source of truth for scaling. Change this to zoom in/out.
+PIXELS_PER_METER = 110      # This is the single source of truth for scaling. Change this to zoom in/out.
 
 
 # Disable CUDA before importing anything else to avoid version conflicts
@@ -548,6 +548,11 @@ class MadronaPipeline:
             if auto_step: self.step_simulation()
             
             data = self.get_simulation_data()
+            if data and 'game_state' in data:
+                game_state = data['game_state'][0]
+                game_clock = float(game_state[8])  # Adjust index if needed
+                if game_clock <= 0 and auto_step:
+                    auto_step = False
             self.handle_audio_events(data)  # Call the new audio handler
             self.draw_simulation_data(data)
 
