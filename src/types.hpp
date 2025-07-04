@@ -61,6 +61,8 @@ namespace madsimple {
 
         float scoredBaskets;
         float outOfBoundsCount;
+
+        float inboundClock;
     };
 
 

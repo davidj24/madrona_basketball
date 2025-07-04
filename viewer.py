@@ -14,7 +14,7 @@ import math
 
 # ================================ Config Constants ================================
 WINDOW_WIDTH = 3500
-WINDOW_HEIGHT = 1750
+WINDOW_HEIGHT = 2000
 BACKGROUND_COLOR = (50, 50, 50)  # Dark gray
 TEXT_COLOR = (255, 255, 255)     # White
 
@@ -27,7 +27,7 @@ NBA_KEY_HEIGHT = 4.88
 NBA_TOP_OF_KEY_RADIUS = 1.22
 NBA_HALFCOURT_CIRCLE_RADIUS = 1.33
 
-COURT_MARGIN_FACTOR = 1.1  # World area will be 1.1x the court area
+COURT_MARGIN_FACTOR = 1.2  # World area will be 1.1x the court area
 PIXELS_PER_METER = 110      # This is the single source of truth for scaling. Change this to zoom in/out.
 
 
@@ -305,18 +305,69 @@ class MadronaPipeline:
         world_border_rect = pygame.Rect(self.world_offset_x, self.world_offset_y, self.world_width_px, self.world_height_px)
         pygame.draw.rect(self.screen, ORANGE_BORDER, world_border_rect, 3)
 
+    def draw_inbound_clock(self, data):
+        """Draws the inbound clock only when an inbound pass is in progress."""
+        if data is None or 'game_state' not in data:
+            return
+
+        game_state = data['game_state'][0]
+        # These indices MUST match your C++ GameState struct.
+        # From your function, it looks like inboundingInProgress is at index 0
+        # and inbound_clock is at index 12.
+        inbounding_in_progress = game_state[0] > 0.5
+        inbound_clock = float(game_state[12])
+
+        # Only draw if inbounding is active
+        if not inbounding_in_progress:
+            return
+
+        # 1. Define appearance and dimensions in meters for proper scaling
+        box_width_meters = 2.5
+        box_height_meters = 1.2
+        box_vertical_offset_from_top_px = 50 # How far from the top of the window
+
+        # 2. Scale dimensions to pixels using the pixels_per_meter variable
+        box_width_px = int(box_width_meters * self.pixels_per_meter)
+        box_height_px = int(box_height_meters * self.pixels_per_meter)
+
+        # 3. Calculate position (centered horizontally, near the top)
+        box_center_x = WINDOW_WIDTH // 2
+        box_top_y = box_vertical_offset_from_top_px
+        box_rect = pygame.Rect(
+            box_center_x - box_width_px // 2,
+            box_top_y,
+            box_width_px,
+            box_height_px
+        )
+
+        # 4. Draw the box
+        pygame.draw.rect(self.screen, (0, 0, 0), box_rect) # Black background
+        pygame.draw.rect(self.screen, (255, 255, 255), box_rect, 3) # White outline
+
+        # 5. Draw the text, scaling the font size with the box size
+        font_size = int(box_height_px * 0.8)
+        inbound_font = pygame.font.Font(None, font_size)
+
+        # Format the clock to show one decimal place
+        clock_text = f"{inbound_clock:.1f}"
+        text_surface = inbound_font.render(clock_text, True, (255, 255, 255))
+        text_rect = text_surface.get_rect(center=box_rect.center)
+
+        self.screen.blit(text_surface, text_rect)
+
     def draw_score_display(self, data):
         """Draw the team scores and game info at the bottom center of the screen"""
         if data is None or 'game_state' not in data:
             return
 
         game_state = data['game_state'][0]
-        
+        inboundingInProgress = float(game_state[0])
         period = int(game_state[2])
         team0_score = int(game_state[5])
         team1_score = int(game_state[7])
         game_clock = float(game_state[8])
         shot_clock = float(game_state[9])
+        inbound_clock = float(game_state[12])
 
         # Get team colors 
         team_colors = { 0: (0, 100, 255), 1: (255, 50, 50) }
@@ -394,8 +445,14 @@ class MadronaPipeline:
         """Draw whatever data your simulation produces"""
         if data is None: return
         self.screen.fill(BACKGROUND_COLOR)
+        
+        # Draw the main gameplay elements
         self.draw_basketball_court()
         self.draw_score_display(data)
+        
+        # Draw the new inbound clock (it will only appear when needed)
+        self.draw_inbound_clock(data)
+
         y_offset = 20
         info_texts = [f"Madrona Basketball Simulation - Step {self.step_count}"]
 
@@ -412,24 +469,13 @@ class MadronaPipeline:
         if 'done' in data:
             for i, done in enumerate(data['done'][0]): info_texts.append(f"Agent {i} Done: {done}")
 
-        # --- Basketball Rendering (Scaled to Real Size) ---
+        # --- Basketball Rendering (Preserved from your file) ---
         if 'basketball_pos' in data:
-            # Real basketball diameter and radius in meters
-            BALL_DIAMETER_M = 0.242
-            BALL_RADIUS_M = BALL_DIAMETER_M / 2.0
-            # Use the pipeline's pixels_per_meter for scaling
-            ball_radius_px = BALL_RADIUS_M * self.pixels_per_meter
             for i, pos in enumerate(data['basketball_pos'][0]):
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
-                # Draw filled orange ball
-                pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), int(ball_radius_px))
-                # Draw a darker orange outline
-                pygame.draw.circle(self.screen, (200, 50, 0), (screen_x, screen_y), int(ball_radius_px), max(2, int(ball_radius_px * 0.15)))
-                # Optionally, draw a label for the ball (small, centered)
-                font_ball = pygame.font.Font(None, max(12, int(ball_radius_px * 0.7)))
-                label_surface = font_ball.render(f"B{i + 1}", True, (255, 255, 255))
-                label_rect = label_surface.get_rect(center=(screen_x, screen_y))
-                self.screen.blit(label_surface, label_rect)
+                pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), 12)
+                pygame.draw.circle(self.screen, (200, 50, 0), (screen_x, screen_y), 12, 2)
+                self.screen.blit(pygame.font.Font(None, 16).render(f"B{i + 1}", True, (255, 255, 255)), (screen_x - 8, screen_y - 5))
 
         # --- Hoop Rendering (Preserved from your file) ---
         if 'hoop_pos' in data:

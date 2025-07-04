@@ -10,91 +10,151 @@
 using namespace madrona;
 using namespace madrona::math;
 
+constexpr float SIMULATION_HZ = 62.0f; // How many timesteps are in one second
+constexpr float TIMESTEPS_TO_SECONDS_FACTOR = 1.0f / SIMULATION_HZ;
+constexpr float HOOP_SCORE_ZONE_SIZE = .1f;
+constexpr float TIME_PER_PERIOD = 300.f;
 
+constexpr float COURT_LENGTH_M = 28.65f;
+constexpr float COURT_WIDTH_M = 15.24f;
+constexpr float WORLD_WIDTH_M = 28.65f * 1.1f;
+constexpr float WORLD_HEIGHT_M = 15.24f * 1.1f;
+constexpr float COURT_MIN_X = (WORLD_WIDTH_M - COURT_LENGTH_M) / 2.0f;
+constexpr float COURT_MAX_X = COURT_MIN_X + COURT_LENGTH_M;
+constexpr float COURT_MIN_Y = (WORLD_HEIGHT_M - COURT_WIDTH_M) / 2.0f;
+constexpr float COURT_MAX_Y = COURT_MIN_Y + COURT_WIDTH_M;
 
-// Computes the rotation needed to align the 'start' vector with the 'target' vector.
-inline Quat findRotationBetweenVectors(Vector3 start, Vector3 target) 
-{
-    // Ensure the vectors are normalized (unit length)
-    start = start.normalize();
-    target = target.normalize();
+// This is the small buffer to ensure the player is placed *inside* the line
+constexpr float IN_COURT_OFFSET = 0.1f; 
 
-    float dot_product = dot(start, target);
+namespace madsimple {
+    // =================================================== Helper Functions ===================================================
+    
+    // Computes the rotation needed to align the 'start' vector with the 'target' vector.
+    inline Quat findRotationBetweenVectors(Vector3 start, Vector3 target) 
+    {
+        // Ensure the vectors are normalized (unit length)
+        start = start.normalize();
+        target = target.normalize();
 
-    // Case 1: If the vectors are already aligned, no rotation is needed.
-    if (dot_product > 0.999999f) {
-        return Quat::id();
+        float dot_product = dot(start, target);
+
+        // Case 1: If the vectors are already aligned, no rotation is needed.
+        if (dot_product > 0.999999f) {
+            return Quat::id();
+        }
+
+        // Case 2: If the vectors are in opposite directions, we need a 180-degree rotation.
+        // For a 2D game, the most stable axis for a 180-degree turn is the Z-axis.
+        if (dot_product < -0.999999f) {
+            return Quat::angleAxis(pi, Vector3{0.f, 0.f, 1.f});
+        }
+
+        // Case 3: The general case.
+        // The axis of rotation is the cross product of the two vectors.
+        Vector3 rotation_axis = cross(start, target);
+        rotation_axis = rotation_axis.normalize();
+
+        // The angle is the arccosine of the dot product.
+        float rotation_angle = acosf(dot_product);
+
+        return Quat::angleAxis(rotation_angle, rotation_axis);
     }
 
-    // Case 2: If the vectors are in opposite directions, we need a 180-degree rotation.
-    // For a 2D game, the most stable axis for a 180-degree turn is the Z-axis.
-    if (dot_product < -0.999999f) {
-        return Quat::angleAxis(pi, Vector3{0.f, 0.f, 1.f});
-    }
+    inline int32_t getShotPointValue(Position shot_pos, Position hoop_pos, float distance_to_hoop) 
+    {
+        const float COURT_LENGTH_M = 28.65f;
+        const float COURT_WIDTH_M = 15.24f;
+        const float WORLD_WIDTH_M = 31.515f;  // 28.65 * 1.1
+        const float WORLD_HEIGHT_M = 16.764f; // 15.24 * 1.1
 
-    // Case 3: The general case.
-    // The axis of rotation is the cross product of the two vectors.
-    Vector3 rotation_axis = cross(start, target);
-    rotation_axis = rotation_axis.normalize();
+        const float ARC_RADIUS_M = 7.24f;
+        const float CORNER_3_FROM_SIDELINE_M = 0.91f;
+        const float CORNER_3_LENGTH_FROM_BASELINE_M = 4.27f;
 
-    // The angle is the arccosine of the dot product.
-    float rotation_angle = acosf(dot_product);
+        // --- Calculate Court's Position within the World (The crucial fix) ---
+        const float court_min_x = (WORLD_WIDTH_M - COURT_LENGTH_M) / 2.0f;
+        const float court_min_y = (WORLD_HEIGHT_M - COURT_WIDTH_M) / 2.0f;
 
-    return Quat::angleAxis(rotation_angle, rotation_axis);
-}
+        // --- Logic ---
 
-inline int32_t getShotPointValue(madsimple::Position shot_pos, madsimple::Position hoop_pos, float distance_to_hoop) 
-{
-    const float COURT_LENGTH_M = 28.65f;
-    const float COURT_WIDTH_M = 15.24f;
-    const float WORLD_WIDTH_M = 31.515f;  // 28.65 * 1.1
-    const float WORLD_HEIGHT_M = 16.764f; // 15.24 * 1.1
+        // 1. Check if the shot is in the corner lane, relative to the court's position.
+        bool isInCornerLane = (shot_pos.position.y < court_min_y + CORNER_3_FROM_SIDELINE_M || 
+                            shot_pos.position.y > court_min_y + COURT_WIDTH_M - CORNER_3_FROM_SIDELINE_M);
 
-    const float ARC_RADIUS_M = 7.24f;
-    const float CORNER_3_FROM_SIDELINE_M = 0.91f;
-    const float CORNER_3_LENGTH_FROM_BASELINE_M = 4.27f;
-
-    // --- Calculate Court's Position within the World (The crucial fix) ---
-    const float court_min_x = (WORLD_WIDTH_M - COURT_LENGTH_M) / 2.0f;
-    const float court_min_y = (WORLD_HEIGHT_M - COURT_WIDTH_M) / 2.0f;
-
-    // --- Logic ---
-
-    // 1. Check if the shot is in the corner lane, relative to the court's position.
-    bool isInCornerLane = (shot_pos.position.y < court_min_y + CORNER_3_FROM_SIDELINE_M || 
-                           shot_pos.position.y > court_min_y + COURT_WIDTH_M - CORNER_3_FROM_SIDELINE_M);
-
-    if (isInCornerLane) {
-        // 2. If so, check if the shot is within the corner's length, relative to the court's position.
-        bool isShootingAtLeftHoop = hoop_pos.position.x < WORLD_WIDTH_M / 2.0f;
-        
-        if (isShootingAtLeftHoop) {
-            if (shot_pos.position.x <= court_min_x + CORNER_3_LENGTH_FROM_BASELINE_M) {
-                return 3;
+        if (isInCornerLane) {
+            // 2. If so, check if the shot is within the corner's length, relative to the court's position.
+            bool isShootingAtLeftHoop = hoop_pos.position.x < WORLD_WIDTH_M / 2.0f;
+            
+            if (isShootingAtLeftHoop) {
+                if (shot_pos.position.x <= court_min_x + CORNER_3_LENGTH_FROM_BASELINE_M) {
+                    return 3;
+                }
+            } else { // Shooting at the right hoop
+                if (shot_pos.position.x >= court_min_x + COURT_LENGTH_M - CORNER_3_LENGTH_FROM_BASELINE_M) {
+                    return 3;
+                }
             }
-        } else { // Shooting at the right hoop
-            if (shot_pos.position.x >= court_min_x + COURT_LENGTH_M - CORNER_3_LENGTH_FROM_BASELINE_M) {
-                return 3;
+        }
+
+        // 3. If not a valid corner 3, check the distance against the arc.
+        if (distance_to_hoop > ARC_RADIUS_M) {
+            return 3;
+        }
+
+        // 4. If none of the 3-point conditions are met, it is a 2-point shot.
+        return 2;
+    }
+
+    inline void assignInbounder(Engine &ctx, Entity ball_entity, uint32_t new_team_idx, bool is_turnover)
+    {
+        GameState &gameState = ctx.singleton<GameState>();
+        bool inbounder_assigned = false;
+
+        // Find the first available player on the new team.
+        auto agent_query = ctx.query<Entity, Team, InPossession, Position, Inbounding>();
+        Position ball_pos = ctx.get<Position>(ball_entity);
+
+        ctx.iterateQuery(agent_query, [&](Entity agent_entity, Team &agent_team, InPossession &in_possession, Position &agent_pos, Inbounding &inbounding)
+        {
+            // FIX: Ensure you're comparing compatible types (uint32_t and int32_t)
+            if ((uint32_t)agent_team.teamIndex == new_team_idx && !inbounder_assigned)
+            {
+                inbounder_assigned = true;
+                inbounding.imInbounding = true;
+                agent_pos = ball_pos; // Move player to the ball
+                
+                // Give them possession of the ball
+                ctx.get<Grabbed>(ball_entity) = {true, (uint32_t)agent_entity.id};
+                in_possession.hasBall = true;
+                // FIX: Assign the ENTITY'S ID, not the entity object itself.
+                in_possession.ballEntityID = ball_entity.id;
+            }
+        });
+
+        // If we successfully found a player, update the game state.
+        if(inbounder_assigned) {
+            gameState.teamInPossession = (float)new_team_idx;
+            gameState.liveBall = 0.f; // Ball is dead during an inbound
+            gameState.inboundingInProgress = 1.0f;
+            gameState.inboundClock = 5.f; // Reset the 5-second clock
+
+            // Only increment the out-of-bounds count if it wasn't a 5-second turnover
+            if (!is_turnover) {
+                gameState.outOfBoundsCount++;
             }
         }
     }
 
-    // 3. If not a valid corner 3, check the distance against the arc.
-    if (distance_to_hoop > ARC_RADIUS_M) {
-        return 3;
+    inline Vector3 clampToCourt(Vector3 pos)
+    {
+        float clamped_x = std::clamp(pos.x, COURT_MIN_X + IN_COURT_OFFSET, COURT_MAX_X - IN_COURT_OFFSET);
+        float clamped_y = std::clamp(pos.y, COURT_MIN_Y + IN_COURT_OFFSET, COURT_MAX_Y - IN_COURT_OFFSET);
+        
+        // Return the new, valid position, keeping the original z-height.
+        return Vector3{clamped_x, clamped_y, pos.z};
     }
-
-    // 4. If none of the 3-point conditions are met, it is a 2-point shot.
-    return 2;
-}
-
-constexpr float SIMULATION_HZ = 62.0f;
-constexpr float G_DELTA_TIME = 1.0f / SIMULATION_HZ;
-constexpr float HOOP_SCORE_ZONE_SIZE = .1f;
-constexpr float TIME_PER_PERIOD = 6.f;
-
-namespace madsimple {
-
+    // =================================================== Registry ===================================================
     void Sim::registerTypes(ECSRegistry &registry, const Config &)
     {
         base::registerTypes(registry);
@@ -464,15 +524,11 @@ namespace madsimple {
                             InPossession &in_possession,
                             Orientation &agent_orientation)
     {
-        // Define the duration of a single simulation step.
-        // For example, if your simulation runs at 30 steps per second.
-        const float delta_time = 1.0f / 60.0f;
-
         const GridState *grid = ctx.data().grid;
         if (action.rotate != 0)
         {
             // Rotation logic is fine as it is
-            float turn_angle = (pi/180.f) * action.rotate * 3;
+            float turn_angle = (pi/180.f) * action.rotate * 6;
             Quat turn = Quat::angleAxis(turn_angle, Vector3{0, 0, 1});
             agent_orientation.orientation = turn * agent_orientation.orientation;
         }
@@ -481,7 +537,7 @@ namespace madsimple {
         {
             // Treat moveSpeed as a velocity in meters/second, not a distance.
             // Let's say a moveSpeed of 1 corresponds to 1 m/s.
-            float agent_velocity_magnitude = action.moveSpeed * 5;
+            float agent_velocity_magnitude = action.moveSpeed * 4;
             if (in_possession.hasBall ==1) {agent_velocity_magnitude *= .8;}
 
             constexpr float angle_between_directions = pi / 4.f;
@@ -492,8 +548,8 @@ namespace madsimple {
             float vel_y = -std::cos(move_angle); // Your forward is -Y
 
             // Calculate distance to move this frame
-            float dx = vel_x * agent_velocity_magnitude * delta_time;
-            float dy = vel_y * agent_velocity_magnitude * delta_time;
+            float dx = vel_x * agent_velocity_magnitude * TIMESTEPS_TO_SECONDS_FACTOR;
+            float dy = vel_y * agent_velocity_magnitude * TIMESTEPS_TO_SECONDS_FACTOR;
 
             // Update position (now using floats)
             float new_x = agent_pos.position.x + dx;
@@ -541,7 +597,6 @@ namespace madsimple {
                 if ((float)hoop_entity.id == gameState.team0Hoop) {gameState.team1Score += ball_physics.pointsWorth;}
                 else{gameState.team0Score += ball_physics.pointsWorth;}
                 gameState.scoredBaskets++;
-                gameState.liveBall = 0.f;
 
                 // Reset the ball position and state
                 ball_physics.inFlight = false;
@@ -591,7 +646,8 @@ namespace madsimple {
                 .gameClock = TIME_PER_PERIOD,
                 .shotClock = 24.0f,
                 .scoredBaskets = 0.f,
-                .outOfBoundsCount = 0.f
+                .outOfBoundsCount = 0.f,
+                .inboundClock = 0.f
             };
         }
 
@@ -667,18 +723,23 @@ namespace madsimple {
 
 
 
-    inline void clockSystem(Engine &ctx, Reset &reset, IsWorldClock &is_world_clock)
+    inline void clockSystem(Engine &ctx, Reset &reset, IsWorldClock &)
     {
         GameState &gameState = ctx.singleton<GameState>();
 
+        // Decrement game and shot clocks if the ball is live
         if (gameState.liveBall > 0.5f && gameState.gameClock > 0.f) 
         {
-            gameState.gameClock -= G_DELTA_TIME;
-            gameState.shotClock -= G_DELTA_TIME;
+            gameState.gameClock -= TIMESTEPS_TO_SECONDS_FACTOR;
+            gameState.shotClock -= TIMESTEPS_TO_SECONDS_FACTOR;
+        }
+        
+        // Decrement the inbound clock if an inbound is in progress
+        if (gameState.inboundingInProgress > 0.5f)
+        {
+            gameState.inboundClock -= TIMESTEPS_TO_SECONDS_FACTOR;
         }
 
-        // If time runs out, just set the reset flag on the WorldClock entity.
-        // The new resetSystem will see this and handle all the complex logic.
         if (gameState.gameClock <= 0.f && gameState.liveBall > 0.5f)
         {
             reset.resetNow = 1;
@@ -687,7 +748,6 @@ namespace madsimple {
         if (gameState.shotClock < 0.f) 
         {
             gameState.shotClock = 0.f;
-            // Future logic for shot clock violation
         }
     }
 
@@ -717,75 +777,89 @@ namespace madsimple {
     inline void outOfBoundsSystem(Engine &ctx,
                                 Entity ball_entity,
                                 Position &ball_pos,
-                                Grabbed &grabbed,
                                 BallPhysics &ball_physics)
-{
-    GameState &gameState = ctx.singleton<GameState>();
-
-    // --- Define Court/World Dimensions (These MUST MATCH your Python viewer.py) ---
-    const float COURT_LENGTH_M = 28.65f;
-    const float COURT_WIDTH_M = 15.24f;
-    const float WORLD_WIDTH_M = 28.65f * 1.1f;
-    const float WORLD_HEIGHT_M = 15.24f * 1.1f;
-
-    // --- Calculate the court's actual boundaries within the world ---
-    const float court_min_x = (WORLD_WIDTH_M - COURT_LENGTH_M) / 2.0f;
-    const float court_max_x = court_min_x + COURT_LENGTH_M;
-    const float court_min_y = (WORLD_HEIGHT_M - COURT_WIDTH_M) / 2.0f;
-    const float court_max_y = court_min_y + COURT_WIDTH_M;
-
-    // Check if the ball's center has crossed the court boundaries
-    if (ball_pos.position.x < court_min_x || ball_pos.position.x > court_max_x ||
-        ball_pos.position.y < court_min_y || ball_pos.position.y > court_max_y)
     {
-        // Reset the ball physics
-        ball_physics.inFlight = false;
-        ball_physics.velocity = Vector3::zero();
-        gameState.outOfBoundsCount++;
+        GameState &gameState = ctx.singleton<GameState>();
 
-        auto agent_query = ctx.query<Entity, Team, InPossession, Position, Inbounding>();
-        ctx.iterateQuery(agent_query, [&] (Entity agent_entity, Team &agent_team, InPossession &in_possession, Position &agent_pos, Inbounding &inbounding)
+        // Check if the ball's center has crossed the court boundaries and we are not currently inbounding
+        bool is_out_of_bounds = ball_pos.position.x < COURT_MIN_X || ball_pos.position.x > COURT_MAX_X ||
+                                ball_pos.position.y < COURT_MIN_Y || ball_pos.position.y > COURT_MAX_Y;
+
+        if (is_out_of_bounds && gameState.inboundingInProgress == 0.f)
         {
-            // If an agent has the ball, we need to reset their position
-            if (in_possession.ballEntityID == ball_entity.id && agent_team.teamIndex == ball_physics.lastTouchedByID && inbounding.imInbounding == false)
-            {
-                // Note: Using a generic centered start position instead of the old grid->startX
-                agent_pos = Position {
-                    WORLD_WIDTH_M / 2.0f,
-                    WORLD_HEIGHT_M / 2.0f,
-                    0.f
-                };
-                in_possession.hasBall = false;
-                in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
-            }
+            ball_physics.inFlight = false;
+            ball_physics.velocity = Vector3::zero();
 
-            if (agent_team.teamIndex != ball_physics.lastTouchedByID && gameState.inboundingInProgress < 0.5f)
+            // The team that did NOT last touch the ball gets possession.
+            uint32_t new_team_idx = 1 - ball_physics.lastTouchedByID;
+
+            // Find the player who had the ball and reset their position
+            auto agent_query = ctx.query<InPossession, Position>();
+            ctx.iterateQuery(agent_query, [&](InPossession &in_possession, Position &agent_pos)
             {
-                inbounding.imInbounding = true;
-                gameState.inboundingInProgress = 1.0f;
-                agent_pos = ball_pos;
-                grabbed.isGrabbed = true;
-                grabbed.holderEntityID = agent_entity.id;
-                in_possession.hasBall = true;
-                in_possession.ballEntityID = ball_entity.id;
-                gameState.teamInPossession = (float)agent_team.teamIndex;
+                // If this agent was the one who went out of bounds with the ball...
+                if (in_possession.hasBall && in_possession.ballEntityID == ball_entity.id)
+                {
+                    // FIX: Instead of teleporting to center, clamp them to the nearest in-bounds spot.
+                    agent_pos.position = clampToCourt(agent_pos.position);
+                    
+                    // Take the ball away
+                    in_possession.hasBall = false;
+                    in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
+                }
+            });
+            
+            // Call the helper to give the ball to the other team.
+            assignInbounder(ctx, ball_entity, new_team_idx, false);
+        }
+    }
+
+
+    inline void inboundViolationSystem(Engine &ctx, IsWorldClock &)
+    {
+        GameState &gameState = ctx.singleton<GameState>();
+
+        // This is the conditional check. If this isn't true, the system does nothing.
+        if (!(gameState.inboundingInProgress > 0.5f && gameState.inboundClock <= 0.f)) {
+            return;
+        }
+
+        uint32_t current_team_idx = (uint32_t)gameState.teamInPossession;
+        uint32_t new_team_idx = 1 - current_team_idx;
+
+        uint32_t ball_to_turnover_id = ENTITY_ID_PLACEHOLDER;
+        
+        auto inbounder_query = ctx.query<Inbounding, InPossession, Position>();
+        ctx.iterateQuery(inbounder_query, [&](Inbounding &inb, InPossession &poss, Position &agent_pos) {
+            if (inb.imInbounding) {
+                ball_to_turnover_id = poss.ballEntityID;
+                
+                inb.imInbounding = false;
+                poss.hasBall = false;
+                poss.ballEntityID = ENTITY_ID_PLACEHOLDER;
+
+                agent_pos.position = clampToCourt(agent_pos.position);
             }
         });
+
+        if (ball_to_turnover_id != ENTITY_ID_PLACEHOLDER) {
+            auto ball_query = ctx.query<Entity, Grabbed>();
+            ctx.iterateQuery(ball_query, [&](Entity ball_e, Grabbed &grabbed) {
+                if (ball_e.id == (int32_t)ball_to_turnover_id) {
+                    grabbed = {false, ENTITY_ID_PLACEHOLDER};
+                    assignInbounder(ctx, ball_e, new_team_idx, true);
+                }
+            });
+        }
     }
-}
-
-
 
     // =================================================== Task Graph ===================================================
-    void Sim::setupTasks(TaskGraphManager &taskgraph_mgr, const Config &)
+    void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
+                    const Config &)
     {
         TaskGraphBuilder &builder = taskgraph_mgr.init(0);
         
-        // The order of operations is important.
-        // We want to handle player actions first, then see what happens (move, score, go out of bounds),
-        // then check the clock, and finally, handle any resets that were triggered.
-
-        builder.addToGraph<ParallelForNode<Engine, moveAgentSystem,
+        auto moveAgentSystemNode = builder.addToGraph<ParallelForNode<Engine, moveAgentSystem,
             Action, Position, InPossession, Orientation>>({});
 
         auto grabSystemNode = builder.addToGraph<ParallelForNode<Engine, grabSystem,
@@ -800,25 +874,26 @@ namespace madsimple {
         auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
             Position, BallPhysics, Grabbed>>({grabSystemNode, passSystemNode, shootSystemNode});
 
-        builder.addToGraph<ParallelForNode<Engine, scoreSystem,
+        auto scoreSystemNode = builder.addToGraph<ParallelForNode<Engine, scoreSystem,
             Entity, Position, ScoringZone>>({moveBallSystemNode});
 
-        builder.addToGraph<ParallelForNode<Engine, outOfBoundsSystem,
-            Entity, Position, Grabbed, BallPhysics>>({moveBallSystemNode});
+        auto outOfBoundsSystemNode = builder.addToGraph<ParallelForNode<Engine, outOfBoundsSystem,
+            Entity, Position, BallPhysics>>({moveBallSystemNode});
         
-        builder.addToGraph<ParallelForNode<Engine, updateLastTouchSystem,
+        auto updateLastTouchSystemNode = builder.addToGraph<ParallelForNode<Engine, updateLastTouchSystem,
             Position, BallPhysics>>({moveBallSystemNode});
 
-        // FIX: This now correctly lists only the components the new 'tick' function needs.
         auto tickNode = builder.addToGraph<ParallelForNode<Engine, tick,
             Reset, Done, CurStep, GrabCooldown>>({});
         
-        // This node just updates the clock and sets a reset flag if time runs out.
         auto clockSystemNode = builder.addToGraph<ParallelForNode<Engine, clockSystem,
             Reset, IsWorldClock>>({});
 
-        // FIX: The new centralized reset system runs last, after all other checks.
-        builder.addToGraph<ParallelForNode<Engine, resetSystem,
+        // Add the new inbound violation system to the graph
+        auto inboundViolationSystemNode = builder.addToGraph<ParallelForNode<Engine, inboundViolationSystem,
+            IsWorldClock>>({clockSystemNode});
+
+        auto resetSystemNode = builder.addToGraph<ParallelForNode<Engine, resetSystem,
             Reset, IsWorldClock>>({clockSystemNode, tickNode});
     }
 
