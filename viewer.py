@@ -10,26 +10,8 @@ import numpy as np
 import os
 import math
 
-
-
-# ================================ Config Constants ================================
-WINDOW_WIDTH = 3500
-WINDOW_HEIGHT = 2000
-BACKGROUND_COLOR = (50, 50, 50)  # Dark gray
-TEXT_COLOR = (255, 255, 255)     # White
-
-# World/court dimensions in meters (NBA standard)
-NBA_COURT_WIDTH = 28.65
-NBA_COURT_HEIGHT = 15.24
-NBA_3_POINT_LINE = 7.24 # The 3 point line in the corner is a stright line,and the distnace is shorter, roughly 6.71m
-NBA_KEY_WIDTH = 5.79
-NBA_KEY_HEIGHT = 4.88
-NBA_TOP_OF_KEY_RADIUS = 1.22
-NBA_HALFCOURT_CIRCLE_RADIUS = 1.33
-
-COURT_MARGIN_FACTOR = 1.2  # World area will be 1.1x the court area
-PIXELS_PER_METER = 110      # This is the single source of truth for scaling. Change this to zoom in/out.
-
+# Import constants
+from src.constants import *
 
 # Disable CUDA before importing anything else to avoid version conflicts
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
@@ -128,13 +110,11 @@ class MadronaPipeline:
         self.last_score_count = 0
         self.last_oob_count = 0
         
-        # --- Centralized Coordinate System Setup (your existing code is preserved) ---
+        # --- Centralized Coordinate System Setup ---
         self.pixels_per_meter = PIXELS_PER_METER
-        margin_factor = 1.10
-        NBA_COURT_WIDTH = 28.65
-        NBA_COURT_HEIGHT = 15.24
-        self.world_width_meters = NBA_COURT_WIDTH * margin_factor
-        self.world_height_meters = NBA_COURT_HEIGHT * margin_factor
+        margin_factor = WORLD_MARGIN_FACTOR
+        self.world_width_meters = COURT_LENGTH_M * margin_factor
+        self.world_height_meters = COURT_WIDTH_M * margin_factor
         self.world_width_px = self.world_width_meters * self.pixels_per_meter
         self.world_height_px = self.world_height_meters * self.pixels_per_meter
         self.world_offset_x = (WINDOW_WIDTH - self.world_width_px) / 2
@@ -218,16 +198,6 @@ class MadronaPipeline:
         LINE_WHITE = (255, 255, 255)
         ORANGE_BORDER = (255, 255, 255)
         
-        COURT_LENGTH_M = 28.65
-        COURT_WIDTH_M = 15.24
-        KEY_WIDTH_M = 4.88
-        KEY_HEIGHT_M = 5.79
-        HOOP_FROM_BASELINE_M = 1.575
-        FT_CIRCLE_RADIUS_M = 1.8
-        ARC_RADIUS_M = 7.24
-        CORNER_3_FROM_SIDELINE_M = 0.91
-        CORNER_3_LENGTH_FROM_BASELINE_M = 4.27
-        
         # 2. Scaling and Positioning
         scale = self.pixels_per_meter
         line_thickness = max(2, int(scale * 0.05))
@@ -254,7 +224,7 @@ class MadronaPipeline:
             key_rect = pygame.Rect(key_x, center_y - key_h_px / 2, key_w_px, key_h_px)
             pygame.draw.rect(self.screen, PAINT_RED, key_rect)
             pygame.draw.rect(self.screen, LINE_WHITE, key_rect, line_thickness)
-            ft_radius_px = FT_CIRCLE_RADIUS_M * scale
+            ft_radius_px = FREE_THROW_CIRCLE_RADIUS_M * scale
             ft_center_x = court_rect.left + KEY_HEIGHT_M * scale if side == -1 else court_rect.right - KEY_HEIGHT_M * scale
             ft_arc_rect = pygame.Rect(ft_center_x - ft_radius_px, center_y - ft_radius_px, ft_radius_px * 2, ft_radius_px * 2)
             start_angle, end_angle = (-np.pi / 2, np.pi / 2) if side == -1 else (np.pi / 2, 3 * np.pi / 2)
@@ -298,7 +268,7 @@ class MadronaPipeline:
 
         # 5. Center Line & Circle
         pygame.draw.line(self.screen, LINE_WHITE, (center_x, court_rect.top), (center_x, court_rect.bottom), line_thickness)
-        center_circle_radius = FT_CIRCLE_RADIUS_M * scale
+        center_circle_radius = FREE_THROW_CIRCLE_RADIUS_M * scale
         pygame.draw.circle(self.screen, LINE_WHITE, (center_x, center_y), center_circle_radius, line_thickness)
 
         # 6. World Border
@@ -484,7 +454,7 @@ class MadronaPipeline:
                 agent_color = team_colors.get(team_index, (128, 128, 128)) # Use team color, fallback to gray
                 
                 # Draw the agent's body
-                agent_size_px = self.pixels_per_meter * 0.25
+                agent_size_px = self.pixels_per_meter * AGENT_SIZE_M
                 agent_rect = pygame.Rect(screen_x - agent_size_px / 2, screen_y - agent_size_px / 2, agent_size_px, agent_size_px)
                 pygame.draw.rect(self.screen, agent_color, agent_rect)
                 pygame.draw.rect(self.screen, (255, 255, 255), agent_rect, 1) # White outline
@@ -499,28 +469,35 @@ class MadronaPipeline:
                 BASE_FORWARD_VECTOR = np.array([0.0, 1.0, 0.0])
                 direction_3d = rotate_vec(q, BASE_FORWARD_VECTOR)
                 dx, dy = direction_3d[0], direction_3d[1]
-                arrow_len_px = self.pixels_per_meter * 0.5
+                arrow_len_px = self.pixels_per_meter * AGENT_ORIENTATION_ARROW_LENGTH_M
                 arrow_end = (screen_x + arrow_len_px * dx, screen_y + arrow_len_px * dy)
                 pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 3)
 
-        # --- Basketball Rendering (Preserved from your file) ---
+        # --- Basketball Rendering (Scaled to Real Size) ---
         if 'basketball_pos' in data:
+            # Use real basketball dimensions from constants
+            ball_radius_px = BALL_RADIUS_M * self.pixels_per_meter
             for i, pos in enumerate(data['basketball_pos'][0]):
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
-                pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), 12)
-                pygame.draw.circle(self.screen, (200, 50, 0), (screen_x, screen_y), 12, 2)
-                self.screen.blit(pygame.font.Font(None, 16).render(f"B{i + 1}", True, (255, 255, 255)), (screen_x - 8, screen_y - 5))
+                # Draw filled orange ball
+                pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), int(ball_radius_px))
+                # Draw a darker orange outline
+                pygame.draw.circle(self.screen, (200, 50, 0), (screen_x, screen_y), int(ball_radius_px), max(2, int(ball_radius_px * 0.15)))
+                # Ball label
+                font_ball = pygame.font.Font(None, max(12, int(ball_radius_px * 0.7)))
+                label_surface = font_ball.render(f"B{i + 1}", True, (255, 255, 255))
+                label_rect = label_surface.get_rect(center=(screen_x, screen_y))
+                self.screen.blit(label_surface, label_rect)
 
-        # --- Hoop Rendering (Preserved from your file) ---
+        # --- Hoop Rendering ---
         if 'hoop_pos' in data:
-            BACKBOARD_WIDTH_M, RIM_DIAMETER_M = 1.829, 0.4572
             for i, pos in enumerate(data['hoop_pos'][0]):
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
                 backboard_width_px = BACKBOARD_WIDTH_M * self.pixels_per_meter
                 rim_radius_px = (RIM_DIAMETER_M / 2) * self.pixels_per_meter
                 rim_thickness_px = max(2, int(self.pixels_per_meter * 0.02))
                 backboard_thickness_px = max(3, int(self.pixels_per_meter * 0.05))
-                backboard_offset_px = (1.575 - 1.22) * self.pixels_per_meter
+                backboard_offset_px = BACKBOARD_OFFSET_FROM_HOOP_M * self.pixels_per_meter
                 backboard_x = screen_x - backboard_offset_px if pos[0] < self.world_width_meters / 2 else screen_x + backboard_offset_px
                 pygame.draw.line(self.screen, (255, 255, 255), (backboard_x, screen_y - backboard_width_px / 2), (backboard_x, screen_y + backboard_width_px / 2), backboard_thickness_px)
                 pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), rim_radius_px, rim_thickness_px)

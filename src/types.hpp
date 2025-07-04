@@ -1,16 +1,11 @@
 #pragma once
 
 #include <madrona/components.hpp>
+#include "constants.hpp"
 
 using namespace madrona::math;
 
 namespace madsimple {
-
-// ================================================ Config Constants ================================================
-    constexpr int32_t NUM_AGENTS = 8;
-    constexpr int32_t NUM_BASKETBALLS = 1;
-    constexpr int32_t NUM_HOOPS = 2;
-    constexpr uint32_t ENTITY_ID_PLACEHOLDER = UINT32_MAX;  // Use max value as invalid/null entity ID
 
     enum class ExportID : uint32_t 
     {

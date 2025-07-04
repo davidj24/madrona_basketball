@@ -1,5 +1,6 @@
 #include "sim.hpp"
 #include "types.hpp"
+#include "constants.hpp"
 #include <madrona/mw_gpu_entry.hpp>
 #include <cstdlib>
 #include <vector>
@@ -10,26 +11,7 @@
 using namespace madrona;
 using namespace madrona::math;
 
-constexpr float SIMULATION_HZ = 62.0f; // How many timesteps are in one second
-constexpr float TIMESTEPS_TO_SECONDS_FACTOR = 1.0f / SIMULATION_HZ;
-constexpr float HOOP_SCORE_ZONE_SIZE = .1f;
-constexpr float TIME_PER_PERIOD = 300.f;
-
-constexpr float COURT_LENGTH_M = 28.65f;
-constexpr float COURT_WIDTH_M = 15.24f;
-constexpr float WORLD_WIDTH_M = 28.65f * 1.1f;
-constexpr float WORLD_HEIGHT_M = 15.24f * 1.1f;
-constexpr float COURT_MIN_X = (WORLD_WIDTH_M - COURT_LENGTH_M) / 2.0f;
-constexpr float COURT_MAX_X = COURT_MIN_X + COURT_LENGTH_M;
-constexpr float COURT_MIN_Y = (WORLD_HEIGHT_M - COURT_WIDTH_M) / 2.0f;
-constexpr float COURT_MAX_Y = COURT_MIN_Y + COURT_WIDTH_M;
-constexpr float PIXELS_PER_METER = 110;
-
 const Vector3 AGENT_BASE_FORWARD = {0, 1, 0}; 
-
-
-// This is the small buffer to ensure the player is placed *inside* the line
-constexpr float IN_COURT_OFFSET = 0.1f; 
 
 namespace madsimple {
     // =================================================== Helper Functions ===================================================
@@ -67,35 +49,22 @@ namespace madsimple {
 
     inline int32_t getShotPointValue(Position shot_pos, Position hoop_pos, float distance_to_hoop) 
     {
-        const float COURT_LENGTH_M = 28.65f;
-        const float COURT_WIDTH_M = 15.24f;
-        const float WORLD_WIDTH_M = 31.515f;  // 28.65 * 1.1
-        const float WORLD_HEIGHT_M = 16.764f; // 15.24 * 1.1
-
-        const float ARC_RADIUS_M = 7.24f;
-        const float CORNER_3_FROM_SIDELINE_M = 0.91f;
-        const float CORNER_3_LENGTH_FROM_BASELINE_M = 4.27f;
-
-        // --- Calculate Court's Position within the World (The crucial fix) ---
-        const float court_min_x = (WORLD_WIDTH_M - COURT_LENGTH_M) / 2.0f;
-        const float court_min_y = (WORLD_HEIGHT_M - COURT_WIDTH_M) / 2.0f;
-
         // --- Logic ---
 
         // 1. Check if the shot is in the corner lane, relative to the court's position.
-        bool isInCornerLane = (shot_pos.position.y < court_min_y + CORNER_3_FROM_SIDELINE_M || 
-                            shot_pos.position.y > court_min_y + COURT_WIDTH_M - CORNER_3_FROM_SIDELINE_M);
+        bool isInCornerLane = (shot_pos.position.y < COURT_MIN_Y + CORNER_3_FROM_SIDELINE_M || 
+                            shot_pos.position.y > COURT_MIN_Y + COURT_WIDTH_M - CORNER_3_FROM_SIDELINE_M);
 
         if (isInCornerLane) {
             // 2. If so, check if the shot is within the corner's length, relative to the court's position.
             bool isShootingAtLeftHoop = hoop_pos.position.x < WORLD_WIDTH_M / 2.0f;
             
             if (isShootingAtLeftHoop) {
-                if (shot_pos.position.x <= court_min_x + CORNER_3_LENGTH_FROM_BASELINE_M) {
+                if (shot_pos.position.x <= COURT_MIN_X + CORNER_3_LENGTH_FROM_BASELINE_M) {
                     return 3;
                 }
             } else { // Shooting at the right hoop
-                if (shot_pos.position.x >= court_min_x + COURT_LENGTH_M - CORNER_3_LENGTH_FROM_BASELINE_M) {
+                if (shot_pos.position.x >= COURT_MIN_X + COURT_LENGTH_M - CORNER_3_LENGTH_FROM_BASELINE_M) {
                     return 3;
                 }
             }
@@ -551,7 +520,7 @@ namespace madsimple {
             float agent_velocity_magnitude = action.moveSpeed * 4;
             if (in_possession.hasBall ==1) {agent_velocity_magnitude *= .8;}
 
-            constexpr float angle_between_directions = pi / 4.f;
+            constexpr float angle_between_directions = ANGLE_BETWEEN_DIRECTIONS;
             float move_angle = action.moveAngle * angle_between_directions;
 
             // Calculate velocity vector components
@@ -1056,11 +1025,7 @@ namespace madsimple {
             Entity hoop = ctx.makeEntity<Hoop>();
             Position hoop_pos;
             
-            const float NBA_COURT_WIDTH = 28.65f;
-            const float NBA_COURT_HEIGHT = 15.24f;
-            const float HOOP_OFFSET_FROM_BASELINE = 1.575f;
-            
-            float court_start_x = (grid->width - NBA_COURT_WIDTH) / 2.0f;
+            float court_start_x = (grid->width - COURT_LENGTH_M) / 2.0f;
             float court_center_y = grid->height / 2.0f;
             
             if (i == 0) 
@@ -1068,7 +1033,7 @@ namespace madsimple {
                 gameState.team0Hoop = hoop.id;
                 hoop_pos = Position { 
                     Vector3{
-                        court_start_x + HOOP_OFFSET_FROM_BASELINE, 
+                        court_start_x + HOOP_FROM_BASELINE_M, 
                         court_center_y, 
                         0.f 
                     }
@@ -1079,7 +1044,7 @@ namespace madsimple {
                 gameState.team1Hoop = hoop.id;
                 hoop_pos = Position { 
                     Vector3{
-                        court_start_x + NBA_COURT_WIDTH - HOOP_OFFSET_FROM_BASELINE, 
+                        court_start_x + COURT_LENGTH_M - HOOP_FROM_BASELINE_M, 
                         court_center_y, 
                         0.f 
                     }
