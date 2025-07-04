@@ -990,8 +990,8 @@ namespace madsimple {
             ctx.get<Position>(agent) = Position 
             {
                 Vector3{
-                    grid->startX + (i - 2) * 1.0f,
-                    grid->startY,
+                    grid->startX - 1 - (-2*(i % 2)),
+                    grid->startY - 2 + i/2,
                     0.f
                 }
             };

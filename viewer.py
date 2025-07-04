@@ -149,6 +149,7 @@ class MadronaPipeline:
         """Get the current state from your Madrona simulation"""
         try:
             obs_tensor = self.sim.observation_tensor()
+            agent_pos_tensor = self.sim.agent_pos_tensor()
             agent_team_tensor = self.sim.agent_team_tensor()
             action_tensor = self.sim.action_tensor() 
             reward_tensor = self.sim.reward_tensor()
@@ -166,6 +167,7 @@ class MadronaPipeline:
             
             return {
                 'observations': obs_tensor.to_torch().detach().cpu().numpy(),
+                'agent_pos' : agent_pos_tensor.to_torch().detach().cpu().numpy(),
                 'agent_teams': agent_team_tensor.to_torch().detach().cpu().numpy(),
                 'actions': action_tensor.to_torch().detach().cpu().numpy(),
                 'rewards': reward_tensor.to_torch().detach().cpu().numpy(),
@@ -440,8 +442,8 @@ class MadronaPipeline:
             for i, done in enumerate(data['done'][0]): info_texts.append(f"Agent {i} Done: {done}")
 
         # --- Agent Rendering (Corrected Colors and Text) ---
-        if 'observations' in data and 'agent_teams' in data and 'orientation' in data:
-            positions, team_data, orientations = data['observations'][0], data['agent_teams'][0], data['orientation'][0]
+        if 'agent_pos' in data and 'agent_teams' in data and 'orientation' in data:
+            positions, team_data, orientations = data['agent_pos'][0], data['agent_teams'][0], data['orientation'][0]
             
             # Use a consistent color map matching your scoreboard
             team_colors = { 0: (0, 100, 255), 1: (255, 50, 50) } 

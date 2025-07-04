@@ -17,6 +17,7 @@ namespace madsimple {
         Action,
         ActionMask,
         AgentPos,
+        Observations,
         Reward,
         Done,
         AgentEntityID,

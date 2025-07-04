@@ -59,7 +59,7 @@ BALL_RADIUS_M = BALL_DIAMETER_M / 2.0
 BALL_CIRCUMFERENCE_M = 0.749  # Official basketball circumference
 
 # ======================================== Agent Properties ========================================
-AGENT_SIZE_M = 0.2  # Agent visual size for rendering
+AGENT_SIZE_M = 0.25  # Agent visual size for rendering
 AGENT_ORIENTATION_ARROW_LENGTH_M = 0.5  # Length of orientation arrow
 
 # ======================================== Pygame/Visualization Constants ========================================
