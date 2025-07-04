@@ -79,7 +79,7 @@ namespace madsimple {
         return 2;
     }
 
-    inline void assignInbounder(Engine &ctx, Entity ball_entity, Position ball_pos, uint32_t new_team_idx, Quat new_orientation, bool is_turnover)
+    inline void assignInbounder(Engine &ctx, Entity ball_entity, Position ball_pos, uint32_t new_team_idx, Quat new_orientation, bool is_oob)
     {
         GameState &gameState = ctx.singleton<GameState>();
         bool inbounder_assigned = false;
@@ -112,19 +112,16 @@ namespace madsimple {
             gameState.inboundClock = 5.f; // Reset the 5-second clock
 
             // Only increment the out-of-bounds count if it wasn't a 5-second turnover
-            if (!is_turnover) {
+            if (is_oob) {
                 gameState.outOfBoundsCount++;
             }
         }
     }
-
-    inline Vector3 clampToCourt(Vector3 pos)
+    
+    inline Vector3 findVectorToCenter(Engine &ctx, Position entity_pos)
     {
-        float clamped_x = std::clamp(pos.x, COURT_MIN_X + IN_COURT_OFFSET, COURT_MAX_X - IN_COURT_OFFSET);
-        float clamped_y = std::clamp(pos.y, COURT_MIN_Y + IN_COURT_OFFSET, COURT_MAX_Y - IN_COURT_OFFSET);
-        
-        // Return the new, valid position, keeping the original z-height.
-        return Vector3{clamped_x, clamped_y, pos.z};
+        const GridState *grid = ctx.data().grid;
+        return (Vector3{grid->startX, grid->startY, 0.f} - entity_pos.position).normalize();
     }
     
     
@@ -601,7 +598,6 @@ namespace madsimple {
                         ScoringZone &scoring_zone)
     {
         GameState &gameState = ctx.singleton<GameState>();
-        const GridState *grid = ctx.data().grid;
         
         auto ball_query = ctx.query<Entity, Position, BallPhysics>();
         ctx.iterateQuery(ball_query, [&] (Entity ball_entity, Position &ball_pos, BallPhysics &ball_physics)
@@ -644,8 +640,7 @@ namespace madsimple {
                 ball_pos = inbound_spot;
 
                 // Set up the inbound for the defending team.
-                Vector3 vector_to_center = Vector3{grid->startX, grid->startY, 0.f} - ball_pos.position;
-                inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, vector_to_center);
+                inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, findVectorToCenter(ctx, ball_pos));
                 assignInbounder(ctx, ball_entity, inbound_spot, defending_team_idx, inbound_orientation, false);
             }
         });
@@ -827,10 +822,10 @@ namespace madsimple {
         GameState &gameState = ctx.singleton<GameState>();
 
         // Check if the ball's center has crossed the court boundaries and we are not currently inbounding
-        bool is_out_of_bounds = ball_pos.position.x < COURT_MIN_X || ball_pos.position.x > COURT_MAX_X ||
-                                ball_pos.position.y < COURT_MIN_Y || ball_pos.position.y > COURT_MAX_Y;
 
-        if (is_out_of_bounds && gameState.inboundingInProgress == 0.f)
+        if ((ball_pos.position.x < COURT_MIN_X || ball_pos.position.x > COURT_MAX_X ||
+            ball_pos.position.y < COURT_MIN_Y || ball_pos.position.y > COURT_MAX_Y) &&
+            gameState.inboundingInProgress == 0.f)
         {
             ball_physics.inFlight = false;
             ball_physics.velocity = Vector3::zero();
@@ -846,8 +841,7 @@ namespace madsimple {
                 // If this agent was the one who went out of bounds with the ball...
                 if (in_possession.hasBall && in_possession.ballEntityID == ball_entity.id)
                 {
-                    // FIX: Instead of teleporting to center, clamp them to the nearest in-bounds spot.
-                    agent_pos.position = clampToCourt(agent_pos.position);
+                    agent_pos.position += findVectorToCenter(ctx, agent_pos);
                     
                     // Take the ball away
                     in_possession.hasBall = false;
@@ -856,11 +850,8 @@ namespace madsimple {
             });
             
             // Call the helper to give the ball to the other team.
-            // assignInbounder(Engine &ctx, Entity ball_entity, Position ball_pos, uint32_t new_team_idx, Quat new_orientation, bool is_turnover)
-            const GridState *grid = ctx.data().grid;
-            Vector3 vector_to_center = Vector3{grid->startX, grid->startY, 0.f} - ball_pos.position;
-            Quat inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, vector_to_center);
-            assignInbounder(ctx, ball_entity, ball_pos, new_team_idx, inbound_orientation, false);
+            Quat inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, findVectorToCenter(ctx, ball_pos));
+            assignInbounder(ctx, ball_entity, ball_pos, new_team_idx, inbound_orientation, true);
         }
     }
 
@@ -868,7 +859,6 @@ namespace madsimple {
     inline void inboundViolationSystem(Engine &ctx, IsWorldClock &)
     {
         GameState &gameState = ctx.singleton<GameState>();
-        const GridState *grid = ctx.data().grid;
 
         // This is the conditional check. If this isn't true, the system does nothing.
         if (!(gameState.inboundingInProgress > 0.5f && gameState.inboundClock <= 0.f)) {
@@ -890,7 +880,7 @@ namespace madsimple {
                 poss.hasBall = false;
                 poss.ballEntityID = ENTITY_ID_PLACEHOLDER;
 
-                agent_pos.position = clampToCourt(agent_pos.position);
+                agent_pos.position += findVectorToCenter(ctx, agent_pos);
             }
         });
 
@@ -899,8 +889,7 @@ namespace madsimple {
             ctx.iterateQuery(ball_query, [&](Position &ball_pos, Entity ball_entity, Grabbed &grabbed) {
                 if (ball_entity.id == (int32_t)ball_to_turnover_id) {
                     grabbed = {false, ENTITY_ID_PLACEHOLDER};
-                    Vector3 vector_to_center = Vector3{grid->startX, grid->startY, 0.f} - ball_pos.position;
-                    Quat inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, vector_to_center);
+                    Quat inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, findVectorToCenter(ctx, ball_pos));
                     assignInbounder(ctx, ball_entity, ball_pos, new_team_idx, inbound_orientation, false);
                 }
             });

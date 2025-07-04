@@ -106,44 +106,45 @@ class MadronaPipeline:
             self.score_sound = None
             self.whistle_sound = None
 
-        # Keep track of the last count to detect when a new event occurs
-        self.last_score_count = 0
-        self.last_oob_count = 0
-        
-        # --- Centralized Coordinate System Setup ---
+        # --- Correctly set up the coordinate system ---
+
+        # 1. These are the TRUE world dimensions in meters, based on your constants.
+        self.world_width_meters = WORLD_WIDTH_M
+        self.world_height_meters = WORLD_HEIGHT_M
         self.pixels_per_meter = PIXELS_PER_METER
-        margin_factor = WORLD_MARGIN_FACTOR
-        self.world_width_meters = COURT_LENGTH_M * margin_factor
-        self.world_height_meters = COURT_WIDTH_M * margin_factor
-        self.world_width_px = self.world_width_meters * self.pixels_per_meter
-        self.world_height_px = self.world_height_meters * self.pixels_per_meter
+
+        # 2. These are the TRUE pixel dimensions for drawing, calculated only ONCE.
+        self.world_width_px = self.world_width_meters * PIXELS_PER_METER
+        self.world_height_px = self.world_height_meters * PIXELS_PER_METER
+
+        # 3. This is the TRUE pixel offset for centering the world view.
         self.world_offset_x = (WINDOW_WIDTH - self.world_width_px) / 2
         self.world_offset_y = (WINDOW_HEIGHT - self.world_height_px) / 2
-
-        print("Initializing Madrona simulation...")
         
-        import math
-        self.world_discrete_width = math.ceil(self.world_width_meters)
-        self.world_discrete_height = math.ceil(self.world_height_meters)
-        walls = np.zeros((self.world_discrete_height, self.world_discrete_width), dtype=bool)
-        rewards = np.zeros((self.world_discrete_height, self.world_discrete_width), dtype=float)
+        print("Initializing Madrona simulation...")
+
+        # 4. The discrete grid is only needed to create the legacy `walls` array.
+        #    It no longer affects the drawing coordinates.
+        world_discrete_width = math.ceil(self.world_width_meters)
+        world_discrete_height = math.ceil(self.world_height_meters)
+        walls = np.zeros((world_discrete_height, world_discrete_width), dtype=bool)
+        rewards = np.zeros((world_discrete_height, world_discrete_width), dtype=float)
         
         self.sim = madrona_sim.SimpleGridworldSimulator(
             walls=walls,
             rewards=rewards, 
-            start_x=self.world_discrete_width / 2.0,
-            start_y=self.world_discrete_height / 2.0,
-            max_episode_length=39600, # 6 seconds of real time is roughly 330 timesteps
+            start_x=self.world_width_meters / 2.0,  # Start in the true center
+            start_y=self.world_height_meters / 2.0,
+            max_episode_length=39600,
             exec_mode=ExecMode.CPU,
             num_worlds=1,
             gpu_id=-1
         )
-        self.world_width_px = self.world_discrete_width * self.pixels_per_meter
-        self.world_height_px = self.world_discrete_height * self.pixels_per_meter
-        self.world_offset_x = (WINDOW_WIDTH - self.world_width_px) / 2
-        self.world_offset_y = (WINDOW_HEIGHT - self.world_height_px) / 2
-        print(f"✓ Madrona simulation initialized! World size: {self.world_discrete_width}x{self.world_discrete_height} meters (discrete grid)")
+        
+        print(f"✓ Madrona simulation initialized! World is {self.world_width_meters:.2f}m x {self.world_height_meters:.2f}m")
         self.step_count = 0
+        self.last_score_count = 0
+        self.last_oob_count = 0
         
     def get_simulation_data(self):
         """Get the current state from your Madrona simulation"""
@@ -296,7 +297,7 @@ class MadronaPipeline:
         # 1. Define appearance and dimensions in meters for proper scaling
         box_width_meters = 2.5
         box_height_meters = 1.2
-        box_vertical_offset_from_top_px = 50 # How far from the top of the window
+        box_vertical_offset_from_top_px = 20 # How far from the top of the window
 
         # 2. Scale dimensions to pixels using the pixels_per_meter variable
         box_width_px = int(box_width_meters * self.pixels_per_meter)
@@ -359,7 +360,7 @@ class MadronaPipeline:
         display_width = 600
         display_height = 120
         display_x = (WINDOW_WIDTH - display_width) // 2
-        display_y = WINDOW_HEIGHT - display_height - 50
+        display_y = WINDOW_HEIGHT - display_height - 10
 
         # Draw main score display background 
         score_bg_rect = pygame.Rect(display_x, display_y, display_width, display_height)
