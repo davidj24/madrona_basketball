@@ -501,6 +501,7 @@ namespace madsimple {
                             ActionMask &action_mask,
                             Position &agent_pos, // Note: This should now store floats
                             InPossession &in_possession,
+                            Inbounding &inbounding,
                             Orientation &agent_orientation)
     {
         const GridState *grid = ctx.data().grid;
@@ -518,13 +519,14 @@ namespace madsimple {
             // Treat moveSpeed as a velocity in meters/second, not a distance.
             // Let's say a moveSpeed of 1 corresponds to 1 m/s.
             float agent_velocity_magnitude = action.moveSpeed * 4;
-            if (in_possession.hasBall ==1) {agent_velocity_magnitude *= .8;}
+            if (in_possession.hasBall == 1) {agent_velocity_magnitude *= .8;}
 
             constexpr float angle_between_directions = ANGLE_BETWEEN_DIRECTIONS;
             float move_angle = action.moveAngle * angle_between_directions;
 
             // Calculate velocity vector components
             float vel_x = std::sin(move_angle);
+            if (inbounding.imInbounding == 1.f) {vel_x = 0.f;}
             float vel_y = -std::cos(move_angle); // Your forward is -Y
 
             // Calculate distance to move this frame
@@ -575,11 +577,11 @@ namespace madsimple {
             action_mask.can_shoot = 1.f;
         }
 
-        if (gameState.inboundingInProgress == 1.f && gameState.liveBall == 0.f)
+        if (gameState.inboundingInProgress == 1.f)
         {
             action_mask.can_shoot = 0.f;
             action_mask.can_grab = 0.f;
-            if (inbounding.imInbounding == 1.f) 
+            if (inbounding.imInbounding == 1.f && gameState.liveBall == 0.f) 
             {
                 action_mask.can_move = 0.f;
             }
@@ -875,8 +877,9 @@ namespace madsimple {
 
         uint32_t current_team_idx = (uint32_t)gameState.teamInPossession;
         uint32_t new_team_idx = 1 - current_team_idx;
-
         uint32_t ball_to_turnover_id = ENTITY_ID_PLACEHOLDER;
+
+        gameState.liveBall = 0.f;
         
         auto inbounder_query = ctx.query<Inbounding, InPossession, Position>();
         ctx.iterateQuery(inbounder_query, [&](Inbounding &inb, InPossession &poss, Position &agent_pos) {
@@ -914,7 +917,7 @@ namespace madsimple {
             ActionMask, GrabCooldown, InPossession, Inbounding>>({});
         
         auto moveAgentSystemNode = builder.addToGraph<ParallelForNode<Engine, moveAgentSystem,
-            Action, ActionMask, Position, InPossession, Orientation>>({actionMaskingNode});
+            Action, ActionMask, Position, InPossession, Inbounding, Orientation>>({actionMaskingNode});
 
         auto grabSystemNode = builder.addToGraph<ParallelForNode<Engine, grabSystem,
             Entity, Action, ActionMask, Position, InPossession, Team, GrabCooldown>>({actionMaskingNode});
