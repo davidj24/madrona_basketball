@@ -839,7 +839,7 @@ namespace madsimple {
                                 (ball_pos.position.y - agent_pos.position.y) * (ball_pos.position.y - agent_pos.position.y) +
                                 (ball_pos.position.z - agent_pos.position.z) * (ball_pos.position.z - agent_pos.position.z));
             
-            if (distance <= 0.5f) 
+            if (distance <= 0.2f) 
             {
                 ball_physics.lastTouchedByID = (uint32_t)team.teamIndex;
             }
