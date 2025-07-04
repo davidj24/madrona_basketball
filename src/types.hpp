@@ -102,9 +102,16 @@ namespace madsimple {
         int32_t shoot;      // Currently Adding
 
         // Defensive Actions
-        int32_t steal;
-        int32_t contest;
         // int32_t take charge <--- later
+    };
+
+    struct ActionMask
+    {
+        float can_move;
+        float can_rotate;
+        float can_grab;
+        float can_pass;
+        float can_shoot;
     };
 
     struct Orientation
@@ -185,6 +192,7 @@ namespace madsimple {
     struct Agent : public madrona::Archetype<
         Reset,
         Action,
+        ActionMask,
         GrabCooldown,
         Position,
         Reward,

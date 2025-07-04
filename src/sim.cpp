@@ -575,7 +575,31 @@ namespace madsimple {
     }
 
 
+    inline void actionMaskSystem(Engine &ctx,
+                                 ActionMask &action_mask,
+                                 InPossession &in_possession,
+                                 Team &team,
+                                 Inbounding &inbounding)
+    {
+        GameState &gameState = ctx.singleton<GameState>();
+        if (some_condition)
+        {
 
+        }
+        else
+        {
+            action_mask.can_move = 1.f;
+            // Offensive actions
+            if (gameState.teamInPossession == team.teamIndex)
+            {
+                
+            }
+            else // Defensive actions
+            {
+
+            }
+        }
+    }
 
 
     //=================================================== Hoop Systems ===================================================
