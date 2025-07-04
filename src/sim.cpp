@@ -23,6 +23,10 @@ constexpr float COURT_MIN_X = (WORLD_WIDTH_M - COURT_LENGTH_M) / 2.0f;
 constexpr float COURT_MAX_X = COURT_MIN_X + COURT_LENGTH_M;
 constexpr float COURT_MIN_Y = (WORLD_HEIGHT_M - COURT_WIDTH_M) / 2.0f;
 constexpr float COURT_MAX_Y = COURT_MIN_Y + COURT_WIDTH_M;
+constexpr float PIXELS_PER_METER = 110;
+
+const Vector3 AGENT_BASE_FORWARD = {0, 1, 0}; 
+
 
 // This is the small buffer to ensure the player is placed *inside* the line
 constexpr float IN_COURT_OFFSET = 0.1f; 
@@ -106,18 +110,16 @@ namespace madsimple {
         return 2;
     }
 
-    inline void assignInbounder(Engine &ctx, Entity ball_entity, uint32_t new_team_idx, bool is_turnover)
+    inline void assignInbounder(Engine &ctx, Entity ball_entity, Position ball_pos, uint32_t new_team_idx, Quat new_orientation, bool is_turnover)
     {
         GameState &gameState = ctx.singleton<GameState>();
         bool inbounder_assigned = false;
 
         // Find the first available player on the new team.
-        auto agent_query = ctx.query<Entity, Team, InPossession, Position, Inbounding>();
-        Position ball_pos = ctx.get<Position>(ball_entity);
+        auto agent_query = ctx.query<Entity, Team, InPossession, Position, Orientation, Inbounding>();
 
-        ctx.iterateQuery(agent_query, [&](Entity agent_entity, Team &agent_team, InPossession &in_possession, Position &agent_pos, Inbounding &inbounding)
+        ctx.iterateQuery(agent_query, [&](Entity agent_entity, Team &agent_team, InPossession &in_possession, Position &agent_pos, Orientation &agent_orient, Inbounding &inbounding)
         {
-            // FIX: Ensure you're comparing compatible types (uint32_t and int32_t)
             if ((uint32_t)agent_team.teamIndex == new_team_idx && !inbounder_assigned)
             {
                 inbounder_assigned = true;
@@ -127,15 +129,16 @@ namespace madsimple {
                 // Give them possession of the ball
                 ctx.get<Grabbed>(ball_entity) = {true, (uint32_t)agent_entity.id};
                 in_possession.hasBall = true;
-                // FIX: Assign the ENTITY'S ID, not the entity object itself.
                 in_possession.ballEntityID = ball_entity.id;
+                
+                // Set the agent's orientation to face the court
+                agent_orient.orientation = new_orientation;
             }
         });
 
         // If we successfully found a player, update the game state.
         if(inbounder_assigned) {
             gameState.teamInPossession = (float)new_team_idx;
-            gameState.liveBall = 0.f; // Ball is dead during an inbound
             gameState.inboundingInProgress = 1.0f;
             gameState.inboundClock = 5.f; // Reset the 5-second clock
 
@@ -154,6 +157,8 @@ namespace madsimple {
         // Return the new, valid position, keeping the original z-height.
         return Vector3{clamped_x, clamped_y, pos.z};
     }
+    
+    
     // =================================================== Registry ===================================================
     void Sim::registerTypes(ECSRegistry &registry, const Config &)
     {
@@ -176,6 +181,7 @@ namespace madsimple {
 
         // ================================================== Agent Components ==================================================
         registry.registerComponent<Action>();
+        registry.registerComponent<ActionMask>();
         registry.registerComponent<Reward>();
         registry.registerComponent<Inbounding>();
         registry.registerComponent<InPossession>();
@@ -205,6 +211,7 @@ namespace madsimple {
         // ================================================= Tensor Exports For Viewer =================================================
         registry.exportColumn<Agent, Reset>((uint32_t)ExportID::Reset);
         registry.exportColumn<Agent, Action>((uint32_t)ExportID::Action);
+        registry.exportColumn<Agent, ActionMask>((uint32_t)ExportID::ActionMask);
         registry.exportColumn<Agent, Position>((uint32_t)ExportID::AgentPos);
         registry.exportColumn<Agent, Reward>((uint32_t)ExportID::Reward);
         registry.exportColumn<Agent, Done>((uint32_t)ExportID::Done);
@@ -309,6 +316,7 @@ namespace madsimple {
     inline void grabSystem(Engine &ctx,
                             Entity agent_entity,
                             Action &action,
+                            ActionMask &action_mask,
                             Position &agent_pos,
                             InPossession &in_possession,
                             Team &team,
@@ -316,8 +324,7 @@ namespace madsimple {
     {
         GameState &gameState = ctx.singleton<GameState>();
         auto basketball_query = ctx.query<Entity, Position, Grabbed, BallPhysics>();
-        if (action.grab == 0) {return;}
-        if (grab_cooldown.cooldown > 0.f) {return;}
+        if (action_mask.can_grab == 0.f || action.grab == 0.f) {return;}
         grab_cooldown.cooldown = 10.f;
 
         ctx.iterateQuery(basketball_query, [&](Entity ball_entity, Position &basketball_pos, Grabbed &grabbed, BallPhysics &ball_physics) 
@@ -371,12 +378,13 @@ namespace madsimple {
     inline void passSystem(Engine &ctx,
                         Entity agent_entity,
                         Action &action,
+                        ActionMask &action_mask,
                         Orientation &agent_orientation,
                         InPossession &in_possession,
                         Inbounding &inbounding)
     {
 
-        if (action.pass == 0 || !in_possession.hasBall) {return;}
+        if (action_mask.can_pass == 0.f || action.pass == 0.f) {return;}
         GameState &gameState = ctx.singleton<GameState>();
 
 
@@ -403,13 +411,14 @@ namespace madsimple {
     inline void shootSystem(Engine &ctx,
                             Entity agent_entity,
                             Action &action,
+                            ActionMask &action_mask,
                             Position agent_pos,
                             Orientation &agent_orientation,
                             Inbounding &inbounding,
                             InPossession &in_possession,
                             Team &team)
     {
-        if (action.shoot == 0 || !in_possession.hasBall) {return;}
+        if (action_mask.can_shoot == 0.f || action.shoot == 0.f) {return;}
 
         // Find the attacking hoop (not defendingHoopID)
         auto hoop_query = ctx.query<Entity, Position, ScoringZone>();
@@ -520,6 +529,7 @@ namespace madsimple {
 
     inline void moveAgentSystem(Engine &ctx,
                             Action &action,
+                            ActionMask &action_mask,
                             Position &agent_pos, // Note: This should now store floats
                             InPossession &in_possession,
                             Orientation &agent_orientation)
@@ -527,11 +537,12 @@ namespace madsimple {
         const GridState *grid = ctx.data().grid;
         if (action.rotate != 0)
         {
-            // Rotation logic is fine as it is
             float turn_angle = (pi/180.f) * action.rotate * 6;
             Quat turn = Quat::angleAxis(turn_angle, Vector3{0, 0, 1});
             agent_orientation.orientation = turn * agent_orientation.orientation;
         }
+
+        if (action_mask.can_move == 0.f || action.moveSpeed == 0) {return;}
 
         if (action.moveSpeed > 0)
         {
@@ -577,55 +588,94 @@ namespace madsimple {
 
     inline void actionMaskSystem(Engine &ctx,
                                  ActionMask &action_mask,
+                                 GrabCooldown &grab_cooldown,
                                  InPossession &in_possession,
-                                 Team &team,
                                  Inbounding &inbounding)
     {
         GameState &gameState = ctx.singleton<GameState>();
-        if (some_condition)
-        {
 
+        action_mask.can_move = 1.f;
+        action_mask.can_grab = 1.f;
+        action_mask.can_pass = 0.f;
+        action_mask.can_shoot = 0.f;
+
+        // Offensive actions
+        if (in_possession.hasBall)
+        {
+            action_mask.can_pass = 1.f;
+            action_mask.can_shoot = 1.f;
         }
-        else
-        {
-            action_mask.can_move = 1.f;
-            // Offensive actions
-            if (gameState.teamInPossession == team.teamIndex)
-            {
-                
-            }
-            else // Defensive actions
-            {
 
+        if (gameState.inboundingInProgress == 1.f && gameState.liveBall == 0.f)
+        {
+            action_mask.can_shoot = 0.f;
+            action_mask.can_grab = 0.f;
+            if (inbounding.imInbounding == 1.f) 
+            {
+                action_mask.can_move = 0.f;
             }
+        }
+
+        if (grab_cooldown.cooldown > 0.f)
+        {
+            action_mask.can_grab = 0.f;
         }
     }
 
 
     //=================================================== Hoop Systems ===================================================
     inline void scoreSystem(Engine &ctx,
-                            Entity hoop_entity,
-                            Position &hoop_pos,
-                            ScoringZone &scoring_zone)
+                        Entity hoop_entity,
+                        Position &hoop_pos,
+                        ScoringZone &scoring_zone)
     {
         GameState &gameState = ctx.singleton<GameState>();
+        const GridState *grid = ctx.data().grid;
         
-        auto ball_query = ctx.query<Position, BallPhysics>();
-        ctx.iterateQuery(ball_query, [&] (Position &ball_pos, BallPhysics &ball_physics)
+        auto ball_query = ctx.query<Entity, Position, BallPhysics>();
+        ctx.iterateQuery(ball_query, [&] (Entity ball_entity, Position &ball_pos, BallPhysics &ball_physics)
         {
             float distance_to_hoop = std::sqrt((ball_pos.position.x - hoop_pos.position.x) * (ball_pos.position.x - hoop_pos.position.x) + 
-                                               (ball_pos.position.y - hoop_pos.position.y) * (ball_pos.position.y - hoop_pos.position.y));
+                                            (ball_pos.position.y - hoop_pos.position.y) * (ball_pos.position.y - hoop_pos.position.y));
+
             if (distance_to_hoop <= scoring_zone.radius && ball_physics.inFlight && gameState.liveBall == 1.f) 
             {
-                // Ball is within scoring zone, score a point
-                if ((float)hoop_entity.id == gameState.team0Hoop) {gameState.team1Score += ball_physics.pointsWorth;}
-                else{gameState.team0Score += ball_physics.pointsWorth;}
+                uint32_t scoring_team_idx;
+                uint32_t defending_team_idx;
+                Position inbound_spot;
+                Quat inbound_orientation;
+
+                if ((uint32_t)hoop_entity.id == (uint32_t)gameState.team0Hoop) 
+                {
+                    gameState.team1Score += ball_physics.pointsWorth;
+                    scoring_team_idx = 1;
+                    defending_team_idx = 0;
+                    
+                    // Inbound spot is on the baseline behind the hoop that was scored on.
+                    inbound_spot = Position{{COURT_MIN_X, hoop_pos.position.y+(PIXELS_PER_METER/60), 0.f}};
+                } 
+                else 
+                {
+                    // Team 0 scored on Team 1's hoop. Team 1 will inbound.
+                    gameState.team0Score += ball_physics.pointsWorth;
+                    scoring_team_idx = 0;
+                    defending_team_idx = 1;
+
+                    inbound_spot = Position{{COURT_MAX_X, hoop_pos.position.y+(PIXELS_PER_METER/60), 0.f}};
+                }
+                
                 gameState.scoredBaskets++;
 
-                // Reset the ball position and state
+                // Set the ball's state for the inbound
                 ball_physics.inFlight = false;
-                ball_pos = hoop_pos;
                 ball_physics.velocity = Vector3::zero();
+                ball_physics.lastTouchedByID = scoring_team_idx;
+                ball_pos = inbound_spot;
+
+                // Set up the inbound for the defending team.
+                Vector3 vector_to_center = Vector3{grid->startX, grid->startY, 0.f} - ball_pos.position;
+                inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, vector_to_center);
+                assignInbounder(ctx, ball_entity, inbound_spot, defending_team_idx, inbound_orientation, false);
             }
         });
     }
@@ -681,7 +731,7 @@ namespace madsimple {
         int agent_i = 0;
         ctx.iterateQuery(agent_query, [&](Action &action, Position &pos, Reset &reset, Inbounding &inbounding, Done &done, CurStep &curstep, InPossession &inpos, Orientation &orient, GrabCooldown &cooldown) 
         {
-            action = Action{0, 0, 0, 0, 0, 0, 0, 0};
+            action = Action{0, 0, 0, 0, 0, 0};
             float x = (agent_i < 4) ? agent_start_x[agent_i] : grid->startX;
             pos = Position{Vector3{x, grid->startY, 0.f}};
             reset.resetNow = 0; // Clear the flag
@@ -813,6 +863,7 @@ namespace madsimple {
         {
             ball_physics.inFlight = false;
             ball_physics.velocity = Vector3::zero();
+            gameState.liveBall = 0.f;
 
             // The team that did NOT last touch the ball gets possession.
             uint32_t new_team_idx = 1 - ball_physics.lastTouchedByID;
@@ -834,7 +885,11 @@ namespace madsimple {
             });
             
             // Call the helper to give the ball to the other team.
-            assignInbounder(ctx, ball_entity, new_team_idx, false);
+            // assignInbounder(Engine &ctx, Entity ball_entity, Position ball_pos, uint32_t new_team_idx, Quat new_orientation, bool is_turnover)
+            const GridState *grid = ctx.data().grid;
+            Vector3 vector_to_center = Vector3{grid->startX, grid->startY, 0.f} - ball_pos.position;
+            Quat inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, vector_to_center);
+            assignInbounder(ctx, ball_entity, ball_pos, new_team_idx, inbound_orientation, false);
         }
     }
 
@@ -842,6 +897,7 @@ namespace madsimple {
     inline void inboundViolationSystem(Engine &ctx, IsWorldClock &)
     {
         GameState &gameState = ctx.singleton<GameState>();
+        const GridState *grid = ctx.data().grid;
 
         // This is the conditional check. If this isn't true, the system does nothing.
         if (!(gameState.inboundingInProgress > 0.5f && gameState.inboundClock <= 0.f)) {
@@ -867,11 +923,13 @@ namespace madsimple {
         });
 
         if (ball_to_turnover_id != ENTITY_ID_PLACEHOLDER) {
-            auto ball_query = ctx.query<Entity, Grabbed>();
-            ctx.iterateQuery(ball_query, [&](Entity ball_e, Grabbed &grabbed) {
-                if (ball_e.id == (int32_t)ball_to_turnover_id) {
+            auto ball_query = ctx.query<Position, Entity, Grabbed>();
+            ctx.iterateQuery(ball_query, [&](Position &ball_pos, Entity ball_entity, Grabbed &grabbed) {
+                if (ball_entity.id == (int32_t)ball_to_turnover_id) {
                     grabbed = {false, ENTITY_ID_PLACEHOLDER};
-                    assignInbounder(ctx, ball_e, new_team_idx, true);
+                    Vector3 vector_to_center = Vector3{grid->startX, grid->startY, 0.f} - ball_pos.position;
+                    Quat inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, vector_to_center);
+                    assignInbounder(ctx, ball_entity, ball_pos, new_team_idx, inbound_orientation, false);
                 }
             });
         }
@@ -882,18 +940,21 @@ namespace madsimple {
                     const Config &)
     {
         TaskGraphBuilder &builder = taskgraph_mgr.init(0);
+
+        auto actionMaskingNode = builder.addToGraph<ParallelForNode<Engine, actionMaskSystem,
+            ActionMask, GrabCooldown, InPossession, Inbounding>>({});
         
         auto moveAgentSystemNode = builder.addToGraph<ParallelForNode<Engine, moveAgentSystem,
-            Action, Position, InPossession, Orientation>>({});
+            Action, ActionMask, Position, InPossession, Orientation>>({actionMaskingNode});
 
         auto grabSystemNode = builder.addToGraph<ParallelForNode<Engine, grabSystem,
-            Entity, Action, Position, InPossession, Team, GrabCooldown>>({});
+            Entity, Action, ActionMask, Position, InPossession, Team, GrabCooldown>>({actionMaskingNode});
 
         auto passSystemNode = builder.addToGraph<ParallelForNode<Engine, passSystem,
-            Entity, Action, Orientation, InPossession, Inbounding>>({});
+            Entity, Action, ActionMask, Orientation, InPossession, Inbounding>>({actionMaskingNode});
         
         auto shootSystemNode = builder.addToGraph<ParallelForNode<Engine, shootSystem,
-            Entity, Action, Position, Orientation, Inbounding, InPossession, Team>>({});
+            Entity, Action, ActionMask, Position, Orientation, Inbounding, InPossession, Team>>({actionMaskingNode});
 
         auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
             Position, BallPhysics, Grabbed>>({grabSystemNode, passSystemNode, shootSystemNode});
@@ -955,7 +1016,8 @@ namespace madsimple {
         for (int i = 0; i < NUM_AGENTS; i++) 
         {
             Entity agent = ctx.makeEntity<Agent>();
-            ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0, 0, 0};
+            ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0};
+            ctx.get<ActionMask>(agent) = ActionMask{0.f, 0.f, 0.f, 0.f};
             ctx.get<Position>(agent) = Position 
             {
                 Vector3{

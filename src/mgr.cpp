@@ -331,9 +331,14 @@ namespace madsimple {
     Tensor Manager::actionTensor() const
     {
         return impl_->exportTensor(ExportID::Action, TensorElementType::Int32,
-            {impl_->cfg.numWorlds, NUM_AGENTS, 8}); // 8 actions: moveSpeed, moveAngle, rotate, grab, pass, shoot, steal, contest
+            {impl_->cfg.numWorlds, NUM_AGENTS, 6}); // 8 actions: moveSpeed, moveAngle, rotate, grab, pass, shoot, steal, contest
     }
 
+    Tensor Manager::actionMaskTensor() const
+    {
+        return impl_->exportTensor(ExportID::ActionMask, TensorElementType::Float32,
+            {impl_->cfg.numWorlds, NUM_AGENTS, 4});
+    }
 
     Tensor Manager::observationTensor() const
     {

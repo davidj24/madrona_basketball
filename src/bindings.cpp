@@ -123,6 +123,7 @@ NB_MODULE(_madrona_simple_example_cpp, m) {
 
         //=================================================== Agent Tensors ===================================================
         .def("action_tensor", &Manager::actionTensor)
+        .def("action_mask_tensor", &Manager::actionMaskTensor)
         .def("observation_tensor", &Manager::observationTensor)
         .def("reward_tensor", &Manager::rewardTensor)
         .def("done_tensor", &Manager::doneTensor)

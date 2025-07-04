@@ -20,6 +20,7 @@ namespace madsimple {
 
         // Agent Exports
         Action,
+        ActionMask,
         AgentPos,
         Reward,
         Done,
@@ -108,7 +109,6 @@ namespace madsimple {
     struct ActionMask
     {
         float can_move;
-        float can_rotate;
         float can_grab;
         float can_pass;
         float can_shoot;
