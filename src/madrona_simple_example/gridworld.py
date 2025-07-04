@@ -33,7 +33,7 @@ class GridWorld:
 
         self.force_reset = self.sim.reset_tensor().to_torch()
         self.actions = self.sim.action_tensor().to_torch()
-        self.observations = self.sim.observation_tensor().to_torch()
+        self.observations = self.sim.observations_tensor().to_torch()
         self.rewards = self.sim.reward_tensor().to_torch()
         self.dones = self.sim.done_tensor().to_torch()
 

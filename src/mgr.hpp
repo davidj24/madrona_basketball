@@ -46,7 +46,7 @@ public:
     MGR_EXPORT madrona::py::Tensor actionTensor() const;
     MGR_EXPORT madrona::py::Tensor actionMaskTensor() const;
     MGR_EXPORT madrona::py::Tensor agentPosTensor() const;
-    MGR_EXPORT madrona::py::Tensor observationTensor() const;
+    MGR_EXPORT madrona::py::Tensor observationsTensor() const;
     MGR_EXPORT madrona::py::Tensor orientationTensor() const;
     MGR_EXPORT madrona::py::Tensor agentTeamTensor() const;
     MGR_EXPORT madrona::py::Tensor rewardTensor() const;

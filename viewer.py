@@ -149,7 +149,7 @@ class MadronaPipeline:
     def get_simulation_data(self):
         """Get the current state from your Madrona simulation"""
         try:
-            obs_tensor = self.sim.observation_tensor()
+            obs_tensor = self.sim.observations_tensor()
             agent_pos_tensor = self.sim.agent_pos_tensor()
             agent_team_tensor = self.sim.agent_team_tensor()
             action_tensor = self.sim.action_tensor() 

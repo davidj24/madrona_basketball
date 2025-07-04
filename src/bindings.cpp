@@ -125,7 +125,7 @@ NB_MODULE(_madrona_simple_example_cpp, m) {
         .def("action_tensor", &Manager::actionTensor)
         .def("action_mask_tensor", &Manager::actionMaskTensor)
         .def("agent_pos_tensor", &Manager::agentPosTensor)
-        .def("observation_tensor", &Manager::observationTensor)
+        .def("observations_tensor", &Manager::observationsTensor)
         .def("reward_tensor", &Manager::rewardTensor)
         .def("done_tensor", &Manager::doneTensor)
         .def("agent_possession_tensor", &Manager::agentPossessionTensor)

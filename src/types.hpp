@@ -149,6 +149,11 @@ namespace madsimple {
         float cooldown;
     };
 
+    struct Observations
+    {
+        std::array<float, 128> observationsArray; // Change size as needed
+    };
+
 // ======================================================================================================= Ball Components =======================================================================================================
 
     struct Grabbed 
@@ -169,7 +174,6 @@ namespace madsimple {
 // ======================================================================================================= Hoop Components =======================================================================================================
     struct ImAHoop{}; // This component is just a tag to differenitate that a hoop entity is a hoop
 
-    // If the ball is FULLY within the scoring zone, it should count as a made basket
     struct ScoringZone
     {
         float radius;
