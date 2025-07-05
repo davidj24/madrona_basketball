@@ -896,6 +896,13 @@ namespace madsimple {
         }
     }
 
+
+    inline void fillObservationsSystem(Engine &ctx, Observations &observations)
+    {
+        auto &observations_array = observations.observationsArray;
+        uint32_t index = 0;
+    };
+
     // =================================================== Task Graph ===================================================
     void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
                     const Config &)
