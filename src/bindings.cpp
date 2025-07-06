@@ -132,6 +132,8 @@ NB_MODULE(_madrona_simple_example_cpp, m) {
         .def("agent_entity_id_tensor", &Manager::agentEntityIDTensor)
         .def("agent_team_tensor", &Manager::agentTeamTensor)
         .def("orientation_tensor", &Manager::orientationTensor)
+        .def("agent_stats_tensor", &Manager::agentStatsTensor)
+        
 
 
         //=================================================== Basketball Tensors ===================================================

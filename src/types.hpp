@@ -24,6 +24,7 @@ namespace madsimple {
         AgentPossession,
         Orientation,
         TeamData,
+        AgentStats,
 
         // Basketball Exports
         BasketballPos,
@@ -155,6 +156,12 @@ namespace madsimple {
         std::array<float, 128> observationsArray; // Change size as needed
     };
 
+    struct Stats
+    {
+        float points;
+        float fouls;
+        // Add assists later if necessary
+    };
 // ======================================================================================================= Ball Components =======================================================================================================
 
     struct Grabbed 
@@ -205,7 +212,8 @@ namespace madsimple {
         InPossession,
         Orientation,
         Inbounding,
-        Team
+        Team,
+        Stats
     > {};
 
     struct Basketball : public madrona::Archetype<

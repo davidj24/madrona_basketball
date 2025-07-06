@@ -395,7 +395,11 @@ namespace madsimple {
     }
 
 
-
+    Tensor Manager::agentStatsTensor() const
+    {
+        return impl_->exportTensor(ExportID::AgentStats, TensorElementType::Int32,
+            {impl_->cfg.numWorlds, NUM_AGENTS, 2});  // points and fouls
+    }
 
     //=================================================== Basketball Tensors ===================================================
     Tensor Manager::basketballPosTensor() const

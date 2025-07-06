@@ -53,6 +53,8 @@ public:
     MGR_EXPORT madrona::py::Tensor doneTensor() const;
     MGR_EXPORT madrona::py::Tensor agentPossessionTensor() const;
     MGR_EXPORT madrona::py::Tensor agentEntityIDTensor() const;
+    MGR_EXPORT madrona::py::Tensor agentStatsTensor() const;
+    
 
 
     //=================================================== Basketball Tensors ===================================================

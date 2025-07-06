@@ -155,6 +155,7 @@ namespace madsimple {
         registry.registerComponent<Orientation>();
         registry.registerComponent<Team>();
         registry.registerComponent<GrabCooldown>();
+        registry.registerComponent<Stats>();
 
 
         // ================================================== Ball Components ==================================================
@@ -185,6 +186,7 @@ namespace madsimple {
         registry.exportColumn<Agent, InPossession>((uint32_t)ExportID::AgentPossession);
         registry.exportColumn<Agent, Team>((uint32_t)ExportID::TeamData);
         registry.exportColumn<Agent, Orientation>((uint32_t)ExportID::Orientation);
+        registry.exportColumn<Agent, Stats>((uint32_t)ExportID::AgentStats);
 
         registry.exportColumn<Basketball, Position>((uint32_t)ExportID::BasketballPos);
         registry.exportColumn<Basketball, BallPhysics>((uint32_t)ExportID::BallPhysicsData);
@@ -466,9 +468,9 @@ namespace madsimple {
 
 
         // ======================== DEVIATION TUNERS ==============================
-        float dist_deviation_per_meter = 0.0f;
+        float dist_deviation_per_meter = .2f;
         float def_deviation_per_meter = .0f; 
-        float vel_deviation_factor = 1.f;
+        float vel_deviation_factor = 2.f;
 
 
         // 1. Mess up angle based on distance
@@ -505,7 +507,7 @@ namespace madsimple {
         // 3. Mess up angle based on agent velocity
         float deviation_from_velocity = 0.0f;
         if (action.moveSpeed > 0) {
-            float vel_stddev = vel_deviation_factor/10 * action.moveSpeed;
+            float vel_stddev = vel_deviation_factor/100 * action.moveSpeed;
             std::normal_distribution<float> vel_dist(0.0f, vel_stddev);
             deviation_from_velocity = vel_dist(rng);
         }
@@ -705,19 +707,25 @@ namespace madsimple {
             float distance_to_hoop = std::sqrt((ball_pos.position.x - hoop_pos.position.x) * (ball_pos.position.x - hoop_pos.position.x) + 
                                             (ball_pos.position.y - hoop_pos.position.y) * (ball_pos.position.y - hoop_pos.position.y));
 
-            if (distance_to_hoop <= scoring_zone.radius && ball_physics.inFlight && gameState.liveBall == 1.f) 
+            if (distance_to_hoop <= scoring_zone.radius && ball_physics.inFlight) 
             {
                 // Use the point value that was calculated when the shot was taken
                 int32_t points_scored = ball_physics.shotPointValue;
                 
                 // Find which team is defending this hoop (has defendingHoopID == hoop_entity.id)
                 uint32_t inbounding_team_idx = 0; // Default fallback
-                auto defending_team_query = ctx.query<Team>();
-                ctx.iterateQuery(defending_team_query, [&](Team &team) {
+                auto defending_team_query = ctx.query<Entity, Team, Stats>();
+                ctx.iterateQuery(defending_team_query, [&](Entity agent_entity, Team &team, Stats &agent_stats) 
+                {
                     if (team.defendingHoopID == (uint32_t)hoop_entity.id) 
                     {
                         inbounding_team_idx = (uint32_t)team.teamIndex;
                         return; // Found the defending team
+                    }
+
+                    if (agent_entity.id == ball_physics.shotByAgentID)
+                    {
+                        agent_stats.points += ball_physics.shotPointValue;
                     }
                 });
                 
@@ -805,10 +813,10 @@ namespace madsimple {
         }
 
         // Reset all agents
-        auto agent_query = ctx.query<Action, Position, Reset, Inbounding, Done, CurStep, InPossession, Orientation, GrabCooldown>();
+        auto agent_query = ctx.query<Action, Position, Reset, Inbounding, Done, CurStep, InPossession, Orientation, GrabCooldown, Stats>();
         float agent_start_x[4] = {grid->startX - 2.0f, grid->startX - 1.0f, grid->startX + 0.0f, grid->startX + 1.0f};
         int agent_i = 0;
-        ctx.iterateQuery(agent_query, [&](Action &action, Position &pos, Reset &reset, Inbounding &inbounding, Done &done, CurStep &curstep, InPossession &inpos, Orientation &orient, GrabCooldown &cooldown) 
+        ctx.iterateQuery(agent_query, [&](Action &action, Position &pos, Reset &reset, Inbounding &inbounding, Done &done, CurStep &curstep, InPossession &inpos, Orientation &orient, GrabCooldown &cooldown, Stats &agent_stats) 
         {
             action = Action{0, 0, 0, 0, 0, 0};
             float x = (agent_i < 4) ? agent_start_x[agent_i] : grid->startX;
@@ -820,6 +828,7 @@ namespace madsimple {
             inpos = {false, ENTITY_ID_PLACEHOLDER, 2}; // Initialize with 2 points (default)
             orient = Orientation{Quat::id()};
             cooldown = GrabCooldown{0.f};
+            agent_stats = {0.f, 0.f};
             agent_i++;
         });
 
@@ -1110,6 +1119,11 @@ namespace madsimple {
 
     };
 
+
+    // inline void callFoulSystem(Engine &ctx,
+    //                            Position agent_position,
+    //                            Action agent_action,)
+
     // =================================================== Task Graph ===================================================
     void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
                     const Config &)
@@ -1273,6 +1287,7 @@ namespace madsimple {
             ctx.get<InPossession>(agent) = {false, ENTITY_ID_PLACEHOLDER, 2};
             ctx.get<Orientation>(agent) = Orientation {Quat::id()};
             ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
+            ctx.get<Stats>(agent) = {0.f, 0.f};
             
             // Use actual hoop entity IDs from gameState
             uint32_t defending_hoop_id = (i % 2 == 0) ? gameState.team0Hoop : gameState.team1Hoop;
@@ -1289,5 +1304,9 @@ namespace madsimple {
             ctx.get<Grabbed>(basketball) = Grabbed {false, ENTITY_ID_PLACEHOLDER};
             ctx.get<BallPhysics>(basketball) = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2};
         }
+
+
+
+
     }
 }

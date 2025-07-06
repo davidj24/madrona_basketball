@@ -165,6 +165,7 @@ class MadronaPipeline:
             ball_entity_id_tensor = self.sim.ball_entity_id_tensor()
             game_state_tensor = self.sim.game_state_tensor()
             orientation_tensor = self.sim.orientation_tensor()
+            agent_stats_tensor = self.sim.agent_stats_tensor()
             
             return {
                 'observations': obs_tensor.to_torch().detach().cpu().numpy(),
@@ -182,7 +183,8 @@ class MadronaPipeline:
                 'agent_entity_ids': agent_entity_id_tensor.to_torch().detach().cpu().numpy(),
                 'ball_entity_ids': ball_entity_id_tensor.to_torch().detach().cpu().numpy(),
                 'orientation': orientation_tensor.to_torch().detach().cpu().numpy(),
-                'game_state': game_state_tensor.to_torch().detach().cpu().numpy()
+                'game_state': game_state_tensor.to_torch().detach().cpu().numpy(),
+                'agent_stats' : agent_stats_tensor.to_torch().detach().cpu().numpy()
             }
         except Exception as e:
             print(f"Error getting simulation data: {e}")
