@@ -971,7 +971,9 @@ namespace madsimple {
     }
 
 
+
     inline void fillObservationsSystem(Engine &ctx, 
+                                       Entity agent_entity,
                                        Observations &observations, 
                                        Position &agent_pos, 
                                        Orientation &agent_orientation, 
@@ -994,7 +996,7 @@ namespace madsimple {
         observations_array[index++] = agent_orientation.orientation.y;
         observations_array[index++] = agent_orientation.orientation.z;
         observations_array[index++] = in_possession.hasBall;
-        observations_array[index++] = in_possession.pointsWorth; // How many points this agent would get if they scored
+        observations_array[index++] = in_possession.pointsWorth; // How many points "I" would get if "I" scored from here
         observations_array[index++] = inbounding.imInbounding;
         observations_array[index++] = team.teamIndex;
         observations_array[index++] = grab_cooldown.cooldown;
@@ -1005,11 +1007,24 @@ namespace madsimple {
         observations_array[index++] = gameState.inboundClock;
         observations_array[index++] = gameState.period;
         observations_array[index++] = gameState.inboundingInProgress;
-        observations_array[index++] = gameState.team0Score;
-        observations_array[index++] = gameState.team1Score;
+
+        if (agent_team.teamIndex == 0) 
+        {
+            float our_score = gameState.team0Score;
+            float opponents_score = gameState.team1Score;
+        }
+        else 
+        {
+            float our_score = gameState.team1Score;
+            float opponents_score = gameState.team0Score;
+        }
+        observations_array[index++] = our_score
+        observations_array[index++] = gameState.opponents_score
         observations_array[index++] = gameState.teamInPossession;
         observations_array[index++] = gameState.liveBall;
         
+
+        // Ball State
         auto ball_query = ctx.query<BallPhysics, Grabbed>();
         ctx.iterateQuery(ball_query, [&] (BallPhysics &ball_physics, Grabbed &grabbed)
         {
@@ -1023,6 +1038,35 @@ namespace madsimple {
             observations_array[index++] = ball_physics.shotByTeamID;
             observations_array[index++] = ball_physics.shotPointValue;
         });
+
+
+        // Other Agents State
+        ctx.iterateQuery(ctx.query<Entity, Position, Orientation, InPossession, Inbounding, Team, GrabCooldown>, [&] (Entity other_agent_entity, Position &other_agent_pos, 
+                                                                                                              Orientation &other_agent_orientation,
+                                                                                                              InPossession &other_agent_in_possession, 
+                                                                                                              Inbounding &other_agent_inbounding, 
+                                                                                                              Team &other_agent_team, 
+                                                                                                              GrabCooldown &other_agent_grab_cooldown)
+        {
+            if (other_agent_entity.id == agent_entity) {return;}
+
+            if (other_agent_team.teamindex == agent_team.teamIndex) // This is a teammate
+            {
+
+            }
+            observations_array[index++] = other_agent_agent_pos.position.x;
+            observations_array[index++] = other_agent_agent_pos.position.y;
+            observations_array[index++] = other_agent_agent_pos.position.z;
+            observations_array[index++] = other_agent_agent_orientation.orientation.w;
+            observations_array[index++] = other_agent_agent_orientation.orientation.x;
+            observations_array[index++] = other_agent_agent_orientation.orientation.y;
+            observations_array[index++] = other_agent_agent_orientation.orientation.z;
+            observations_array[index++] = other_agent_in_possession.hasBall;
+            observations_array[index++] = other_agent_in_possession.pointsWorth; // How many points this agent would get if they scored
+            observations_array[index++] = other_agent_inbounding.imInbounding;
+            observations_array[index++] = other_agent_team.teamIndex;
+            observations_array[index++] = other_agent_grab_cooldown.cooldown;
+        })
 
     };
 
