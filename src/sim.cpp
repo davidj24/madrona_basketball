@@ -653,6 +653,44 @@ namespace madsimple {
     }
 
 
+
+    inline void agentCollisionSystem(Engine &ctx, 
+                                     Entity entity_a, 
+                                     Position &entity_a_pos,
+                                     InPossession &in_possession_a)
+    {
+        // Query for all agents to get their positions.
+        // We need Entity to compare IDs and Position to read/write locations.
+        auto agent_query = ctx.query<Entity, Position, InPossession>();
+        ctx.iterateQuery(agent_query, [&](Entity entity_b, Position &entity_b_pos, InPossession &in_possession_b) 
+        {
+            
+            // Don't check an agent against itself.
+            // Only check pairs where A's ID is less than B's to avoid checking each pair twice.
+            if (entity_a.id >= entity_b.id) {return;}
+
+            // Calculate the vector and distance between the two agents
+            Vector3 vec_between_agents = (entity_b_pos.position - entity_a_pos.position);
+            float dist_between_agents = vec_between_agents.length();
+
+            if (dist_between_agents < AGENT_SIZE_M) 
+            {
+                // Calculate how much they are overlapping. If dist is 0, provide a small default push.
+                float penetration_depth = AGENT_SIZE_M - dist_between_agents;
+                Vector3 correction_vec = (dist_between_agents > 1e-5f) ? (vec_between_agents / dist_between_agents) : Vector3{1.f, 0.f, 0.f};
+
+                // Move each agent away from the other by half of the overlap.
+                // This "resolves" the collision by pushing them apart.
+                entity_a_pos.position.x -= correction_vec.x * penetration_depth * 0.5f;
+                entity_a_pos.position.y -= correction_vec.y * penetration_depth * 0.5f;
+                
+                entity_b_pos.position.x += correction_vec.x * penetration_depth * 0.5f;
+                entity_b_pos.position.y += correction_vec.y * penetration_depth * 0.5f;
+            }
+        });
+    }
+
+
     //=================================================== Hoop Systems ===================================================
     inline void scoreSystem(Engine &ctx,
                         Entity hoop_entity,
@@ -878,7 +916,7 @@ namespace madsimple {
             // Check if agent is within touch distance (0.2 meters)
             float distance = (ball_pos.position - agent_pos.position).length();
             
-            if (distance <= 0.2f) 
+            if (distance <= AGENT_SIZE_M) 
             {
                 ball_physics.lastTouchedByAgentID = (uint32_t)agent_entity.id;
                 ball_physics.lastTouchedByTeamID = (uint32_t)team.teamIndex;
@@ -979,7 +1017,7 @@ namespace madsimple {
                                        Orientation &agent_orientation, 
                                        InPossession &in_possession, 
                                        Inbounding &inbounding, 
-                                       Team &team, 
+                                       Team &agent_team, 
                                        GrabCooldown &grab_cooldown)
     {
         auto &observations_array = observations.observationsArray;
@@ -998,7 +1036,7 @@ namespace madsimple {
         observations_array[index++] = in_possession.hasBall;
         observations_array[index++] = in_possession.pointsWorth; // How many points "I" would get if "I" scored from here
         observations_array[index++] = inbounding.imInbounding;
-        observations_array[index++] = team.teamIndex;
+        observations_array[index++] = agent_team.teamIndex;
         observations_array[index++] = grab_cooldown.cooldown;
         
         // Game State
@@ -1008,18 +1046,20 @@ namespace madsimple {
         observations_array[index++] = gameState.period;
         observations_array[index++] = gameState.inboundingInProgress;
 
+        float our_score = 0.f;
+        float opponents_score = 0.f;
         if (agent_team.teamIndex == 0) 
         {
-            float our_score = gameState.team0Score;
-            float opponents_score = gameState.team1Score;
+            our_score = gameState.team0Score;
+            opponents_score = gameState.team1Score;
         }
         else 
         {
-            float our_score = gameState.team1Score;
-            float opponents_score = gameState.team0Score;
+            our_score = gameState.team1Score;
+            opponents_score = gameState.team0Score;
         }
-        observations_array[index++] = our_score
-        observations_array[index++] = gameState.opponents_score
+        observations_array[index++] = our_score;
+        observations_array[index++] = opponents_score;
         observations_array[index++] = gameState.teamInPossession;
         observations_array[index++] = gameState.liveBall;
         
@@ -1041,32 +1081,32 @@ namespace madsimple {
 
 
         // Other Agents State
-        ctx.iterateQuery(ctx.query<Entity, Position, Orientation, InPossession, Inbounding, Team, GrabCooldown>, [&] (Entity other_agent_entity, Position &other_agent_pos, 
+        ctx.iterateQuery(ctx.query<Entity, Position, Orientation, InPossession, Inbounding, Team, GrabCooldown>(), [&] (Entity other_agent_entity, Position &other_agent_pos, 
                                                                                                               Orientation &other_agent_orientation,
                                                                                                               InPossession &other_agent_in_possession, 
                                                                                                               Inbounding &other_agent_inbounding, 
                                                                                                               Team &other_agent_team, 
                                                                                                               GrabCooldown &other_agent_grab_cooldown)
         {
-            if (other_agent_entity.id == agent_entity) {return;}
+            if (other_agent_entity.id == agent_entity.id) {return;}
 
-            if (other_agent_team.teamindex == agent_team.teamIndex) // This is a teammate
+            if (other_agent_team.teamIndex == agent_team.teamIndex) // This is a teammate
             {
 
             }
-            observations_array[index++] = other_agent_agent_pos.position.x;
-            observations_array[index++] = other_agent_agent_pos.position.y;
-            observations_array[index++] = other_agent_agent_pos.position.z;
-            observations_array[index++] = other_agent_agent_orientation.orientation.w;
-            observations_array[index++] = other_agent_agent_orientation.orientation.x;
-            observations_array[index++] = other_agent_agent_orientation.orientation.y;
-            observations_array[index++] = other_agent_agent_orientation.orientation.z;
+            observations_array[index++] = other_agent_pos.position.x;
+            observations_array[index++] = other_agent_pos.position.y;
+            observations_array[index++] = other_agent_pos.position.z;
+            observations_array[index++] = other_agent_orientation.orientation.w;
+            observations_array[index++] = other_agent_orientation.orientation.x;
+            observations_array[index++] = other_agent_orientation.orientation.y;
+            observations_array[index++] = other_agent_orientation.orientation.z;
             observations_array[index++] = other_agent_in_possession.hasBall;
             observations_array[index++] = other_agent_in_possession.pointsWorth; // How many points this agent would get if they scored
             observations_array[index++] = other_agent_inbounding.imInbounding;
             observations_array[index++] = other_agent_team.teamIndex;
             observations_array[index++] = other_agent_grab_cooldown.cooldown;
-        })
+        });
 
     };
 
@@ -1118,6 +1158,9 @@ namespace madsimple {
 
         auto updatePointsWorthNode = builder.addToGraph<ParallelForNode<Engine, updatePointsWorthSystem,
             Position, InPossession, Team>>({});
+
+        auto agentCollisionNode = builder.addToGraph<ParallelForNode<Engine, agentCollisionSystem,
+            Entity, Position, InPossession>>({moveAgentSystemNode});
     }
 
     // =================================================== Sim Creation ===================================================
