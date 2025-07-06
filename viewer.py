@@ -568,7 +568,8 @@ class MadronaPipeline:
         if keys[pygame.K_COMMA]: rotate1 = -1
         elif keys[pygame.K_PERIOD]: rotate1 = 1
         if keys[pygame.K_KP0]: grab1 = 1
-        if keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL]: pass_ball1 = 1
+        if keys[pygame.K_RCTRL] : pass_ball1 = 1
+        if keys[pygame.K_RSHIFT] : shoot_ball1 = 1
         self.sim.set_action(0, 0, move_speed, move_angle, rotate, grab, pass_ball, shoot_ball)
         self.sim.set_action(0, 1, move_speed1, move_angle1, rotate1, grab1, pass_ball1, shoot_ball1)
 

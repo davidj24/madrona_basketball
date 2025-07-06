@@ -47,38 +47,6 @@ namespace madsimple {
         return Quat::angleAxis(rotation_angle, rotation_axis);
     }
 
-    inline int32_t getShotPointValue(Position shot_pos, Position hoop_pos, float distance_to_hoop) 
-    {
-        // --- Logic ---
-
-        // 1. Check if the shot is in the corner lane, relative to the court's position.
-        bool isInCornerLane = (shot_pos.position.y < COURT_MIN_Y + CORNER_3_FROM_SIDELINE_M || 
-                            shot_pos.position.y > COURT_MIN_Y + COURT_WIDTH_M - CORNER_3_FROM_SIDELINE_M);
-
-        if (isInCornerLane) {
-            // 2. If so, check if the shot is within the corner's length, relative to the court's position.
-            bool isShootingAtLeftHoop = hoop_pos.position.x < WORLD_WIDTH_M / 2.0f;
-            
-            if (isShootingAtLeftHoop) {
-                if (shot_pos.position.x <= COURT_MIN_X + CORNER_3_LENGTH_FROM_BASELINE_M) {
-                    return 3;
-                }
-            } else { // Shooting at the right hoop
-                if (shot_pos.position.x >= COURT_MIN_X + COURT_LENGTH_M - CORNER_3_LENGTH_FROM_BASELINE_M) {
-                    return 3;
-                }
-            }
-        }
-
-        // 3. If not a valid corner 3, check the distance against the arc.
-        if (distance_to_hoop > ARC_RADIUS_M) {
-            return 3;
-        }
-
-        // 4. If none of the 3-point conditions are met, it is a 2-point shot.
-        return 2;
-    }
-
     inline void assignInbounder(Engine &ctx, Entity ball_entity, Position ball_pos, uint32_t new_team_idx, Quat new_orientation, bool is_oob)
     {
         GameState &gameState = ctx.singleton<GameState>();
@@ -124,7 +92,40 @@ namespace madsimple {
         return (Vector3{grid->startX, grid->startY, 0.f} - entity_pos.position).normalize();
     }
     
-    
+    inline int32_t getShotPointValue(Position shot_pos, Position hoop_pos) 
+    {
+        float distance_to_hoop = (shot_pos.position - hoop_pos.position).length();
+        
+        // 1. Check if the shot is in the corner lane, relative to the court's position.
+        bool isInCornerLane = (shot_pos.position.y < COURT_MIN_Y + CORNER_3_FROM_SIDELINE_M || 
+                            shot_pos.position.y > COURT_MIN_Y + COURT_WIDTH_M - CORNER_3_FROM_SIDELINE_M);
+
+        if (isInCornerLane) {
+            // 2. If so, check if the shot is within the corner's length, relative to the court's position.
+            bool isShootingAtLeftHoop = hoop_pos.position.x < WORLD_WIDTH_M / 2.0f;
+            
+            if (isShootingAtLeftHoop) {
+                if (shot_pos.position.x <= COURT_MIN_X + CORNER_3_LENGTH_FROM_BASELINE_M) {
+                    return 3;
+                }
+            } else { // Shooting at the right hoop
+                if (shot_pos.position.x >= COURT_MIN_X + COURT_LENGTH_M - CORNER_3_LENGTH_FROM_BASELINE_M) {
+                    return 3;
+                }
+            }
+        }
+
+        // 3. If not a valid corner 3, check the distance against the arc.
+        // If the shot is beyond the 3-point arc distance, it's a 3-pointer
+        if (distance_to_hoop >= ARC_RADIUS_M) {
+            return 3;
+        }
+
+        // 4. If none of the 3-point conditions are met, it is a 2-point shot.
+        return 2;
+    }
+
+
     // =================================================== Registry ===================================================
     void Sim::registerTypes(ECSRegistry &registry, const Config &)
     {
@@ -276,7 +277,51 @@ namespace madsimple {
         }
     }
 
+    
+    
+    inline void updatePointsWorthSystem(Engine &ctx,
+                                        Position &agent_pos,
+                                        InPossession &in_possession,
+                                        Team &team)
+    {
+        // Get all hoop positions
+        Position hoop_positions[NUM_HOOPS];
+        uint32_t hoop_ids[NUM_HOOPS];
+        int hoop_idx = 0;
+        
+        auto hoop_query = ctx.query<Entity, Position, ImAHoop>();
+        ctx.iterateQuery(hoop_query, [&](Entity hoop_entity, Position &hoop_pos, ImAHoop &) {
+            if (hoop_idx < NUM_HOOPS) {
+                hoop_positions[hoop_idx] = hoop_pos;
+                hoop_ids[hoop_idx] = hoop_entity.id;
+                hoop_idx++;
+            }
+        });
 
+        // Find the hoop this agent should be shooting at (opposing team's hoop)
+        Position target_hoop_pos;
+        bool found_target_hoop = false;
+        
+        for (int i = 0; i < hoop_idx; i++) 
+        {
+            if (hoop_ids[i] != team.defendingHoopID) 
+            {
+                target_hoop_pos = hoop_positions[i];
+                found_target_hoop = true;
+                break;
+            }
+        }
+        
+        // Calculate points worth for this agent's current position
+        if (found_target_hoop) 
+        {
+            in_possession.pointsWorth = getShotPointValue(agent_pos, target_hoop_pos);
+        } 
+        else 
+        {
+            in_possession.pointsWorth = 2; // Default to 2 points if we can't find the target hoop
+        }
+    }
 
     //=================================================== Agent Systems ===================================================
     inline void grabSystem(Engine &ctx,
@@ -332,6 +377,12 @@ namespace madsimple {
                 grabbed.isGrabbed = true;
                 ball_physics.inFlight = false; // Make it so the ball isn't "in flight" anymore
                 ball_physics.velocity = Vector3::zero(); // And change its velocity to be zero
+                
+                // Clear shot information since this is a new possession
+                ball_physics.shotByAgentID = ENTITY_ID_PLACEHOLDER;
+                ball_physics.shotByTeamID = ENTITY_ID_PLACEHOLDER;
+                ball_physics.shotPointValue = 2; // Default to 2 points
+                
                 gameState.teamInPossession = (float)team.teamIndex; // Update the team in possession
                 gameState.liveBall = 1.f;
             }
@@ -480,14 +531,25 @@ namespace madsimple {
         {
             if (grabbed.holderEntityID == agent_entity.id)
             {
+                // Calculate the point value of this shot from the agent's current position
+                int32_t shot_point_value = getShotPointValue(agent_pos, attacking_hoop_pos);
+                
                 grabbed.isGrabbed = false;
                 grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER;
                 in_possession.hasBall = false;
                 in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
                 inbounding.imInbounding = false;
-                ball_physics.pointsWorth = getShotPointValue(agent_pos, attacking_hoop_pos, distance_to_hoop);
                 ball_physics.velocity = final_shot_vec * .1f;
                 ball_physics.inFlight = true;
+                
+                // Set who shot the ball for scoring system (these don't change after touching)
+                ball_physics.shotByAgentID = (uint32_t)agent_entity.id;
+                ball_physics.shotByTeamID = (uint32_t)team.teamIndex;
+                ball_physics.shotPointValue = shot_point_value;
+                
+                // Also set last touched (these can change if ball is touched after shooting)
+                ball_physics.lastTouchedByAgentID = (uint32_t)agent_entity.id;
+                ball_physics.lastTouchedByTeamID = (uint32_t)team.teamIndex;
             }
         });
     }
@@ -607,26 +669,35 @@ namespace madsimple {
 
             if (distance_to_hoop <= scoring_zone.radius && ball_physics.inFlight && gameState.liveBall == 1.f) 
             {
-                uint32_t scoring_team_idx;
-                uint32_t defending_team_idx;
+                // Use the point value that was calculated when the shot was taken
+                int32_t points_scored = ball_physics.shotPointValue;
+                
+                // Find which team is defending this hoop (has defendingHoopID == hoop_entity.id)
+                uint32_t inbounding_team_idx = 0; // Default fallback
+                auto defending_team_query = ctx.query<Team>();
+                ctx.iterateQuery(defending_team_query, [&](Team &team) {
+                    if (team.defendingHoopID == (uint32_t)hoop_entity.id) 
+                    {
+                        inbounding_team_idx = (uint32_t)team.teamIndex;
+                        return; // Found the defending team
+                    }
+                });
+                
                 Position inbound_spot;
                 Quat inbound_orientation;
 
                 if ((uint32_t)hoop_entity.id == (uint32_t)gameState.team0Hoop) 
                 {
-                    gameState.team1Score += ball_physics.pointsWorth;
-                    scoring_team_idx = 1;
-                    defending_team_idx = 0;
+                    // Someone scored on Team 0's hoop, so Team 1 gets the points
+                    gameState.team1Score += points_scored;
                     
                     // Inbound spot is on the baseline behind the hoop that was scored on.
                     inbound_spot = Position{{COURT_MIN_X, hoop_pos.position.y+(PIXELS_PER_METER/60), 0.f}};
                 } 
                 else 
                 {
-                    // Team 0 scored on Team 1's hoop. Team 1 will inbound.
-                    gameState.team0Score += ball_physics.pointsWorth;
-                    scoring_team_idx = 0;
-                    defending_team_idx = 1;
+                    // Someone scored on Team 1's hoop, so Team 0 gets the points
+                    gameState.team0Score += points_scored;
 
                     inbound_spot = Position{{COURT_MAX_X, hoop_pos.position.y+(PIXELS_PER_METER/60), 0.f}};
                 }
@@ -636,12 +707,16 @@ namespace madsimple {
                 // Set the ball's state for the inbound
                 ball_physics.inFlight = false;
                 ball_physics.velocity = Vector3::zero();
-                ball_physics.lastTouchedByID = scoring_team_idx;
                 ball_pos = inbound_spot;
+                
+                // Clear shot information since the shot scored
+                ball_physics.shotByAgentID = ENTITY_ID_PLACEHOLDER;
+                ball_physics.shotByTeamID = ENTITY_ID_PLACEHOLDER;
+                ball_physics.shotPointValue = 2; // Reset to default
 
                 // Set up the inbound for the defending team.
                 inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, findVectorToCenter(ctx, ball_pos));
-                assignInbounder(ctx, ball_entity, inbound_spot, defending_team_idx, inbound_orientation, false);
+                assignInbounder(ctx, ball_entity, inbound_spot, inbounding_team_idx, inbound_orientation, false);
             }
         });
     }
@@ -704,7 +779,7 @@ namespace madsimple {
             inbounding = Inbounding{false, true};
             done.episodeDone = 1.f; // Signal to python that a reset happened
             curstep.step = 0;
-            inpos = {false, ENTITY_ID_PLACEHOLDER};
+            inpos = {false, ENTITY_ID_PLACEHOLDER, 2}; // Initialize with 2 points (default)
             orient = Orientation{Quat::id()};
             cooldown = GrabCooldown{0.f};
             agent_i++;
@@ -718,7 +793,7 @@ namespace madsimple {
             done.episodeDone = 1.f;
             curstep.step = 0;
             grabbed = Grabbed{false, ENTITY_ID_PLACEHOLDER};
-            ballphys = BallPhysics{false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, 2};
+            ballphys = BallPhysics{false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2};
         });
 
         // Reset all hoops 
@@ -797,17 +872,16 @@ namespace madsimple {
                                     Position &ball_pos,
                                     BallPhysics &ball_physics)
     {
-        auto touched_agent_query = ctx.query<Position, Team>();
-        ctx.iterateQuery(touched_agent_query, [&] (Position &agent_pos, Team &team)
+        auto touched_agent_query = ctx.query<Entity, Position, Team>();
+        ctx.iterateQuery(touched_agent_query, [&] (Entity agent_entity, Position &agent_pos, Team &team)
         {
-            // Check if agent is within touch distance (0.5 meters)
-            float distance = sqrt((ball_pos.position.x - agent_pos.position.x) * (ball_pos.position.x - agent_pos.position.x) +
-                                (ball_pos.position.y - agent_pos.position.y) * (ball_pos.position.y - agent_pos.position.y) +
-                                (ball_pos.position.z - agent_pos.position.z) * (ball_pos.position.z - agent_pos.position.z));
+            // Check if agent is within touch distance (0.2 meters)
+            float distance = (ball_pos.position - agent_pos.position).length();
             
             if (distance <= 0.2f) 
             {
-                ball_physics.lastTouchedByID = (uint32_t)team.teamIndex;
+                ball_physics.lastTouchedByAgentID = (uint32_t)agent_entity.id;
+                ball_physics.lastTouchedByTeamID = (uint32_t)team.teamIndex;
             }
         });
     }
@@ -832,7 +906,7 @@ namespace madsimple {
             gameState.liveBall = 0.f;
 
             // The team that did NOT last touch the ball gets possession.
-            uint32_t new_team_idx = 1 - ball_physics.lastTouchedByID;
+            uint32_t new_team_idx = 1 - ball_physics.lastTouchedByTeamID;
 
             // Find the player who had the ball and reset their position
             auto agent_query = ctx.query<InPossession, Position>();
@@ -897,10 +971,59 @@ namespace madsimple {
     }
 
 
-    inline void fillObservationsSystem(Engine &ctx, Observations &observations)
+    inline void fillObservationsSystem(Engine &ctx, 
+                                       Observations &observations, 
+                                       Position &agent_pos, 
+                                       Orientation &agent_orientation, 
+                                       InPossession &in_possession, 
+                                       Inbounding &inbounding, 
+                                       Team &team, 
+                                       GrabCooldown &grab_cooldown)
     {
         auto &observations_array = observations.observationsArray;
+        GameState &gameState = ctx.singleton<GameState>();
         uint32_t index = 0;
+
+
+        // Self State for agent:
+        observations_array[index++] = agent_pos.position.x;
+        observations_array[index++] = agent_pos.position.y;
+        observations_array[index++] = agent_pos.position.z;
+        observations_array[index++] = agent_orientation.orientation.w;
+        observations_array[index++] = agent_orientation.orientation.x;
+        observations_array[index++] = agent_orientation.orientation.y;
+        observations_array[index++] = agent_orientation.orientation.z;
+        observations_array[index++] = in_possession.hasBall;
+        observations_array[index++] = in_possession.pointsWorth; // How many points this agent would get if they scored
+        observations_array[index++] = inbounding.imInbounding;
+        observations_array[index++] = team.teamIndex;
+        observations_array[index++] = grab_cooldown.cooldown;
+        
+        // Game State
+        observations_array[index++] = gameState.gameClock;
+        observations_array[index++] = gameState.shotClock;
+        observations_array[index++] = gameState.inboundClock;
+        observations_array[index++] = gameState.period;
+        observations_array[index++] = gameState.inboundingInProgress;
+        observations_array[index++] = gameState.team0Score;
+        observations_array[index++] = gameState.team1Score;
+        observations_array[index++] = gameState.teamInPossession;
+        observations_array[index++] = gameState.liveBall;
+        
+        auto ball_query = ctx.query<BallPhysics, Grabbed>();
+        ctx.iterateQuery(ball_query, [&] (BallPhysics &ball_physics, Grabbed &grabbed)
+        {
+            observations_array[index++] = ball_physics.inFlight;
+            observations_array[index++] = ball_physics.velocity.x;
+            observations_array[index++] = ball_physics.velocity.y;
+            observations_array[index++] = ball_physics.velocity.z;
+            observations_array[index++] = ball_physics.lastTouchedByAgentID;
+            observations_array[index++] = ball_physics.lastTouchedByTeamID;
+            observations_array[index++] = ball_physics.shotByAgentID;
+            observations_array[index++] = ball_physics.shotByTeamID;
+            observations_array[index++] = ball_physics.shotPointValue;
+        });
+
     };
 
     // =================================================== Task Graph ===================================================
@@ -948,6 +1071,9 @@ namespace madsimple {
 
         auto resetSystemNode = builder.addToGraph<ParallelForNode<Engine, resetSystem,
             Reset, IsWorldClock>>({clockSystemNode, tickNode});
+
+        auto updatePointsWorthNode = builder.addToGraph<ParallelForNode<Engine, updatePointsWorthSystem,
+            Position, InPossession, Team>>({});
     }
 
     // =================================================== Sim Creation ===================================================
@@ -971,7 +1097,8 @@ namespace madsimple {
             .gameClock = TIME_PER_PERIOD,
             .shotClock = 24.0f,
             .scoredBaskets = 0.f,
-            .outOfBoundsCount = 0.f
+            .outOfBoundsCount = 0.f,
+            .inboundClock = 0.0f
         };
 
         // Make sure to add the Reset component to the WorldClock entity
@@ -979,45 +1106,7 @@ namespace madsimple {
         ctx.get<IsWorldClock>(worldClock) = {};
         ctx.get<Reset>(worldClock) = {0}; // Initialize resetNow to 0
 
-
-        std::vector<Vector3> team_colors = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
-        for (int i = 0; i < NUM_AGENTS; i++) 
-        {
-            Entity agent = ctx.makeEntity<Agent>();
-            ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0};
-            ctx.get<ActionMask>(agent) = ActionMask{0.f, 0.f, 0.f, 0.f};
-            ctx.get<Position>(agent) = Position 
-            {
-                Vector3{
-                    grid->startX - 1 - (-2*(i % 2)),
-                    grid->startY - 2 + i/2,
-                    0.f
-                }
-            };
-            ctx.get<Reset>(agent) = Reset{0};
-            ctx.get<Inbounding>(agent) = Inbounding{false, true};
-            ctx.get<Reward>(agent).r = 0.f;
-            ctx.get<Done>(agent).episodeDone = 0.f;
-            ctx.get<CurStep>(agent).step = 0;
-            ctx.get<InPossession>(agent) = {false, ENTITY_ID_PLACEHOLDER};
-            ctx.get<Orientation>(agent) = Orientation {Quat::id()};
-            ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
-            
-            uint32_t defending_hoop_id = (i % 2 == 0) ? 1 : 0;
-            ctx.get<Team>(agent) = Team{i % 2, team_colors[i % 2], defending_hoop_id};
-        };
-
-        for (int i = 0; i < NUM_BASKETBALLS; i++) 
-        {
-            Entity basketball = ctx.makeEntity<Basketball>();
-            ctx.get<Position>(basketball) = Position { Vector3{grid->startX, grid->startY, 0.f} };
-            ctx.get<Reset>(basketball) = Reset{0};
-            ctx.get<Done>(basketball).episodeDone = 0.f;
-            ctx.get<CurStep>(basketball).step = 0;
-            ctx.get<Grabbed>(basketball) = Grabbed {false, ENTITY_ID_PLACEHOLDER};
-            ctx.get<BallPhysics>(basketball) = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, 2};
-        }
-
+        // Initialize GameState and create hoops first
         GameState &gameState = ctx.singleton<GameState>();
         for (int i = 0; i < NUM_HOOPS; i++) 
         {
@@ -1072,6 +1161,46 @@ namespace madsimple {
                 .1f,
                 Vector3{hoop_pos.position.x, hoop_pos.position.y, hoop_pos.position.z}
             };
+        }
+
+        // Now create agents with proper hoop references
+        std::vector<Vector3> team_colors = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
+        for (int i = 0; i < NUM_AGENTS; i++) 
+        {
+            Entity agent = ctx.makeEntity<Agent>();
+            ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0};
+            ctx.get<ActionMask>(agent) = ActionMask{0.f, 0.f, 0.f, 0.f};
+            ctx.get<Position>(agent) = Position 
+            {
+                Vector3{
+                    grid->startX - 1 - (-2*(i % 2)),
+                    grid->startY - 2 + i/2,
+                    0.f
+                }
+            };
+            ctx.get<Reset>(agent) = Reset{0};
+            ctx.get<Inbounding>(agent) = Inbounding{false, true};
+            ctx.get<Reward>(agent).r = 0.f;
+            ctx.get<Done>(agent).episodeDone = 0.f;
+            ctx.get<CurStep>(agent).step = 0;
+            ctx.get<InPossession>(agent) = {false, ENTITY_ID_PLACEHOLDER, 2};
+            ctx.get<Orientation>(agent) = Orientation {Quat::id()};
+            ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
+            
+            // Use actual hoop entity IDs from gameState
+            uint32_t defending_hoop_id = (i % 2 == 0) ? gameState.team0Hoop : gameState.team1Hoop;
+            ctx.get<Team>(agent) = Team{i % 2, team_colors[i % 2], defending_hoop_id};
+        };
+
+        for (int i = 0; i < NUM_BASKETBALLS; i++) 
+        {
+            Entity basketball = ctx.makeEntity<Basketball>();
+            ctx.get<Position>(basketball) = Position { Vector3{grid->startX, grid->startY, 0.f} };
+            ctx.get<Reset>(basketball) = Reset{0};
+            ctx.get<Done>(basketball).episodeDone = 0.f;
+            ctx.get<CurStep>(basketball).step = 0;
+            ctx.get<Grabbed>(basketball) = Grabbed {false, ENTITY_ID_PLACEHOLDER};
+            ctx.get<BallPhysics>(basketball) = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2};
         }
     }
 }

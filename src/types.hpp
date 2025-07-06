@@ -129,6 +129,7 @@ namespace madsimple {
     {
         bool hasBall;
         uint32_t ballEntityID;
+        int32_t pointsWorth; // Points this agent would get if they scored from their current position
     };
 
     struct Inbounding
@@ -166,8 +167,11 @@ namespace madsimple {
     {
         bool inFlight;
         Vector3 velocity;
-        uint32_t lastTouchedByID; // This is a team ID of which entity last touched the ball 
-        int32_t pointsWorth; // The amount of points the ball is worth (2 or 3)
+        uint32_t lastTouchedByAgentID; // Entity ID of the specific agent who last touched the ball 
+        uint32_t lastTouchedByTeamID; // Team ID of the team that last touched the ball 
+        uint32_t shotByAgentID; // Entity ID of the agent who shot the ball (doesn't change after touching)
+        uint32_t shotByTeamID; // Team ID of the team that shot the ball (doesn't change after touching)
+        int32_t shotPointValue; // Point value of the shot when it was taken (2 or 3)
     };
 
     
