@@ -61,6 +61,8 @@ namespace madsimple {
         float outOfBoundsCount;
 
         float inboundClock;
+        float isOneOnOne; // A bool that just changes the logic for after a scored basket
+
     };
 
 
@@ -162,7 +164,17 @@ namespace madsimple {
         float fouls;
         // Add assists later if necessary
     };
-// ======================================================================================================= Ball Components =======================================================================================================
+
+    struct Attributes // Per Agent stats like how fast a given agent can move etc
+    {
+        float speed;
+        float shooting;
+        float freeThrowPercentage;
+        float reactionSpeed;
+        Vector3 currentTargetPosition;
+    };
+
+    // ======================================================================================================= Ball Components =======================================================================================================
 
     struct Grabbed 
     {
@@ -213,7 +225,8 @@ namespace madsimple {
         Orientation,
         Inbounding,
         Team,
-        Stats
+        Stats,
+        Attributes
     > {};
 
     struct Basketball : public madrona::Archetype<

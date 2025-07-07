@@ -2,7 +2,7 @@
 
 namespace madsimple {
     // ======================================== Entity Counts ========================================
-    constexpr int32_t NUM_AGENTS = 10;
+    constexpr int32_t NUM_AGENTS = 3;
     constexpr int32_t NUM_BASKETBALLS = 1;
     constexpr int32_t NUM_HOOPS = 2;
     constexpr uint32_t ENTITY_ID_PLACEHOLDER = UINT32_MAX;  // Use max value as invalid/null entity ID
@@ -35,10 +35,11 @@ namespace madsimple {
     constexpr float AGENT_SIZE_M = 0.2f; // Agent visual size for rendering
     constexpr float AGENT_ORIENTATION_ARROW_LENGTH_M = 0.5f; // Length of orientation arrow
     constexpr uint32_t NUM_OBSERVATIONS_PER_AGENT = 10; 
-    constexpr float GUARDING_DISTANCE = 1.5f; // How many meters to guard away from for hard-coded defense
+    constexpr float GUARDING_DISTANCE = .5f; // How many meters to guard away from for hard-coded defense
     
     // Movement
     constexpr float ANGLE_BETWEEN_DIRECTIONS = madrona::math::pi / 4.0f; // π/4 for 8-directional movement
+    const madrona::math::Vector3 AGENT_BASE_FORWARD = {0, 1, 0}; 
 
 
 

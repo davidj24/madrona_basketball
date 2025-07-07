@@ -11,7 +11,7 @@
 using namespace madrona;
 using namespace madrona::math;
 
-const Vector3 AGENT_BASE_FORWARD = {0, 1, 0}; 
+
 
 namespace madsimple {
     // =================================================== Helper Functions ===================================================
@@ -156,6 +156,7 @@ namespace madsimple {
         registry.registerComponent<Team>();
         registry.registerComponent<GrabCooldown>();
         registry.registerComponent<Stats>();
+        registry.registerComponent<Attributes>();
 
 
         // ================================================== Ball Components ==================================================
@@ -361,15 +362,16 @@ namespace madsimple {
             float distance_between_ball_and_player = sqrt((basketball_pos.position.x - agent_pos.position.x) * (basketball_pos.position.x - agent_pos.position.x) +
                                 (basketball_pos.position.y - agent_pos.position.y) * (basketball_pos.position.y - agent_pos.position.y));
             
-            if (distance_between_ball_and_player <= 0.5f)
+            if (distance_between_ball_and_player <= 0.3f)
             {
-                auto agent_query = ctx.query<InPossession>();
-                ctx.iterateQuery(agent_query, [&] (InPossession &other_in_possession)
+                auto agent_query = ctx.query<InPossession, GrabCooldown>();
+                ctx.iterateQuery(agent_query, [&] (InPossession &other_in_possession, GrabCooldown &robbed_agent_grab_cooldown)
                 {
                     if (other_in_possession.ballEntityID == (uint32_t)ball_entity.id) // if we're stealing from another agent
                     {
                         other_in_possession.hasBall = false;
                         other_in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
+                        robbed_agent_grab_cooldown.cooldown = SIMULATION_HZ;
                     }
                 });
 
@@ -563,7 +565,8 @@ namespace madsimple {
                             Position &agent_pos, // Note: This should now store floats
                             InPossession &in_possession,
                             Inbounding &inbounding,
-                            Orientation &agent_orientation)
+                            Orientation &agent_orientation,
+                            Attributes &attributes)
     {
         const GridState *grid = ctx.data().grid;
         if (action.rotate != 0)
@@ -579,7 +582,7 @@ namespace madsimple {
         {
             // Treat moveSpeed as a velocity in meters/second, not a distance.
             // Let's say a moveSpeed of 1 corresponds to 1 m/s.
-            float agent_velocity_magnitude = action.moveSpeed * 4;
+            float agent_velocity_magnitude = action.moveSpeed * attributes.speed * 4;
             if (in_possession.hasBall == 1) {agent_velocity_magnitude *= .8;}
 
             constexpr float angle_between_directions = ANGLE_BETWEEN_DIRECTIONS;
@@ -696,7 +699,8 @@ namespace madsimple {
     inline void hardCodeDefenseSystem(Engine &ctx,
                                 Team &defender_team,
                                 Position &defender_pos,
-                                Action &defender_action)
+                                Action &defender_action,
+                                Attributes &defender_attributes)
     {
         GameState &gameState = ctx.singleton<GameState>();
 
@@ -706,6 +710,7 @@ namespace madsimple {
             return;
         }
 
+        defender_action.grab = 1.f;
         Vector3 guarding_pos; // The place we want our defensive agent to go to to defend
         bool found_offender = false;
         auto agent_with_ball_query = ctx.query<Position, Team, InPossession>();
@@ -730,7 +735,15 @@ namespace madsimple {
             return;
         }
 
-        Vector3 move_vector = guarding_pos - defender_pos.position;
+        Vector3 current_target = defender_attributes.currentTargetPosition;
+        Vector3 ideal_target = guarding_pos;
+        float interpolation_factor = defender_attributes.reactionSpeed * TIMESTEPS_TO_SECONDS_FACTOR;
+
+        defender_attributes.currentTargetPosition = current_target + (ideal_target - current_target) * interpolation_factor;
+
+
+
+        Vector3 move_vector = defender_attributes.currentTargetPosition - defender_pos.position;
         if (move_vector.length2() < 0.01f) 
         {
             defender_action.moveSpeed = 0;
@@ -831,7 +844,6 @@ namespace madsimple {
                 // Set the ball's state for the inbound
                 ball_physics.inFlight = false;
                 ball_physics.velocity = Vector3::zero();
-                ball_pos = inbound_spot;
                 
                 // Clear shot information since the shot scored
                 ball_physics.shotByAgentID = ENTITY_ID_PLACEHOLDER;
@@ -839,8 +851,12 @@ namespace madsimple {
                 ball_physics.shotPointValue = 2; // Reset to default
 
                 // Set up the inbound for the defending team.
-                inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, findVectorToCenter(ctx, ball_pos));
-                assignInbounder(ctx, ball_entity, inbound_spot, inbounding_team_idx, inbound_orientation, false);
+                if (gameState.isOneOnOne == 0.f)
+                {
+                    ball_pos = inbound_spot;
+                    inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, findVectorToCenter(ctx, ball_pos));
+                    assignInbounder(ctx, ball_entity, inbound_spot, inbounding_team_idx, inbound_orientation, false);
+                }
             }
         });
     }
@@ -1148,7 +1164,6 @@ namespace madsimple {
         // ===================================================
 
         // --- Ball State ---
-        // FIX: Declare variables in the outer scope first.
         Position ball_pos;
         BallPhysics ball_phys;
         Grabbed ball_grabbed;
@@ -1198,10 +1213,13 @@ namespace madsimple {
         obs[idx++] = gameState.inboundClock;
 
         // Egocentric Score
-        if (agent_team.teamIndex == 0) {
+        if (agent_team.teamIndex == 0) 
+        {
             obs[idx++] = gameState.team0Score;
             obs[idx++] = gameState.team1Score;
-        } else {
+        } 
+        else 
+        {
             obs[idx++] = gameState.team1Score;
             obs[idx++] = gameState.team0Score;
         }
@@ -1238,15 +1256,20 @@ namespace madsimple {
         for (int i = 0; i < agent_idx; i++) {
             if (all_agents[i].id == agent_entity.id) continue;
 
-            if (all_agents[i].teamID == agent_team.teamIndex) {
-                if (teammate_count < max_teammates) {
+            if (all_agents[i].teamID == agent_team.teamIndex) 
+            {
+                if (teammate_count < max_teammates) 
+                {
                     fill_vec3(all_agents[i].pos.position);
                     fill_quat(all_agents[i].orient.orientation);
                     obs[idx++] = (float)all_agents[i].in_pos.hasBall;
                     teammate_count++;
                 }
-            } else {
-                if (opponent_count < max_opponents) {
+            } 
+            else 
+            {
+                if (opponent_count < max_opponents) 
+                {
                     fill_vec3(all_agents[i].pos.position);
                     fill_quat(all_agents[i].orient.orientation);
                     obs[idx++] = (float)all_agents[i].in_pos.hasBall;
@@ -1257,28 +1280,33 @@ namespace madsimple {
 
         // Padding for agent data
         int agent_feature_size = 3 + 4 + 1; // Pos, Orient, HasBall
-        for (int i = teammate_count; i < max_teammates; i++) {
+        for (int i = teammate_count; i < max_teammates; i++) 
+        {
             for (int j = 0; j < agent_feature_size; j++) obs[idx++] = 0.f;
         }
-        for (int i = opponent_count; i < max_opponents; i++) {
+        for (int i = opponent_count; i < max_opponents; i++) 
+        {
             for (int j = 0; j < agent_feature_size; j++) obs[idx++] = 0.f;
         }
 
         // One-hot encoded vector for who has the ball
-        for (int i = 0; i < agent_idx; i++) {
+        for (int i = 0; i < agent_idx; i++) 
+        {
             obs[idx++] = (all_agents[i].id == (int32_t)ball_grabbed.holderEntityID) ? 1.f : 0.f;
         }
         for (int i = agent_idx; i < NUM_AGENTS; i++) { obs[idx++] = 0.f; }
 
         // One-hot encoded vector for who is inbounding
-        for (int i = 0; i < agent_idx; i++) {
+        for (int i = 0; i < agent_idx; i++) 
+        {
             obs[idx++] = (all_agents[i].id == inbounder_id) ? 1.f : 0.f;
         }
         for (int i = agent_idx; i < NUM_AGENTS; i++) { obs[idx++] = 0.f; }
 
 
         // Zero out any remaining space for safety
-        for (; idx < (int32_t)obs.size(); idx++) {
+        for (; idx < (int32_t)obs.size(); idx++) 
+        {
             obs[idx] = 0.f;
         }
     }
@@ -1294,7 +1322,7 @@ namespace madsimple {
             ActionMask, GrabCooldown, InPossession, Inbounding>>({});
         
         auto moveAgentSystemNode = builder.addToGraph<ParallelForNode<Engine, moveAgentSystem,
-            Action, ActionMask, Position, InPossession, Inbounding, Orientation>>({actionMaskingNode});
+            Action, ActionMask, Position, InPossession, Inbounding, Orientation, Attributes>>({actionMaskingNode});
 
         auto grabSystemNode = builder.addToGraph<ParallelForNode<Engine, grabSystem,
             Entity, Action, ActionMask, Position, InPossession, Team, GrabCooldown>>({actionMaskingNode});
@@ -1338,7 +1366,7 @@ namespace madsimple {
         
 
         auto hardCodeDefenseSystemNode = builder.addToGraph<ParallelForNode<Engine, hardCodeDefenseSystem,
-            Team, Position, Action>>({moveAgentSystemNode});
+            Team, Position, Action, Attributes>>({moveAgentSystemNode});
     }
 
     // =================================================== Sim Creation ===================================================
@@ -1363,7 +1391,8 @@ namespace madsimple {
             .shotClock = 24.0f,
             .scoredBaskets = 0.f,
             .outOfBoundsCount = 0.f,
-            .inboundClock = 0.0f
+            .inboundClock = 0.0f,
+            .isOneOnOne = 1.f,
         };
 
         // Make sure to add the Reset component to the WorldClock entity
@@ -1452,6 +1481,7 @@ namespace madsimple {
             ctx.get<Orientation>(agent) = Orientation {Quat::id()};
             ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
             ctx.get<Stats>(agent) = {0.f, 0.f};
+            ctx.get<Attributes>(agent) = {1.f, 0.f, 0.f, 3.5f, ctx.get<Position>(agent).position};
             
             // Use actual hoop entity IDs from gameState
             uint32_t defending_hoop_id = (i % 2 == 0) ? gameState.team0Hoop : gameState.team1Hoop;
@@ -1468,8 +1498,6 @@ namespace madsimple {
             ctx.get<Grabbed>(basketball) = Grabbed {false, ENTITY_ID_PLACEHOLDER};
             ctx.get<BallPhysics>(basketball) = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2};
         }
-
-
 
 
     }

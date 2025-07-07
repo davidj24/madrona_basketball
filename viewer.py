@@ -556,24 +556,24 @@ class MadronaPipeline:
         if keys[pygame.K_LSHIFT]: grab = 1
         if keys[pygame.K_SPACE]: pass_ball = 1
         if keys[pygame.K_h]: shoot_ball = 1
-        move_speed1, move_angle1, rotate1, grab1, pass_ball1, shoot_ball1 = 0,0,0,0,0,0
-        if keys[pygame.K_UP] or keys[pygame.K_DOWN] or keys[pygame.K_LEFT] or keys[pygame.K_RIGHT]:
-            move_speed1 = 1
-            if keys[pygame.K_UP] and keys[pygame.K_RIGHT]: move_angle1 = 1
-            elif keys[pygame.K_RIGHT] and keys[pygame.K_DOWN]: move_angle1 = 3
-            elif keys[pygame.K_DOWN] and keys[pygame.K_LEFT]: move_angle1 = 5
-            elif keys[pygame.K_LEFT] and keys[pygame.K_UP]: move_angle1 = 7
-            elif keys[pygame.K_UP]: move_angle1 = 0
-            elif keys[pygame.K_RIGHT]: move_angle1 = 2
-            elif keys[pygame.K_DOWN]: move_angle1 = 4
-            elif keys[pygame.K_LEFT]: move_angle1 = 6
-        if keys[pygame.K_COMMA]: rotate1 = -1
-        elif keys[pygame.K_PERIOD]: rotate1 = 1
-        if keys[pygame.K_KP0]: grab1 = 1
-        if keys[pygame.K_RCTRL] : pass_ball1 = 1
-        if keys[pygame.K_RSHIFT] : shoot_ball1 = 1
+        # move_speed1, move_angle1, rotate1, grab1, pass_ball1, shoot_ball1 = 0,0,0,0,0,0
+        # if keys[pygame.K_UP] or keys[pygame.K_DOWN] or keys[pygame.K_LEFT] or keys[pygame.K_RIGHT]:
+        #     move_speed1 = 1
+        #     if keys[pygame.K_UP] and keys[pygame.K_RIGHT]: move_angle1 = 1
+        #     elif keys[pygame.K_RIGHT] and keys[pygame.K_DOWN]: move_angle1 = 3
+        #     elif keys[pygame.K_DOWN] and keys[pygame.K_LEFT]: move_angle1 = 5
+        #     elif keys[pygame.K_LEFT] and keys[pygame.K_UP]: move_angle1 = 7
+        #     elif keys[pygame.K_UP]: move_angle1 = 0
+        #     elif keys[pygame.K_RIGHT]: move_angle1 = 2
+        #     elif keys[pygame.K_DOWN]: move_angle1 = 4
+        #     elif keys[pygame.K_LEFT]: move_angle1 = 6
+        # if keys[pygame.K_COMMA]: rotate1 = -1
+        # elif keys[pygame.K_PERIOD]: rotate1 = 1
+        # if keys[pygame.K_KP0]: grab1 = 1
+        # if keys[pygame.K_RCTRL] : pass_ball1 = 1
+        # if keys[pygame.K_RSHIFT] : shoot_ball1 = 1
         self.sim.set_action(0, 0, move_speed, move_angle, rotate, grab, pass_ball, shoot_ball)
-        self.sim.set_action(0, 1, move_speed1, move_angle1, rotate1, grab1, pass_ball1, shoot_ball1)
+        # self.sim.set_action(0, 1, move_speed1, move_angle1, rotate1, grab1, pass_ball1, shoot_ball1)
 
     def run(self):
         running, auto_step = True, True
