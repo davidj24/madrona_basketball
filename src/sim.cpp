@@ -726,18 +726,40 @@ namespace madsimple {
         }
 
         Vector3 move_vector = guarding_pos - defender_pos.position;
-        if (move_vector.length() < 0.01f) {return;}
+        if (move_vector.length2() < 0.01f) {return;}
 
-        defender_action.moveSpeed = 1.f;
 
-        float angle_rad = atan2f(move_vector.y, move_vector.x);
-        // Normalize angle to be between 0 and 2*PI
-        if (angle_rad < 0) {
-            angle_rad += 2.f * M_PI;
-        }
+
+        const Vector3 move_directions[] = {
+            {0.f, -1.f, 0.f},  // 0: Up
+            {1.f, -1.f, 0.f},  // 1: Up-Right
+            {1.f, 0.f, 0.f},   // 2: Right
+            {1.f, 1.f, 0.f},   // 3: Down-Right
+            {0.f, 1.f, 0.f},   // 4: Down
+            {-1.f, 1.f, 0.f},  // 5: Down-Left
+            {-1.f, 0.f, 0.f},  // 6: Left
+            {-1.f, -1.f, 0.f}  // 7: Up-Left
+        };
         
-        // Convert angle to 0-7 range. We add a small offset to handle the segment boundaries correctly.
-        defender_action.moveAngle = (int32_t)fmodf((angle_rad / (2.f * pi)) * 8.f + 0.5f, 8.f);
+        Vector3 desired_dir = move_vector.normalize();
+        float max_dot = -2.f; // Initialize with a value lower than any possible dot product
+        int32_t best_move_angle = 0;
+
+        // Find which of the 8 directions is most aligned with our desired direction
+        for (int32_t i = 0; i < 8; ++i)
+        {
+            float current_dot = dot(desired_dir, move_directions[i].normalize());
+            if (current_dot > max_dot)
+            {
+                max_dot = current_dot;
+                best_move_angle = i;
+            }
+        }
+
+        // Set the action to the best-matching direction
+        defender_action.moveSpeed = 1;
+        defender_action.moveAngle = best_move_angle;
+        defender_action.rotate = 0;
     }
 
     //=================================================== Hoop Systems ===================================================
