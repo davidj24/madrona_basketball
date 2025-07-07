@@ -700,7 +700,11 @@ namespace madsimple {
     {
         GameState &gameState = ctx.singleton<GameState>();
 
-        if (gameState.teamInPossession == defender_team.teamIndex) {return;}
+        if (gameState.teamInPossession == defender_team.teamIndex) 
+        {
+            defender_action.moveSpeed = 0;
+            return;
+        }
 
         Vector3 guarding_pos; // The place we want our defensive agent to go to to defend
         bool found_offender = false;
@@ -722,11 +726,16 @@ namespace madsimple {
 
         if (!found_offender)
         {
+            defender_action.moveSpeed = 0;
             return;
         }
 
         Vector3 move_vector = guarding_pos - defender_pos.position;
-        if (move_vector.length2() < 0.01f) {return;}
+        if (move_vector.length2() < 0.01f) 
+        {
+            defender_action.moveSpeed = 0;
+            return;
+        }
 
 
 
