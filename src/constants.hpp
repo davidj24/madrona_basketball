@@ -15,6 +15,32 @@ namespace madsimple {
     // ======================================== Rendering & Scaling ========================================
     constexpr float PIXELS_PER_METER = 110.f; // Single source of truth for visualization scaling
 
+
+        // ======================================== Gameplay Constants ========================================
+    constexpr float HOOP_SCORE_ZONE_SIZE = 0.1f; // Radius for scoring detection
+    constexpr float IN_COURT_OFFSET = 0.1f; // Buffer to ensure players are placed inside court lines
+    constexpr float SHOT_CLOCK_DURATION = 24.0f; // Shot clock in seconds
+    
+
+
+    // ======================================== Basketball Physical Properties ========================================
+    constexpr float BALL_DIAMETER_M = 0.242f; // Official basketball diameter
+    constexpr float BALL_RADIUS_M = BALL_DIAMETER_M / 2.0f;
+    constexpr float BALL_CIRCUMFERENCE_M = 0.749f; // Official basketball circumference
+    
+
+
+    // ======================================== Agent Properties ========================================
+    constexpr float AGENT_SIZE_M = 0.2f; // Agent visual size for rendering
+    constexpr float AGENT_ORIENTATION_ARROW_LENGTH_M = 0.5f; // Length of orientation arrow
+    constexpr uint32_t NUM_OBSERVATIONS_PER_AGENT = 10; 
+    
+    // Movement
+    constexpr float ANGLE_BETWEEN_DIRECTIONS = madrona::math::pi / 4.0f; // π/4 for 8-directional movement
+
+
+
+
     // ======================================== Basketball Court Dimensions (NBA Standard) ========================================
     constexpr float COURT_LENGTH_M = 28.65f; // Full court length
     constexpr float COURT_WIDTH_M = 15.24f;  // Full court width
@@ -48,21 +74,4 @@ namespace madsimple {
     constexpr float BACKBOARD_WIDTH_M = 1.829f;
     constexpr float RIM_DIAMETER_M = 0.4572f;
     constexpr float BACKBOARD_OFFSET_FROM_HOOP_M = (HOOP_FROM_BASELINE_M - 1.22f); // Distance from hoop center to backboard
-
-    // ======================================== Gameplay Constants ========================================
-    constexpr float HOOP_SCORE_ZONE_SIZE = 0.1f; // Radius for scoring detection
-    constexpr float IN_COURT_OFFSET = 0.1f; // Buffer to ensure players are placed inside court lines
-    constexpr float SHOT_CLOCK_DURATION = 24.0f; // Shot clock in seconds
-    
-    // ======================================== Basketball Physical Properties ========================================
-    constexpr float BALL_DIAMETER_M = 0.242f; // Official basketball diameter
-    constexpr float BALL_RADIUS_M = BALL_DIAMETER_M / 2.0f;
-    constexpr float BALL_CIRCUMFERENCE_M = 0.749f; // Official basketball circumference
-    
-    // ======================================== Agent Properties ========================================
-    constexpr float AGENT_SIZE_M = 0.2f; // Agent visual size for rendering
-    constexpr float AGENT_ORIENTATION_ARROW_LENGTH_M = 0.5f; // Length of orientation arrow
-    
-    // Movement
-    constexpr float ANGLE_BETWEEN_DIRECTIONS = 3.14159265f / 4.0f; // π/4 for 8-directional movement
 }

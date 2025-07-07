@@ -84,7 +84,15 @@
         "algorithm": "cpp",
         "cuda_std_post": "cpp",
         "__string": "cpp",
-        "regex": "cpp"
+        "regex": "cpp",
+        "chrono": "cpp",
+        "ranges": "cpp",
+        "annotated_ptr": "cpp",
+        "propagate_const": "cpp",
+        "future": "cpp",
+        "stream_ref": "cpp",
+        "format": "cpp",
+        "functional": "cpp"
     },
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
     "github.copilot.enable": {

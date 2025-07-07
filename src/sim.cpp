@@ -1018,111 +1018,185 @@ namespace madsimple {
     }
 
 
-
-    inline void fillObservationsSystem(Engine &ctx, 
-                                       Entity agent_entity,
-                                       Observations &observations, 
-                                       Position &agent_pos, 
-                                       Orientation &agent_orientation, 
-                                       InPossession &in_possession, 
-                                       Inbounding &inbounding, 
-                                       Team &agent_team, 
-                                       GrabCooldown &grab_cooldown)
-    {
-        auto &observations_array = observations.observationsArray;
-        GameState &gameState = ctx.singleton<GameState>();
-        uint32_t index = 0;
-
-
-        // Self State for agent:
-        observations_array[index++] = agent_pos.position.x;
-        observations_array[index++] = agent_pos.position.y;
-        observations_array[index++] = agent_pos.position.z;
-        observations_array[index++] = agent_orientation.orientation.w;
-        observations_array[index++] = agent_orientation.orientation.x;
-        observations_array[index++] = agent_orientation.orientation.y;
-        observations_array[index++] = agent_orientation.orientation.z;
-        observations_array[index++] = in_possession.hasBall;
-        observations_array[index++] = in_possession.pointsWorth; // How many points "I" would get if "I" scored from here
-        observations_array[index++] = inbounding.imInbounding;
-        observations_array[index++] = agent_team.teamIndex;
-        observations_array[index++] = grab_cooldown.cooldown;
-        
-        // Game State
-        observations_array[index++] = gameState.gameClock;
-        observations_array[index++] = gameState.shotClock;
-        observations_array[index++] = gameState.inboundClock;
-        observations_array[index++] = gameState.period;
-        observations_array[index++] = gameState.inboundingInProgress;
-
-        float our_score = 0.f;
-        float opponents_score = 0.f;
-        if (agent_team.teamIndex == 0) 
-        {
-            our_score = gameState.team0Score;
-            opponents_score = gameState.team1Score;
-        }
-        else 
-        {
-            our_score = gameState.team1Score;
-            opponents_score = gameState.team0Score;
-        }
-        observations_array[index++] = our_score;
-        observations_array[index++] = opponents_score;
-        observations_array[index++] = gameState.teamInPossession;
-        observations_array[index++] = gameState.liveBall;
-        
-
-        // Ball State
-        auto ball_query = ctx.query<BallPhysics, Grabbed>();
-        ctx.iterateQuery(ball_query, [&] (BallPhysics &ball_physics, Grabbed &grabbed)
-        {
-            observations_array[index++] = ball_physics.inFlight;
-            observations_array[index++] = ball_physics.velocity.x;
-            observations_array[index++] = ball_physics.velocity.y;
-            observations_array[index++] = ball_physics.velocity.z;
-            observations_array[index++] = ball_physics.lastTouchedByAgentID;
-            observations_array[index++] = ball_physics.lastTouchedByTeamID;
-            observations_array[index++] = ball_physics.shotByAgentID;
-            observations_array[index++] = ball_physics.shotByTeamID;
-            observations_array[index++] = ball_physics.shotPointValue;
-        });
-
-
-        // Other Agents State
-        ctx.iterateQuery(ctx.query<Entity, Position, Orientation, InPossession, Inbounding, Team, GrabCooldown>(), [&] (Entity other_agent_entity, Position &other_agent_pos, 
-                                                                                                              Orientation &other_agent_orientation,
-                                                                                                              InPossession &other_agent_in_possession, 
-                                                                                                              Inbounding &other_agent_inbounding, 
-                                                                                                              Team &other_agent_team, 
-                                                                                                              GrabCooldown &other_agent_grab_cooldown)
-        {
-            if (other_agent_entity.id == agent_entity.id) {return;}
-
-            if (other_agent_team.teamIndex == agent_team.teamIndex) // This is a teammate
-            {
-
-            }
-            observations_array[index++] = other_agent_pos.position.x;
-            observations_array[index++] = other_agent_pos.position.y;
-            observations_array[index++] = other_agent_pos.position.z;
-            observations_array[index++] = other_agent_orientation.orientation.w;
-            observations_array[index++] = other_agent_orientation.orientation.x;
-            observations_array[index++] = other_agent_orientation.orientation.y;
-            observations_array[index++] = other_agent_orientation.orientation.z;
-            observations_array[index++] = other_agent_in_possession.hasBall;
-            observations_array[index++] = other_agent_in_possession.pointsWorth; // How many points this agent would get if they scored
-            observations_array[index++] = other_agent_inbounding.imInbounding;
-            observations_array[index++] = other_agent_team.teamIndex;
-            observations_array[index++] = other_agent_grab_cooldown.cooldown;
-        });
-
+    // This is a temporary helper struct used ONLY by the fillObservationsSystem
+    // to gather all agent data before sorting it into the observation vector.
+    struct AgentObservationData {
+        int32_t id;
+        int32_t teamID;
+        Position pos;
+        Orientation orient;
+        InPossession in_pos;
+        Inbounding inb;
+        GrabCooldown cooldown;
     };
 
+    inline void fillObservationsSystem(Engine &ctx, 
+                                        Entity agent_entity,
+                                        Observations &observations, 
+                                        Position &agent_pos, 
+                                        Orientation &agent_orientation, 
+                                        InPossession &in_possession, 
+                                        Inbounding &inbounding, 
+                                        Team &agent_team, 
+                                        GrabCooldown &grab_cooldown)
+    {
+        auto &obs = observations.observationsArray;
+        const GameState &gameState = ctx.singleton<GameState>();
+        int32_t idx = 0;
 
-    // inline void callFoulSystem(Engine &ctx,
-    //                            Position agent_position,
-    //                            Action agent_action,)
+        // A helper lambda to fill a block of the array with a Vector3
+        auto fill_vec3 = [&](const Vector3 &vec) {
+            if (idx + 3 <= (int32_t)obs.size()) {
+                obs[idx++] = vec.x;
+                obs[idx++] = vec.y;
+                obs[idx++] = vec.z;
+            }
+        };
+
+        // A helper lambda to fill a block of the array with a Quaternion
+        auto fill_quat = [&](const Quat &q) {
+            if (idx + 4 <= (int32_t)obs.size()) {
+                obs[idx++] = q.w;
+                obs[idx++] = q.x;
+                obs[idx++] = q.y;
+                obs[idx++] = q.z;
+            }
+        };
+
+        // ===================================================
+        // Part 1: Global State
+        // ===================================================
+        
+        // Game Context
+        obs[idx++] = gameState.gameClock;
+        obs[idx++] = gameState.shotClock;
+        obs[idx++] = gameState.period;
+        obs[idx++] = gameState.inboundingInProgress;
+        obs[idx++] = gameState.inboundClock;
+
+        // Egocentric Score
+        if (agent_team.teamIndex == 0) {
+            obs[idx++] = gameState.team0Score;
+            obs[idx++] = gameState.team1Score;
+        } else {
+            obs[idx++] = gameState.team1Score;
+            obs[idx++] = gameState.team0Score;
+        }
+        
+        // Egocentric Possession
+        float my_team_has_ball = (gameState.teamInPossession == (float)agent_team.teamIndex) ? 1.f : 0.f;
+        obs[idx++] = my_team_has_ball;
+        obs[idx++] = 1.f - my_team_has_ball;
+
+
+        // --- Ball State ---
+        // FIX: Declare variables in the outer scope.
+        Position ball_pos;
+        BallPhysics ball_phys;
+        Grabbed ball_grabbed;
+
+        // Use iterateQuery to fetch the data and assign it to the variables above.
+        // Since we assume 1 ball, this lambda will only run once.
+        ctx.iterateQuery(ctx.query<Position, BallPhysics, Grabbed>(),
+            [&](Position &p, BallPhysics &phys, Grabbed &grab)
+        {
+            ball_pos = p;
+            ball_phys = phys;
+            ball_grabbed = grab;
+        });
+
+        // Now we can use the populated variables throughout the function.
+        fill_vec3(ball_pos.position);
+        fill_vec3({ball_phys.velocity.x, ball_phys.velocity.y, ball_phys.velocity.z});
+        obs[idx++] = ball_phys.inFlight;
+        obs[idx++] = (float)ball_phys.shotPointValue;
+
+
+        // --- Hoop Positions ---
+        Position hoop_positions[NUM_HOOPS];
+        uint32_t hoop_ids[NUM_HOOPS];
+        int hoop_i = 0;
+        ctx.iterateQuery(ctx.query<Entity, Position, ImAHoop>(), [&](Entity e, Position &p, ImAHoop &) {
+            if (hoop_i < NUM_HOOPS) { hoop_positions[hoop_i] = p; hoop_ids[hoop_i] = e.id; hoop_i++; }
+        });
+
+        Position attacking_hoop_pos = (hoop_ids[0] != agent_team.defendingHoopID) ? hoop_positions[0] : hoop_positions[1];
+        Position defending_hoop_pos = (hoop_ids[0] == agent_team.defendingHoopID) ? hoop_positions[0] : hoop_positions[1];
+        fill_vec3(attacking_hoop_pos.position);
+        fill_vec3(defending_hoop_pos.position);
+
+        // ===================================================
+        // Part 2: Agent-Specific States (Self, Teammates, Opponents)
+        // ===================================================
+        
+        AgentObservationData all_agents[NUM_AGENTS];
+        int agent_idx = 0;
+        ctx.iterateQuery(ctx.query<Entity, Position, Orientation, InPossession, Inbounding, Team, GrabCooldown>(), 
+            [&](Entity e, Position &p, Orientation &o, InPossession &ip, Inbounding &ib, Team &t, GrabCooldown &gc)
+        {
+            if (agent_idx < NUM_AGENTS) {
+                all_agents[agent_idx++] = {e.id, t.teamIndex, p, o, ip, ib, gc};
+            }
+        });
+
+        // 1. Self Data
+        fill_vec3(agent_pos.position);
+        fill_quat(agent_orientation.orientation);
+        obs[idx++] = (float)in_possession.hasBall;
+        obs[idx++] = (float)in_possession.pointsWorth;
+        obs[idx++] = (float)inbounding.imInbounding;
+        obs[idx++] = grab_cooldown.cooldown;
+
+        // 2. Teammate & Opponent Data
+        int teammate_count = 0;
+        int opponent_count = 0;
+        const int max_teammates = (NUM_AGENTS / 2) - 1;
+        const int max_opponents = NUM_AGENTS / 2;
+
+        for (int i = 0; i < agent_idx; i++) {
+            if (all_agents[i].id == agent_entity.id) continue;
+
+            if (all_agents[i].teamID == agent_team.teamIndex) {
+                if (teammate_count < max_teammates) {
+                    fill_vec3(all_agents[i].pos.position);
+                    fill_quat(all_agents[i].orient.orientation);
+                    obs[idx++] = (float)all_agents[i].in_pos.hasBall;
+                    teammate_count++;
+                }
+            } else {
+                if (opponent_count < max_opponents) {
+                    fill_vec3(all_agents[i].pos.position);
+                    fill_quat(all_agents[i].orient.orientation);
+                    obs[idx++] = (float)all_agents[i].in_pos.hasBall;
+                    opponent_count++;
+                }
+            }
+        }
+
+        // Pad with zeros to ensure the observation vector is always the same size
+        int agent_feature_size = 3 + 4 + 1; // Pos, Orient, HasBall
+        for (int i = teammate_count; i < max_teammates; i++) {
+            for (int j = 0; j < agent_feature_size; j++) obs[idx++] = 0.f;
+        }
+        for (int i = opponent_count; i < max_opponents; i++) {
+            for (int j = 0; j < agent_feature_size; j++) obs[idx++] = 0.f;
+        }
+
+        // One-hot encoded vector for who has the ball
+        for (int i = 0; i < agent_idx; i++) {
+            obs[idx++] = (all_agents[i].id == (int32_t)ball_grabbed.holderEntityID) ? 1.f : 0.f;
+        }
+        // Pad the rest of the hasBall vector
+        for (int i = agent_idx; i < NUM_AGENTS; i++) {
+            obs[idx++] = 0.f;
+        }
+
+        // Zero out any remaining space in the observation array for safety
+        for (; idx < (int32_t)obs.size(); idx++) {
+            obs[idx] = 0.f;
+        }
+    }
+
 
     // =================================================== Task Graph ===================================================
     void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
