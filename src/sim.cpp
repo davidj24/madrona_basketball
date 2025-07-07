@@ -982,9 +982,7 @@ namespace madsimple {
         GameState &gameState = ctx.singleton<GameState>();
 
         // This is the conditional check. If this isn't true, the system does nothing.
-        if (!(gameState.inboundingInProgress > 0.5f && gameState.inboundClock <= 0.f)) {
-            return;
-        }
+        if (!(gameState.inboundingInProgress > 0.5f && gameState.inboundClock <= 0.f)) {return;}
 
         uint32_t current_team_idx = (uint32_t)gameState.teamInPossession;
         uint32_t new_team_idx = 1 - current_team_idx;
@@ -993,7 +991,8 @@ namespace madsimple {
         gameState.liveBall = 0.f;
         
         auto inbounder_query = ctx.query<Inbounding, InPossession, Position>();
-        ctx.iterateQuery(inbounder_query, [&](Inbounding &inb, InPossession &poss, Position &agent_pos) {
+        ctx.iterateQuery(inbounder_query, [&](Inbounding &inb, InPossession &poss, Position &agent_pos) 
+        {
             if (inb.imInbounding) {
                 ball_to_turnover_id = poss.ballEntityID;
                 
@@ -1005,13 +1004,16 @@ namespace madsimple {
             }
         });
 
-        if (ball_to_turnover_id != ENTITY_ID_PLACEHOLDER) {
+        if (ball_to_turnover_id != ENTITY_ID_PLACEHOLDER) 
+        {
             auto ball_query = ctx.query<Position, Entity, Grabbed>();
-            ctx.iterateQuery(ball_query, [&](Position &ball_pos, Entity ball_entity, Grabbed &grabbed) {
-                if (ball_entity.id == (int32_t)ball_to_turnover_id) {
+            ctx.iterateQuery(ball_query, [&](Position &ball_pos, Entity ball_entity, Grabbed &grabbed) 
+            {
+                if (ball_entity.id == (int32_t)ball_to_turnover_id) 
+                {
                     grabbed = {false, ENTITY_ID_PLACEHOLDER};
                     Quat inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, findVectorToCenter(ctx, ball_pos));
-                    assignInbounder(ctx, ball_entity, ball_pos, new_team_idx, inbound_orientation, false);
+                    assignInbounder(ctx, ball_entity, ball_pos, new_team_idx, inbound_orientation, true);
                 }
             });
         }
@@ -1075,10 +1077,13 @@ namespace madsimple {
         obs[idx++] = gameState.inboundClock;
 
         // Egocentric Score
-        if (agent_team.teamIndex == 0) {
+        if (agent_team.teamIndex == 0) 
+        {
             obs[idx++] = gameState.team0Score;
             obs[idx++] = gameState.team1Score;
-        } else {
+        } 
+        else 
+        {
             obs[idx++] = gameState.team1Score;
             obs[idx++] = gameState.team0Score;
         }
@@ -1090,13 +1095,10 @@ namespace madsimple {
 
 
         // --- Ball State ---
-        // FIX: Declare variables in the outer scope.
         Position ball_pos;
         BallPhysics ball_phys;
         Grabbed ball_grabbed;
 
-        // Use iterateQuery to fetch the data and assign it to the variables above.
-        // Since we assume 1 ball, this lambda will only run once.
         ctx.iterateQuery(ctx.query<Position, BallPhysics, Grabbed>(),
             [&](Position &p, BallPhysics &phys, Grabbed &grab)
         {
@@ -1116,7 +1118,8 @@ namespace madsimple {
         Position hoop_positions[NUM_HOOPS];
         uint32_t hoop_ids[NUM_HOOPS];
         int hoop_i = 0;
-        ctx.iterateQuery(ctx.query<Entity, Position, ImAHoop>(), [&](Entity e, Position &p, ImAHoop &) {
+        ctx.iterateQuery(ctx.query<Entity, Position, ImAHoop>(), [&](Entity e, Position &p, ImAHoop &) 
+        {
             if (hoop_i < NUM_HOOPS) { hoop_positions[hoop_i] = p; hoop_ids[hoop_i] = e.id; hoop_i++; }
         });
 
@@ -1134,7 +1137,8 @@ namespace madsimple {
         ctx.iterateQuery(ctx.query<Entity, Position, Orientation, InPossession, Inbounding, Team, GrabCooldown>(), 
             [&](Entity e, Position &p, Orientation &o, InPossession &ip, Inbounding &ib, Team &t, GrabCooldown &gc)
         {
-            if (agent_idx < NUM_AGENTS) {
+            if (agent_idx < NUM_AGENTS) 
+            {
                 all_agents[agent_idx++] = {e.id, t.teamIndex, p, o, ip, ib, gc};
             }
         });
@@ -1153,18 +1157,24 @@ namespace madsimple {
         const int max_teammates = (NUM_AGENTS / 2) - 1;
         const int max_opponents = NUM_AGENTS / 2;
 
-        for (int i = 0; i < agent_idx; i++) {
+        for (int i = 0; i < agent_idx; i++) 
+        {
             if (all_agents[i].id == agent_entity.id) continue;
 
-            if (all_agents[i].teamID == agent_team.teamIndex) {
-                if (teammate_count < max_teammates) {
+            if (all_agents[i].teamID == agent_team.teamIndex) 
+            {
+                if (teammate_count < max_teammates) 
+                {
                     fill_vec3(all_agents[i].pos.position);
                     fill_quat(all_agents[i].orient.orientation);
                     obs[idx++] = (float)all_agents[i].in_pos.hasBall;
                     teammate_count++;
                 }
-            } else {
-                if (opponent_count < max_opponents) {
+            } 
+            else 
+            {
+                if (opponent_count < max_opponents) 
+                {
                     fill_vec3(all_agents[i].pos.position);
                     fill_quat(all_agents[i].orient.orientation);
                     obs[idx++] = (float)all_agents[i].in_pos.hasBall;
@@ -1175,24 +1185,29 @@ namespace madsimple {
 
         // Pad with zeros to ensure the observation vector is always the same size
         int agent_feature_size = 3 + 4 + 1; // Pos, Orient, HasBall
-        for (int i = teammate_count; i < max_teammates; i++) {
+        for (int i = teammate_count; i < max_teammates; i++) 
+        {
             for (int j = 0; j < agent_feature_size; j++) obs[idx++] = 0.f;
         }
-        for (int i = opponent_count; i < max_opponents; i++) {
+        for (int i = opponent_count; i < max_opponents; i++) 
+        {
             for (int j = 0; j < agent_feature_size; j++) obs[idx++] = 0.f;
         }
 
         // One-hot encoded vector for who has the ball
-        for (int i = 0; i < agent_idx; i++) {
+        for (int i = 0; i < agent_idx; i++) 
+        {
             obs[idx++] = (all_agents[i].id == (int32_t)ball_grabbed.holderEntityID) ? 1.f : 0.f;
         }
         // Pad the rest of the hasBall vector
-        for (int i = agent_idx; i < NUM_AGENTS; i++) {
+        for (int i = agent_idx; i < NUM_AGENTS; i++) 
+        {
             obs[idx++] = 0.f;
         }
 
         // Zero out any remaining space in the observation array for safety
-        for (; idx < (int32_t)obs.size(); idx++) {
+        for (; idx < (int32_t)obs.size(); idx++) 
+        {
             obs[idx] = 0.f;
         }
     }
