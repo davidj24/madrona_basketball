@@ -89,11 +89,14 @@ class MadronaPipeline:
 
     def __init__(self):
         pygame.init()
+        pygame.mixer.init()
 
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         pygame.display.set_caption("Madrona Simulation Pipeline")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 24)
+
+        self.active_agent_idx = 0
 
         # --- Load Sound Effects ---
         try:
@@ -447,22 +450,22 @@ class MadronaPipeline:
         # --- Agent Rendering (Corrected Colors and Text) ---
         if 'agent_pos' in data and 'agent_teams' in data and 'orientation' in data:
             positions, team_data, orientations = data['agent_pos'][0], data['agent_teams'][0], data['orientation'][0]
-            
-            # Use a consistent color map matching your scoreboard
             team_colors = { 0: (0, 100, 255), 1: (255, 50, 50) } 
             
             for i, pos in enumerate(positions):
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
-                
-                # Get team index reliably from the simulation data
                 team_index = int(team_data[i][0]) if i < len(team_data) else 0
-                agent_color = team_colors.get(team_index, (128, 128, 128)) # Use team color, fallback to gray
+                agent_color = team_colors.get(team_index, (128, 128, 128))
                 
-                # Draw the agent's body
                 agent_size_px = self.pixels_per_meter * AGENT_SIZE_M
                 agent_rect = pygame.Rect(screen_x - agent_size_px / 2, screen_y - agent_size_px / 2, agent_size_px, agent_size_px)
                 pygame.draw.rect(self.screen, agent_color, agent_rect)
-                pygame.draw.rect(self.screen, (255, 255, 255), agent_rect, 1) # White outline
+
+                # Draw a special highlight for the active agent
+                if i == self.active_agent_idx:
+                    pygame.draw.rect(self.screen, (0, 255, 255), agent_rect, 3) # Bright yellow outline
+                else:
+                    pygame.draw.rect(self.screen, (255, 255, 255), agent_rect, 1) # Standard white outline
 
                 # Draw the agent's number (not team ID) inside the rectangle
                 font_small = pygame.font.Font(None, int(agent_size_px * 0.8))
@@ -541,6 +544,8 @@ class MadronaPipeline:
     def handle_input(self):
         keys = pygame.key.get_pressed()
         move_speed, move_angle, rotate, grab, pass_ball, shoot_ball = 0,0,0,0,0,0
+
+        # This logic now controls the selected agent
         if keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d]:
             move_speed = 1
             if keys[pygame.K_w] and keys[pygame.K_d]: move_angle = 1
@@ -556,6 +561,17 @@ class MadronaPipeline:
         if keys[pygame.K_LSHIFT]: grab = 1
         if keys[pygame.K_SPACE]: pass_ball = 1
         if keys[pygame.K_h]: shoot_ball = 1
+
+        # FIX: Send the action to the currently active agent
+        self.sim.set_action(0, self.active_agent_idx, move_speed, move_angle, rotate, grab, pass_ball, shoot_ball)
+
+        # You can keep a second set of controls for another agent if you wish,
+        # or have all other agents be controlled by the hard-coded AI.
+        # For now, we'll leave the second player controls as they are.
+        move_speed1, move_angle1, rotate1, grab1, pass_ball1, shoot_ball1 = 0,0,0,0,0,0
+        if keys[pygame.K_UP] or keys[pygame.K_DOWN] or keys[pygame.K_LEFT] or keys[pygame.K_RIGHT]:
+            move_speed1 = 1
+            if keys[pygame.K_UP] and keys[pygame.K_RIGHT]: move_angle1 = 1
         # move_speed1, move_angle1, rotate1, grab1, pass_ball1, shoot_ball1 = 0,0,0,0,0,0
         # if keys[pygame.K_UP] or keys[pygame.K_DOWN] or keys[pygame.K_LEFT] or keys[pygame.K_RIGHT]:
         #     move_speed1 = 1
@@ -572,28 +588,40 @@ class MadronaPipeline:
         # if keys[pygame.K_KP0]: grab1 = 1
         # if keys[pygame.K_RCTRL] : pass_ball1 = 1
         # if keys[pygame.K_RSHIFT] : shoot_ball1 = 1
-        self.sim.set_action(0, 0, move_speed, move_angle, rotate, grab, pass_ball, shoot_ball)
+        # self.sim.set_action(0, 0, move_speed, move_angle, rotate, grab, pass_ball, shoot_ball)
         # self.sim.set_action(0, 1, move_speed1, move_angle1, rotate1, grab1, pass_ball1, shoot_ball1)
 
     def run(self):
         running, auto_step = True, True
         print("Madrona Pipeline Started!\n- Press F to toggle auto-stepping | R to reset | ESC to quit")
         while running:
+            data = self.get_simulation_data() # Get data at the start of the loop
+
             for event in pygame.event.get():
-                if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE): running = False
+                if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                    running = False
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_r: self.reset_simulation()
                     if event.key == pygame.K_f: auto_step = not auto_step
+                # FIX: Add mouse click event handling
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1: # Left mouse click
+                        mouse_x, mouse_y = event.pos
+                        # Check if the click was on any agent
+                        if data and 'agent_pos' in data:
+                            agent_positions = data['agent_pos'][0]
+                            for i, pos in enumerate(agent_positions):
+                                screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+                                agent_rect = pygame.Rect(screen_x - 10, screen_y - 10, 20, 20) # A small clickable area
+                                if agent_rect.collidepoint(mouse_x, mouse_y):
+                                    self.active_agent_idx = i
+                                    print(f"Switched control to Agent {i}")
+                                    break # Stop after finding the first clicked agent
+
             self.handle_input()
             if auto_step: self.step_simulation()
             
-            data = self.get_simulation_data()
-            if data and 'game_state' in data:
-                game_state = data['game_state'][0]
-                game_clock = float(game_state[8])  # Adjust index if needed
-                if game_clock <= 0 and auto_step:
-                    auto_step = False
-            self.handle_audio_events(data)  # Call the new audio handler
+            self.handle_audio_events(data)
             self.draw_simulation_data(data)
 
             pygame.display.flip()
