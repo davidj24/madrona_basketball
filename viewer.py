@@ -89,7 +89,6 @@ class MadronaPipeline:
 
     def __init__(self):
         pygame.init()
-        pygame.mixer.init()  # Initialize the audio mixer
 
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         pygame.display.set_caption("Madrona Simulation Pipeline")
@@ -98,11 +97,12 @@ class MadronaPipeline:
 
         # --- Load Sound Effects ---
         try:
+            pygame.mixer.init()  # Initialize the audio mixer
             self.score_sound = pygame.mixer.Sound("assets/swish.wav")
             self.whistle_sound = pygame.mixer.Sound("assets/whistle.wav")
             print("✓ Audio files loaded successfully.")
         except pygame.error as e:
-            print(f"⚠ Warning: Could not load audio files from 'assets/' folder. Error: {e}")
+            print(f"⚠ Warning: Could not initialize audio. Running in silent mode. Error: {e}")
             self.score_sound = None
             self.whistle_sound = None
 

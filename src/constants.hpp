@@ -12,6 +12,7 @@ namespace madsimple {
     constexpr float TIMESTEPS_TO_SECONDS_FACTOR = 1.0f / SIMULATION_HZ;
     constexpr float TIME_PER_PERIOD = 300.f; // 5 minutes per quarter (in seconds)
 
+
     // ======================================== Rendering & Scaling ========================================
     constexpr float PIXELS_PER_METER = 110.f; // Single source of truth for visualization scaling
 
@@ -34,6 +35,7 @@ namespace madsimple {
     constexpr float AGENT_SIZE_M = 0.2f; // Agent visual size for rendering
     constexpr float AGENT_ORIENTATION_ARROW_LENGTH_M = 0.5f; // Length of orientation arrow
     constexpr uint32_t NUM_OBSERVATIONS_PER_AGENT = 10; 
+    constexpr float GUARDING_DISTANCE = 1.5f; // How many meters to guard away from for hard-coded defense
     
     // Movement
     constexpr float ANGLE_BETWEEN_DIRECTIONS = madrona::math::pi / 4.0f; // π/4 for 8-directional movement

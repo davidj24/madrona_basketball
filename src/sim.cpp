@@ -693,6 +693,53 @@ namespace madsimple {
     }
 
 
+    inline void hardCodeDefenseSystem(Engine &ctx,
+                                Team &defender_team,
+                                Position &defender_pos,
+                                Action &defender_action)
+    {
+        GameState &gameState = ctx.singleton<GameState>();
+
+        if (gameState.teamInPossession == defender_team.teamIndex) {return;}
+
+        Vector3 guarding_pos; // The place we want our defensive agent to go to to defend
+        bool found_offender = false;
+        auto agent_with_ball_query = ctx.query<Position, Team, InPossession>();
+        ctx.iterateQuery(agent_with_ball_query, [&] (Position &offender_pos, Team &offensive_team, InPossession &offender_in_possession)
+        {
+            if (offender_in_possession.hasBall == 1.f && !found_offender)
+            {
+                ctx.iterateQuery(ctx.query<Entity, Position, ImAHoop>(), [&] (Entity hoop_entity, Position &hoop_pos, ImAHoop &im_a_hoop)
+                {
+                    if (defender_team.defendingHoopID == hoop_entity.id)
+                    {
+                        guarding_pos = offender_pos.position + GUARDING_DISTANCE * (hoop_pos.position - offender_pos.position).normalize();
+                        found_offender = true;
+                    }
+                });
+            }
+        });
+
+        if (!found_offender)
+        {
+            return;
+        }
+
+        Vector3 move_vector = guarding_pos - defender_pos.position;
+        if (move_vector.length() < 0.01f) {return;}
+
+        defender_action.moveSpeed = 1.f;
+
+        float angle_rad = atan2f(move_vector.y, move_vector.x);
+        // Normalize angle to be between 0 and 2*PI
+        if (angle_rad < 0) {
+            angle_rad += 2.f * M_PI;
+        }
+        
+        // Convert angle to 0-7 range. We add a small offset to handle the segment boundaries correctly.
+        defender_action.moveAngle = (int32_t)fmodf((angle_rad / (2.f * pi)) * 8.f + 0.5f, 8.f);
+    }
+
     //=================================================== Hoop Systems ===================================================
     inline void scoreSystem(Engine &ctx,
                         Entity hoop_entity,
@@ -1264,6 +1311,10 @@ namespace madsimple {
 
         auto agentCollisionNode = builder.addToGraph<ParallelForNode<Engine, agentCollisionSystem,
             Entity, Position, InPossession>>({moveAgentSystemNode});
+        
+
+        auto hardCodeDefenseSystemNode = builder.addToGraph<ParallelForNode<Engine, hardCodeDefenseSystem,
+            Team, Position, Action>>({moveAgentSystemNode});
     }
 
     // =================================================== Sim Creation ===================================================
