@@ -340,6 +340,7 @@ namespace madsimple {
         auto basketball_query = ctx.query<Entity, Position, Grabbed, BallPhysics>();
         if (action_mask.can_grab == 0.f || action.grab == 0.f) {return;}
         grab_cooldown.cooldown = 10.f;
+        action.grab = 0.f;
 
         ctx.iterateQuery(basketball_query, [&](Entity ball_entity, Position &basketball_pos, Grabbed &grabbed, BallPhysics &ball_physics) 
         {
@@ -372,6 +373,13 @@ namespace madsimple {
                         other_in_possession.hasBall = false;
                         other_in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
                         robbed_agent_grab_cooldown.cooldown = SIMULATION_HZ;
+                        if (gameState.isOneOnOne == 1.f)
+                        {
+                            auto world_clock_query = ctx.query<Reset, IsWorldClock>();
+                            ctx.iterateQuery(world_clock_query, [&](Reset &world_reset, IsWorldClock &lalala) {
+                                world_reset.resetNow = 1;
+                            });
+                        }
                     }
                 });
 
@@ -583,7 +591,7 @@ namespace madsimple {
             // Treat moveSpeed as a velocity in meters/second, not a distance.
             // Let's say a moveSpeed of 1 corresponds to 1 m/s.
             float agent_velocity_magnitude = action.moveSpeed * attributes.speed * 4;
-            if (in_possession.hasBall == 1) {agent_velocity_magnitude *= .8;}
+            if (in_possession.hasBall == 1) {agent_velocity_magnitude *= BALL_AGENT_SLOWDOWN;}
 
             constexpr float angle_between_directions = ANGLE_BETWEEN_DIRECTIONS;
             float move_angle = action.moveAngle * angle_between_directions;
@@ -857,6 +865,13 @@ namespace madsimple {
                     inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, findVectorToCenter(ctx, ball_pos));
                     assignInbounder(ctx, ball_entity, inbound_spot, inbounding_team_idx, inbound_orientation, false);
                 }
+                else
+                {
+                    auto world_clock_query = ctx.query<Reset, IsWorldClock>();
+                    ctx.iterateQuery(world_clock_query, [&](Reset &world_reset, IsWorldClock &lalala) {
+                        world_reset.resetNow = 1;
+                    });
+                }
             }
         });
     }
@@ -865,96 +880,119 @@ namespace madsimple {
     //=================================================== General Systems ===================================================
     inline void resetSystem(Engine &ctx, Reset &world_reset, IsWorldClock &)
     {
-        // This system only runs if the world clock's reset is triggered.
-        if (world_reset.resetNow == 0) {
+        // This system only executes its logic if the reset flag has been set.
+        if (world_reset.resetNow == 0)
+        {
             return;
         }
 
         GameState &gameState = ctx.singleton<GameState>();
         const GridState *grid = ctx.data().grid;
-        
+
+        // --- Part 1: Reset GameState Singleton ---
         // Check if the reset was triggered by the end of a period
-        if (gameState.gameClock <= 0.f) {
-            // Check if the game should continue
-            if (gameState.period < 4 || gameState.team0Score == gameState.team1Score) {
+        if (gameState.gameClock <= 0.f && gameState.isOneOnOne == 0.f)
+        {
+            // End-of-quarter logic (only for full games)
+            if (gameState.period < 4 || gameState.team0Score == gameState.team1Score)
+            {
                 gameState.period++;
                 gameState.gameClock = TIME_PER_PERIOD;
                 gameState.shotClock = 24.0f;
-                gameState.liveBall = 1.f; // Start the next period
-            } else {
-                // The game is over, freeze the clock and ball
-                gameState.gameClock = 0.f;
-                gameState.shotClock = 0.f;
-                gameState.liveBall = 0.f;
+                gameState.liveBall = 1.0f;
+                gameState.inboundingInProgress = 0.f;
             }
-        } else { // This was a manual reset (e.g., from Python)
-            // Fully reset the game state to the beginning
-            gameState = GameState{
+            else
+            {
+                gameState.liveBall = 0.f; // Game over
+            }
+        }
+        else
+        {
+            // This was a manual reset or a reset after a score in 1v1 mode.
+            // Reset everything to the start of a fresh episode.
+            gameState = GameState {
                 .inboundingInProgress = 0.0f,
                 .liveBall = 1.0f,
                 .period = 1.0f,
                 .teamInPossession = 0.0f,
-                .team0Hoop = 0.0f,
+                .team0Hoop = gameState.team0Hoop, // Preserve existing hoop IDs
                 .team0Score = 0.0f,
-                .team1Hoop = 1.0f,
+                .team1Hoop = gameState.team1Hoop, // Preserve existing hoop IDs
                 .team1Score = 0.0f,
                 .gameClock = TIME_PER_PERIOD,
                 .shotClock = 24.0f,
                 .scoredBaskets = 0.f,
                 .outOfBoundsCount = 0.f,
-                .inboundClock = 0.f
+                .inboundClock = 0.0f,
+                .isOneOnOne = gameState.isOneOnOne // Preserve the 1v1 mode setting
             };
         }
 
-        // Reset all agents
-        auto agent_query = ctx.query<Action, Position, Reset, Inbounding, Done, CurStep, InPossession, Orientation, GrabCooldown, Stats>();
-        float agent_start_x[4] = {grid->startX - 2.0f, grid->startX - 1.0f, grid->startX + 0.0f, grid->startX + 1.0f};
+        // --- Part 2: Reset All Agents ---
+        std::vector<Vector3> team_colors = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
+        // The query must include every component that will be modified.
+        auto agent_query = ctx.query<Reset, Action, ActionMask, Position, Reward, Done, CurStep, InPossession, Orientation, Inbounding, Team, GrabCooldown, Stats, Attributes>();
         int agent_i = 0;
-        ctx.iterateQuery(agent_query, [&](Action &action, Position &pos, Reset &reset, Inbounding &inbounding, Done &done, CurStep &curstep, InPossession &inpos, Orientation &orient, GrabCooldown &cooldown, Stats &agent_stats) 
+        ctx.iterateQuery(agent_query,
+            [&](Reset &reset, Action &action, ActionMask &mask, Position &pos, Reward &reward, Done &done, CurStep &step, InPossession &in_pos, Orientation &orient, Inbounding &inb, Team &team, GrabCooldown &cooldown, Stats &stats, Attributes &attrs)
         {
+            // Reset all components to their default state
             action = Action{0, 0, 0, 0, 0, 0};
-            float x = (agent_i < 4) ? agent_start_x[agent_i] : grid->startX;
-            pos = Position{Vector3{x, grid->startY, 0.f}};
-            reset.resetNow = 0; // Clear the flag
-            inbounding = Inbounding{false, true};
-            done.episodeDone = 1.f; // Signal to python that a reset happened
-            curstep.step = 0;
-            inpos = {false, ENTITY_ID_PLACEHOLDER, 2}; // Initialize with 2 points (default)
-            orient = Orientation{Quat::id()};
+            mask = ActionMask{0.f, 0.f, 0.f, 0.f};
+            reset.resetNow = 0;
+            inb = Inbounding{false, true};
+            reward.r = 0.f;
+            done.episodeDone = 1.f;
+            step.step = 0;
+            in_pos = {false, ENTITY_ID_PLACEHOLDER, 2};
+            orient = Orientation {Quat::id()};
             cooldown = GrabCooldown{0.f};
-            agent_stats = {0.f, 0.f};
+            stats = {0.f, 0.f};
+
+            // Set agent position based on the game mode, exactly like in Sim::Sim
+            if (gameState.isOneOnOne == 1.f)
+            {
+                pos = Position { Vector3{ grid->startX + agent_i * 2, grid->startY, 0.f } };
+            }
+            else
+            {
+                pos = Position { Vector3{ grid->startX - 1 - (-2*(agent_i % 2)), grid->startY - 2 + agent_i/2, 0.f } };
+            }
+
+            // Re-initialize attributes, setting the target to the new starting position
+            attrs = {1.f, 0.f, 0.f, 6.5f, pos.position};
+            
+            // Re-assign team and defending hoop
+            uint32_t defending_hoop_id = (agent_i % 2 == 0) ? gameState.team0Hoop : gameState.team1Hoop;
+            team = Team{agent_i % 2, team_colors[agent_i % 2], defending_hoop_id};
+
             agent_i++;
         });
 
-        // Reset all basketballs
-        auto basketball_query = ctx.query<Position, Reset, Done, CurStep, Grabbed, BallPhysics>();
-        ctx.iterateQuery(basketball_query, [&](Position &pos, Reset &reset, Done &done, CurStep &curstep, Grabbed &grabbed, BallPhysics &ballphys) {
-            pos = Position{Vector3{grid->startX, grid->startY, 0.f}};
+        // --- Part 3: Reset All Basketballs ---
+        auto basketball_query = ctx.query<Reset, Position, Done, CurStep, Grabbed, BallPhysics>();
+        ctx.iterateQuery(basketball_query, [&](Reset &reset, Position &pos, Done &done, CurStep &step, Grabbed &grabbed, BallPhysics &phys)
+        {
+            pos = Position { Vector3{grid->startX, grid->startY, 0.f} };
             reset.resetNow = 0;
             done.episodeDone = 1.f;
-            curstep.step = 0;
-            grabbed = Grabbed{false, ENTITY_ID_PLACEHOLDER};
-            ballphys = BallPhysics{false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2};
+            step.step = 0;
+            grabbed = Grabbed {false, ENTITY_ID_PLACEHOLDER};
+            phys = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2};
         });
 
-        // Reset all hoops 
-        auto hoop_query = ctx.query<Position, Reset, Done, CurStep, ImAHoop, ScoringZone>();
-        int hoop_i = 0;
-        ctx.iterateQuery(hoop_query, [&](Position &pos, Reset &reset, Done &done, CurStep &curstep, ImAHoop &, ScoringZone &zone) {
-            // This logic can be more sophisticated based on court dimensions
-            if (hoop_i == 0)
-                pos = Position{Vector3{3.0f, grid->height / 2.0f, 0.f}};
-            else if (hoop_i == 1)
-                pos = Position{Vector3{grid->width - 3.0f, grid->height / 2.0f, 0.f}};
-            
+        // --- Part 4: Reset Hoops (only per-episode data) ---
+        // The hoop positions are static and should not be changed on reset.
+        auto hoop_query = ctx.query<Reset, Done, CurStep>();
+        ctx.iterateQuery(hoop_query, [&](Reset &reset, Done &done, CurStep &step)
+        {
             reset.resetNow = 0;
             done.episodeDone = 1.f;
-            curstep.step = 0;
-            zone = ScoringZone{HOOP_SCORE_ZONE_SIZE, 2.0f, Vector3{pos.position.x, pos.position.y, pos.position.z}};
-            hoop_i++;
+            step.step = 0;
         });
 
-        // Finally, clear the world's reset flag
+        // Finally, clear the world's master reset flag so this doesn't run again until triggered.
         world_reset.resetNow = 0;
     }
     
@@ -1042,31 +1080,41 @@ namespace madsimple {
             ball_pos.position.y < COURT_MIN_Y || ball_pos.position.y > COURT_MAX_Y) &&
             gameState.inboundingInProgress == 0.f)
         {
-            ball_physics.inFlight = false;
-            ball_physics.velocity = Vector3::zero();
-            gameState.liveBall = 0.f;
-
-            // The team that did NOT last touch the ball gets possession.
-            uint32_t new_team_idx = 1 - ball_physics.lastTouchedByTeamID;
-
-            // Find the player who had the ball and reset their position
-            auto agent_query = ctx.query<InPossession, Position>();
-            ctx.iterateQuery(agent_query, [&](InPossession &in_possession, Position &agent_pos)
+            if (gameState.isOneOnOne == 1.f)
             {
-                // If this agent was the one who went out of bounds with the ball...
-                if (in_possession.hasBall && in_possession.ballEntityID == ball_entity.id)
+                auto world_clock_query = ctx.query<Reset, IsWorldClock>();
+                ctx.iterateQuery(world_clock_query, [&](Reset &world_reset, IsWorldClock &lalala) {
+                    world_reset.resetNow = 1;
+                });
+            }
+            else
+            {
+                ball_physics.inFlight = false;
+                ball_physics.velocity = Vector3::zero();
+                gameState.liveBall = 0.f;
+
+                // The team that did NOT last touch the ball gets possession.
+                uint32_t new_team_idx = 1 - ball_physics.lastTouchedByTeamID;
+
+                // Find the player who had the ball and reset their position
+                auto agent_query = ctx.query<InPossession, Position>();
+                ctx.iterateQuery(agent_query, [&](InPossession &in_possession, Position &agent_pos)
                 {
-                    agent_pos.position += findVectorToCenter(ctx, agent_pos);
-                    
-                    // Take the ball away
-                    in_possession.hasBall = false;
-                    in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
-                }
-            });
-            
-            // Call the helper to give the ball to the other team.
-            Quat inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, findVectorToCenter(ctx, ball_pos));
-            assignInbounder(ctx, ball_entity, ball_pos, new_team_idx, inbound_orientation, true);
+                    // If this agent was the one who went out of bounds with the ball...
+                    if (in_possession.hasBall && in_possession.ballEntityID == ball_entity.id)
+                    {
+                        agent_pos.position += findVectorToCenter(ctx, agent_pos);
+                        
+                        // Take the ball away
+                        in_possession.hasBall = false;
+                        in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
+                    }
+                });
+                
+                // Call the helper to give the ball to the other team.
+                Quat inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, findVectorToCenter(ctx, ball_pos));
+                assignInbounder(ctx, ball_entity, ball_pos, new_team_idx, inbound_orientation, true);
+            }
         }
     }
 
@@ -1392,7 +1440,7 @@ namespace madsimple {
             .scoredBaskets = 0.f,
             .outOfBoundsCount = 0.f,
             .inboundClock = 0.0f,
-            .isOneOnOne = 1.f,
+            .isOneOnOne = ONE_ON_ONE,
         };
 
         // Make sure to add the Reset component to the WorldClock entity
@@ -1464,14 +1512,29 @@ namespace madsimple {
             Entity agent = ctx.makeEntity<Agent>();
             ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0};
             ctx.get<ActionMask>(agent) = ActionMask{0.f, 0.f, 0.f, 0.f};
-            ctx.get<Position>(agent) = Position 
+            if (gameState.isOneOnOne == 1.f)
             {
-                Vector3{
-                    grid->startX - 1 - (-2*(i % 2)),
-                    grid->startY - 2 + i/2,
-                    0.f
-                }
-            };
+                ctx.get<Position>(agent) = Position 
+                {
+                    Vector3{
+                        grid->startX + i * 2,
+                        grid->startY,
+                        0.f
+                    }
+                };
+            }
+            else
+            {
+                ctx.get<Position>(agent) = Position 
+                {
+                    Vector3{
+                        grid->startX - 1 - (-2*(i % 2)),
+                        grid->startY - 2 + i/2,
+                        0.f
+                    }
+                };
+            }
+            
             ctx.get<Reset>(agent) = Reset{0};
             ctx.get<Inbounding>(agent) = Inbounding{false, true};
             ctx.get<Reward>(agent).r = 0.f;
@@ -1481,12 +1544,14 @@ namespace madsimple {
             ctx.get<Orientation>(agent) = Orientation {Quat::id()};
             ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
             ctx.get<Stats>(agent) = {0.f, 0.f};
-            ctx.get<Attributes>(agent) = {1.f, 0.f, 0.f, 3.5f, ctx.get<Position>(agent).position};
+            ctx.get<Attributes>(agent) = {1.f, 0.f, 0.f, 6.5f, ctx.get<Position>(agent).position};
             
             // Use actual hoop entity IDs from gameState
             uint32_t defending_hoop_id = (i % 2 == 0) ? gameState.team0Hoop : gameState.team1Hoop;
             ctx.get<Team>(agent) = Team{i % 2, team_colors[i % 2], defending_hoop_id};
         };
+
+
 
         for (int i = 0; i < NUM_BASKETBALLS; i++) 
         {
