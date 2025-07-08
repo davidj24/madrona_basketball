@@ -951,7 +951,6 @@ namespace madsimple {
             cooldown = GrabCooldown{0.f};
             stats = {0.f, 0.f};
 
-            // FIX: Set agent position with randomness, exactly like in Sim::Sim
             if (gameState.isOneOnOne == 1.f)
             {
                 Vector3 base_pos = { grid->startX + (agent_i * 2.f), grid->startY, 0.f };
@@ -966,7 +965,7 @@ namespace madsimple {
                 pos = Position { Vector3{ grid->startX - 1 - (-2*(agent_i % 2)), grid->startY - 2 + agent_i/2, 0.f } };
             }
 
-            attrs = {1.f, 0.f, 0.f, 6.5f, pos.position};
+            attrs = {1.f - agent_i*DEFENDER_SLOWDOWN, 0.f, 0.f, 6.5f, pos.position};
             
             uint32_t defending_hoop_id = (agent_i % 2 == 0) ? gameState.team0Hoop : gameState.team1Hoop;
             team = Team{agent_i % 2, team_colors[agent_i % 2], defending_hoop_id};
@@ -999,6 +998,9 @@ namespace madsimple {
         world_reset.resetNow = 0;
     }
     
+
+
+
     inline void tick(Engine &ctx,
                     Reset &reset,
                     Done &done,
@@ -1561,7 +1563,7 @@ namespace madsimple {
             ctx.get<Orientation>(agent) = Orientation {Quat::id()};
             ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
             ctx.get<Stats>(agent) = {0.f, 0.f};
-            ctx.get<Attributes>(agent) = {1.f, 0.f, 0.f, 6.5f, ctx.get<Position>(agent).position};
+            ctx.get<Attributes>(agent) = {1 - i*DEFENDER_SLOWDOWN, 0.f, 0.f, 6.5f, ctx.get<Position>(agent).position};
             
             // Use actual hoop entity IDs from gameState
             uint32_t defending_hoop_id = (i % 2 == 0) ? gameState.team0Hoop : gameState.team1Hoop;
