@@ -882,7 +882,6 @@ namespace madBasketball {
     //=================================================== General Systems ===================================================
     inline void resetSystem(Engine &ctx, Reset &world_reset, IsWorldClock &)
     {
-        // This system only executes its logic if the reset flag has been set.
         if (world_reset.resetNow == 0)
         {
             return;
@@ -894,7 +893,6 @@ namespace madBasketball {
         // --- Part 1: Reset GameState Singleton ---
         if (gameState.gameClock <= 0.f && gameState.isOneOnOne == 0.f)
         {
-            // End-of-quarter logic (only for full games)
             if (gameState.period < 4 || gameState.team0Score == gameState.team1Score)
             {
                 gameState.period++;
@@ -905,42 +903,49 @@ namespace madBasketball {
             }
             else
             {
-                gameState.liveBall = 0.f; // Game over
+                gameState.liveBall = 0.f;
             }
         }
         else
         {
-            // This was a manual reset or a reset after a score in 1v1 mode.
             gameState = GameState {
                 .inboundingInProgress = 0.0f,
                 .liveBall = 1.0f,
                 .period = 1.0f,
                 .teamInPossession = 0.0f,
-                .team0Hoop = gameState.team0Hoop, // Preserve existing hoop IDs
+                .team0Hoop = gameState.team0Hoop,
                 .team0Score = 0.0f,
-                .team1Hoop = gameState.team1Hoop, // Preserve existing hoop IDs
+                .team1Hoop = gameState.team1Hoop,
                 .team1Score = 0.0f,
                 .gameClock = TIME_PER_PERIOD,
                 .shotClock = 24.0f,
                 .scoredBaskets = 0.f,
                 .outOfBoundsCount = 0.f,
                 .inboundClock = 0.0f,
-                .isOneOnOne = gameState.isOneOnOne // Preserve the 1v1 mode setting
+                .isOneOnOne = gameState.isOneOnOne
             };
         }
 
-        // --- Part 2: Reset All Agents ---
+        // --- Part 2: Reset Entities ---
+
+        // Get the basketball entity ID first
+        Entity basketball_entity;
+        ctx.iterateQuery(ctx.query<Entity, Grabbed>(), [&](Entity e, Grabbed&){
+            basketball_entity = e;
+        });
+
+        // Setup for agent reset
         std::vector<Vector3> team_colors = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
-        
         static thread_local std::mt19937 rng(std::random_device{}());
         std::normal_distribution<float> pos_dist(0.0f, START_POS_STDDEV);
+        uint32_t offensive_agent_id = ENTITY_ID_PLACEHOLDER;
 
-        auto agent_query = ctx.query<Reset, Action, ActionMask, Position, Reward, Done, CurStep, InPossession, Orientation, Inbounding, Team, GrabCooldown, Stats, Attributes>();
+        // Reset all agents
+        auto agent_query = ctx.query<Entity, Reset, Action, ActionMask, Position, Reward, Done, CurStep, InPossession, Orientation, Inbounding, Team, GrabCooldown, Stats, Attributes>();
         int agent_i = 0;
         ctx.iterateQuery(agent_query,
-            [&](Reset &reset, Action &action, ActionMask &mask, Position &pos, Reward &reward, Done &done, CurStep &step, InPossession &in_pos, Orientation &orient, Inbounding &inb, Team &team, GrabCooldown &cooldown, Stats &stats, Attributes &attrs)
+            [&](Entity agent, Reset &reset, Action &action, ActionMask &mask, Position &pos, Reward &reward, Done &done, CurStep &step, InPossession &in_pos, Orientation &orient, Inbounding &inb, Team &team, GrabCooldown &cooldown, Stats &stats, Attributes &attrs)
         {
-            // Reset all components to their default state
             action = Action{0, 0, 0, 0, 0, 0};
             mask = ActionMask{0.f, 0.f, 0.f, 0.f};
             reset.resetNow = 0;
@@ -948,7 +953,6 @@ namespace madBasketball {
             reward.r = 0.f;
             done.episodeDone = 1.f;
             step.step = 0;
-            in_pos = {false, ENTITY_ID_PLACEHOLDER, 2};
             orient = Orientation {Quat::id()};
             cooldown = GrabCooldown{0.f};
             stats = {0.f, 0.f};
@@ -961,21 +965,28 @@ namespace madBasketball {
                 pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
                 pos.position.x = std::clamp(pos.position.x, 0.f, grid->width);
                 pos.position.y = std::clamp(pos.position.y, 0.f, grid->height);
+
+                if (agent_i == 0) {
+                    offensive_agent_id = agent.id;
+                    in_pos = {true, static_cast<uint32_t>(basketball_entity.id), 2};
+                } else {
+                    in_pos = {false, ENTITY_ID_PLACEHOLDER, 2};
+                }
             }
             else
             {
                 pos = Position { Vector3{ grid->startX - 1 - (-2*(agent_i % 2)), grid->startY - 2 + agent_i/2, 0.f } };
+                in_pos = {false, ENTITY_ID_PLACEHOLDER, 2};
             }
 
-            attrs = {1.f - agent_i*DEFENDER_SLOWDOWN, 0.f, 0.f, 6.5f, pos.position};
-            
+            attrs = {1.f - (agent_i % 2) * DEFENDER_SLOWDOWN, 0.f, 0.f, 6.5f, pos.position};
             uint32_t defending_hoop_id = (agent_i % 2 == 0) ? gameState.team0Hoop : gameState.team1Hoop;
             team = Team{agent_i % 2, team_colors[agent_i % 2], defending_hoop_id};
 
             agent_i++;
         });
 
-        // --- Part 3: Reset All Basketballs ---
+        // Reset basketball
         auto basketball_query = ctx.query<Reset, Position, Done, CurStep, Grabbed, BallPhysics>();
         ctx.iterateQuery(basketball_query, [&](Reset &reset, Position &pos, Done &done, CurStep &step, Grabbed &grabbed, BallPhysics &phys)
         {
@@ -983,11 +994,16 @@ namespace madBasketball {
             reset.resetNow = 0;
             done.episodeDone = 1.f;
             step.step = 0;
-            grabbed = Grabbed {false, ENTITY_ID_PLACEHOLDER};
             phys = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2};
+            
+            if (gameState.isOneOnOne == 1.f) {
+                grabbed = Grabbed{true, offensive_agent_id};
+            } else {
+                grabbed = Grabbed{false, ENTITY_ID_PLACEHOLDER};
+            }
         });
 
-        // --- Part 4: Reset Hoops ---
+        // Reset hoops
         auto hoop_query = ctx.query<Reset, Done, CurStep>();
         ctx.iterateQuery(hoop_query, [&](Reset &reset, Done &done, CurStep &step)
         {
@@ -996,7 +1012,6 @@ namespace madBasketball {
             step.step = 0;
         });
 
-        // Finally, clear the world's master reset flag.
         world_reset.resetNow = 0;
     }
     
@@ -1432,10 +1447,10 @@ namespace madBasketball {
     // =================================================== Sim Creation ===================================================
 
     Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
-    : WorldBase(ctx),
-    episodeMgr(init.episodeMgr),
-    grid(init.grid),
-    maxEpisodeLength(cfg.maxEpisodeLength)
+        : WorldBase(ctx),
+        episodeMgr(init.episodeMgr),
+        grid(init.grid),
+        maxEpisodeLength(cfg.maxEpisodeLength)
     {
         ctx.singleton<GameState>() = GameState 
         {
@@ -1455,12 +1470,10 @@ namespace madBasketball {
             .isOneOnOne = ONE_ON_ONE,
         };
 
-        // Make sure to add the Reset component to the WorldClock entity
         Entity worldClock = ctx.makeEntity<WorldClock>();
         ctx.get<IsWorldClock>(worldClock) = {};
-        ctx.get<Reset>(worldClock) = {0}; // Initialize resetNow to 0
+        ctx.get<Reset>(worldClock) = {0};
 
-        // Initialize GameState and create hoops first
         GameState &gameState = ctx.singleton<GameState>();
         for (int i = 0; i < NUM_HOOPS; i++) 
         {
@@ -1470,126 +1483,90 @@ namespace madBasketball {
             float court_start_x = (grid->width - COURT_LENGTH_M) / 2.0f;
             float court_center_y = grid->height / 2.0f;
             
-            if (i == 0) 
-            {
+            if (i == 0) {
                 gameState.team0Hoop = hoop.id;
-                hoop_pos = Position { 
-                    Vector3{
-                        court_start_x + HOOP_FROM_BASELINE_M, 
-                        court_center_y, 
-                        0.f 
-                    }
-                };
-            } 
-            else if (i == 1) 
-            {
+                hoop_pos = Position { Vector3{ court_start_x + HOOP_FROM_BASELINE_M, court_center_y, 0.f } };
+            } else if (i == 1) {
                 gameState.team1Hoop = hoop.id;
-                hoop_pos = Position { 
-                    Vector3{
-                        court_start_x + COURT_LENGTH_M - HOOP_FROM_BASELINE_M, 
-                        court_center_y, 
-                        0.f 
-                    }
-                };
-            } 
-            else 
-            {
-                hoop_pos = Position 
-                { 
-                    Vector3{
-                        grid->startX + 10.0f + i * 5.0f,   
-                        grid->startY + 10.0f,  
-                        0.f
-                    }
-                };
+                hoop_pos = Position { Vector3{ court_start_x + COURT_LENGTH_M - HOOP_FROM_BASELINE_M, court_center_y, 0.f } };
             }
-
+            
             ctx.get<Position>(hoop) = hoop_pos;
             ctx.get<Reset>(hoop) = Reset{0};
             ctx.get<Done>(hoop).episodeDone = 0.f;
             ctx.get<CurStep>(hoop).step = 0;
             ctx.get<ImAHoop>(hoop) = ImAHoop{};
-            ctx.get<ScoringZone>(hoop) = ScoringZone
-            {
-                HOOP_SCORE_ZONE_SIZE,
-                .1f,
-                Vector3{hoop_pos.position.x, hoop_pos.position.y, hoop_pos.position.z}
-            };
+            ctx.get<ScoringZone>(hoop) = ScoringZone { HOOP_SCORE_ZONE_SIZE, .1f, Vector3{hoop_pos.position.x, hoop_pos.position.y, hoop_pos.position.z} };
         }
 
-        
-        
+        // --- Create Basketball First ---
+        // We need the ball's ID to give to the offensive agent.
+        Entity basketball = ctx.makeEntity<Basketball>();
+        ctx.get<Position>(basketball) = Position { Vector3{grid->startX, grid->startY, 0.f} };
+        ctx.get<Reset>(basketball) = Reset{0};
+        ctx.get<Done>(basketball).episodeDone = 0.f;
+        ctx.get<CurStep>(basketball).step = 0;
+        // We will set the Grabbed component later, after we know the agent's ID.
+        ctx.get<Grabbed>(basketball) = Grabbed {false, ENTITY_ID_PLACEHOLDER};
+        ctx.get<BallPhysics>(basketball) = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2};
+
+
+        // --- Create Agents ---
+        uint32_t offensive_agent_id = ENTITY_ID_PLACEHOLDER;
         static thread_local std::mt19937 rng(std::random_device{}());
         std::normal_distribution<float> pos_dist(0.0f, START_POS_STDDEV);
-        // Now create agents with proper hoop references
         std::vector<Vector3> team_colors = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
+        
         for (int i = 0; i < NUM_AGENTS; i++) 
         {
             Entity agent = ctx.makeEntity<Agent>();
-            ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0};
-            ctx.get<ActionMask>(agent) = ActionMask{0.f, 0.f, 0.f, 0.f};
             Position &agent_pos = ctx.get<Position>(agent);
+
             if (gameState.isOneOnOne == 1.f)
             {
-                // Calculate the base starting position
-                Vector3 base_pos = {
-                    grid->startX + (i * 2.f), // Spread them out for 1v1
-                    grid->startY,
-                    0.f
-                };
-
-                // Generate a random deviation
+                Vector3 base_pos = { grid->startX + (i * 2.f), grid->startY, 0.f };
                 float x_dev = pos_dist(rng);
                 float y_dev = pos_dist(rng);
-
-                // Add the deviation to the base position
                 agent_pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
-
-                // It's good practice to clamp the final position to the world boundaries
                 agent_pos.position.x = std::clamp(agent_pos.position.x, 0.f, grid->width);
                 agent_pos.position.y = std::clamp(agent_pos.position.y, 0.f, grid->height);
+
+                // If this is the first agent, they are the designated offensive player.
+                if (i == 0) {
+                    offensive_agent_id = agent.id;
+                    // Give them possession of the ball we just created.
+                    ctx.get<InPossession>(agent) = {true, static_cast<uint32_t>(basketball.id), 2};
+                } else {
+                    // All other agents in 1v1 mode start without the ball.
+                    ctx.get<InPossession>(agent) = {false, ENTITY_ID_PLACEHOLDER, 2};
+                }
             }
             else
             {
-                // Original 5v5 starting positions
-                agent_pos = Position {
-                    Vector3{
-                        grid->startX - 1 - (-2*(i % 2)),
-                        grid->startY - 2 + i/2,
-                        0.f
-                    }
-                };
+                agent_pos = Position { Vector3{ grid->startX - 1 - (-2*(i % 2)), grid->startY - 2 + i/2, 0.f } };
+                ctx.get<InPossession>(agent) = {false, ENTITY_ID_PLACEHOLDER, 2};
             }
             
+            ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0};
+            ctx.get<ActionMask>(agent) = ActionMask{0.f, 0.f, 0.f, 0.f};
             ctx.get<Reset>(agent) = Reset{0};
             ctx.get<Inbounding>(agent) = Inbounding{false, true};
             ctx.get<Reward>(agent).r = 0.f;
             ctx.get<Done>(agent).episodeDone = 0.f;
             ctx.get<CurStep>(agent).step = 0;
-            ctx.get<InPossession>(agent) = {false, ENTITY_ID_PLACEHOLDER, 2};
             ctx.get<Orientation>(agent) = Orientation {Quat::id()};
             ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
             ctx.get<Stats>(agent) = {0.f, 0.f};
-            ctx.get<Attributes>(agent) = {1 - i*DEFENDER_SLOWDOWN, 0.f, 0.f, 6.5f, ctx.get<Position>(agent).position};
+            ctx.get<Attributes>(agent) = {1.f - (i % 2) * DEFENDER_SLOWDOWN, 0.f, 0.f, 6.5f, agent_pos.position};
             
-            // Use actual hoop entity IDs from gameState
             uint32_t defending_hoop_id = (i % 2 == 0) ? gameState.team0Hoop : gameState.team1Hoop;
             ctx.get<Team>(agent) = Team{i % 2, team_colors[i % 2], defending_hoop_id};
         };
 
-
-
-        for (int i = 0; i < NUM_BASKETBALLS; i++) 
-        {
-            Entity basketball = ctx.makeEntity<Basketball>();
-            ctx.get<Position>(basketball) = Position { Vector3{grid->startX, grid->startY, 0.f} };
-            ctx.get<Reset>(basketball) = Reset{0};
-            ctx.get<Done>(basketball).episodeDone = 0.f;
-            ctx.get<CurStep>(basketball).step = 0;
-            ctx.get<Grabbed>(basketball) = Grabbed {false, ENTITY_ID_PLACEHOLDER};
-            ctx.get<BallPhysics>(basketball) = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2};
+        // --- Finalize Ball State for 1v1 ---
+        // Now that we have the offensive_agent_id, we can set the ball's Grabbed component.
+        if (gameState.isOneOnOne == 1.f) {
+            ctx.get<Grabbed>(basketball) = {true, offensive_agent_id};
         }
-
-
     }
 }
