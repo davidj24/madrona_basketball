@@ -103,8 +103,8 @@ namespace madsimple {
                     .numTaskGraphs = 1,
                     .numExportedBuffers = (uint32_t)ExportID::NumExports, 
                 }, {
-                    { SIMPLE_SRC_LIST },
-                    { SIMPLE_COMPILE_FLAGS },
+                    { BASKETBALL_SRC_LIST },
+                    { BASKETBALL_COMPILE_FLAGS },
                     CompileConfig::OptMode::LTO,
                 }, cu_ctx),
             stepGraph(gpuExec.buildLaunchGraph(0))

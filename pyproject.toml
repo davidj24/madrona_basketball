@@ -4,10 +4,9 @@ build-backend = "madrona-py-build"
 backend-path = ["external/madrona/py"]
 
 [project]
-name = "madrona_simple_example"
+name = "madrona_basketball"
 version = "0.0.1"
 
-[tool.madrona.packages.madrona_simple_example]
-path = "src/madrona_simple_example"
+[tool.madrona.packages.madrona_basketball]
 ext-out-dir = "build"
-extensions = [ "_madrona_simple_example_cpp" ]
+ext-only = true

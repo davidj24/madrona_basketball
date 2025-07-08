@@ -51,7 +51,7 @@ static Cell * setupCellData(
     return cells;
 }
 
-NB_MODULE(_madrona_simple_example_cpp, m) {
+NB_MODULE(madrona_basketball, m) {
     madrona::py::setupMadronaSubmodule(m);
 
     nb::class_<Manager> (m, "SimpleGridworldSimulator")

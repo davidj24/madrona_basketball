@@ -29,8 +29,8 @@ except Exception as e:
 sys.path.append('./build')
 
 try:
-    import _madrona_simple_example_cpp as madrona_sim
-    from _madrona_simple_example_cpp.madrona import ExecMode
+    import madrona_basketball as mba
+    from madrona_basketball.madrona import ExecMode
     print("✓ Successfully imported Madrona C++ module")
 except ImportError as e:
     print(f"✗ Failed to import Madrona C++ module: {e}")
@@ -133,7 +133,7 @@ class MadronaPipeline:
         walls = np.zeros((world_discrete_height, world_discrete_width), dtype=bool)
         rewards = np.zeros((world_discrete_height, world_discrete_width), dtype=float)
         
-        self.sim = madrona_sim.SimpleGridworldSimulator(
+        self.sim = mba.SimpleGridworldSimulator(
             walls=walls,
             rewards=rewards, 
             start_x=self.world_width_meters / 2.0,  # Start in the true center
@@ -558,7 +558,7 @@ class MadronaPipeline:
             elif keys[pygame.K_a]: move_angle = 6
         if keys[pygame.K_q]: rotate = -1
         elif keys[pygame.K_e]: rotate = 1
-        if keys[pygame.K_LSHIFT]: grab = 1
+        if keys[pygame.K_LSHIFT]: arab = 1
         if keys[pygame.K_SPACE]: pass_ball = 1
         if keys[pygame.K_h]: shoot_ball = 1
 
