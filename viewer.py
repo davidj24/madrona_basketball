@@ -137,9 +137,9 @@ class MadronaPipeline:
             start_x=self.world_width_meters / 2.0,  # Start in the true center
             start_y=self.world_height_meters / 2.0,
             max_episode_length=39600,
-            exec_mode=ExecMode.CPU,
+            exec_mode=ExecMode.CUDA,
             num_worlds=1,
-            gpu_id=-1
+            gpu_id=0
         )
         
         print(f"✓ Madrona simulation initialized! World is {self.world_width_meters:.2f}m x {self.world_height_meters:.2f}m")
