@@ -556,7 +556,7 @@ class MadronaPipeline:
             elif keys[pygame.K_a]: move_angle = 6
         if keys[pygame.K_q]: rotate = -1
         elif keys[pygame.K_e]: rotate = 1
-        if keys[pygame.K_LSHIFT]: arab = 1
+        if keys[pygame.K_LSHIFT]: grab = 1
         if keys[pygame.K_SPACE]: pass_ball = 1
         if keys[pygame.K_h]: shoot_ball = 1
 
