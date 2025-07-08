@@ -841,10 +841,10 @@ inline void resetSystem(Engine &ctx, Reset &world_reset, IsWorldClock &)
 
 
 inline void tick(Engine &ctx,
-                Reset &reset,
-                Done &done,
-                CurStep &episode_step,
-                GrabCooldown &grab_cooldown)
+                 Reset &reset,
+                 Done &done,
+                 CurStep &episode_step,
+                 GrabCooldown &grab_cooldown)
 {
     // If a reset has been triggered, mark the agent as done for the learning side.
     if (reset.resetNow == 1) {
@@ -1014,14 +1014,14 @@ struct AgentObservationData {
 };
 
 inline void fillObservationsSystem(Engine &ctx,
-                                    Entity agent_entity,
-                                    Observations &observations,
-                                    Position &agent_pos,
-                                    Orientation &agent_orientation,
-                                    InPossession &in_possession,
-                                    Inbounding &inbounding,
-                                    Team &agent_team,
-                                    GrabCooldown &grab_cooldown)
+                                   Entity agent_entity,
+                                   Observations &observations,
+                                   Position &agent_pos,
+                                   Orientation &agent_orientation,
+                                   InPossession &in_possession,
+                                   Inbounding &inbounding,
+                                   Team &agent_team,
+                                   GrabCooldown &grab_cooldown)
 {
     auto &obs = observations.observationsArray;
     const GameState &gameState = ctx.singleton<GameState>();
@@ -1029,21 +1029,17 @@ inline void fillObservationsSystem(Engine &ctx,
 
     // Helper lambda to fill a block of the array with a Vector3
     auto fill_vec3 = [&](const Vector3 &vec) {
-        if (idx + 3 <= (int32_t)obs.size()) {
-            obs[idx++] = vec.x;
-            obs[idx++] = vec.y;
-            obs[idx++] = vec.z;
-        }
+        obs[idx++] = vec.x;
+        obs[idx++] = vec.y;
+        obs[idx++] = vec.z;
     };
 
     // Helper lambda to fill a block of the array with a Quaternion
     auto fill_quat = [&](const Quat &q) {
-        if (idx + 4 <= (int32_t)obs.size()) {
-            obs[idx++] = q.w;
-            obs[idx++] = q.x;
-            obs[idx++] = q.y;
-            obs[idx++] = q.z;
-        }
+        obs[idx++] = q.w;
+        obs[idx++] = q.x;
+        obs[idx++] = q.y;
+        obs[idx++] = q.z;
     };
 
     // ===================================================
@@ -1069,8 +1065,13 @@ inline void fillObservationsSystem(Engine &ctx,
     Position hoop_positions[NUM_HOOPS];
     uint32_t hoop_ids[NUM_HOOPS];
     int hoop_i = 0;
-    ctx.iterateQuery(ctx.data().hoopQuery, [&](Entity e, Position &p, ImAHoop &, Reset &, Done &, CurStep &, ScoringZone &) {
-        if (hoop_i < NUM_HOOPS) { hoop_positions[hoop_i] = p; hoop_ids[hoop_i] = e.id; hoop_i++; }
+    ctx.iterateQuery(ctx.data().hoopQuery,
+        [&](Entity e, Position &p, ImAHoop &, Reset &, Done &, CurStep &, ScoringZone &)
+    {
+        assert(hoop_i < NUM_HOOPS);
+        hoop_positions[hoop_i] = p;
+        hoop_ids[hoop_i] = e.id;
+        hoop_i++;
     });
 
     // --- All Agent Data ---
@@ -1078,13 +1079,14 @@ inline void fillObservationsSystem(Engine &ctx,
     int agent_idx = 0;
     int32_t inbounder_id = -1; // Store the ID of the current inbounder
     ctx.iterateQuery(ctx.data().agentQuery,
-        [&](Entity e, Team &t, InPossession &ip, Position &p, Orientation &o, Inbounding &ib, GrabCooldown &gc, Reset &, Action &, ActionMask &, Reward &, Done &, CurStep &, Stats &, Attributes &)
+        [&](Entity e, Team &t, InPossession &ip, Position &p, Orientation &o,
+            Inbounding &ib, GrabCooldown &gc, Reset &, Action &, ActionMask &,
+            Reward &, Done &, CurStep &, Stats &, Attributes &)
     {
-        if (agent_idx < NUM_AGENTS) {
-            all_agents[agent_idx++] = {e.id, t.teamIndex, p, o, ip, ib, gc};
-            if (ib.imInbounding) {
-                inbounder_id = e.id;
-            }
+        assert(agent_idx < NUM_AGENTS);
+        all_agents[agent_idx++] = { e.id, t.teamIndex, p, o, ip, ib, gc };
+        if (ib.imInbounding) {
+            inbounder_id = e.id;
         }
     });
 
@@ -1191,6 +1193,7 @@ inline void fillObservationsSystem(Engine &ctx,
     for (int i = agent_idx; i < NUM_AGENTS; i++) { obs[idx++] = 0.f; }
 
 
+    assert(idx < (int32_t)obs.size()); // Ensure we didn't overflow the observation array
     // Zero out any remaining space for safety
     for (; idx < (int32_t)obs.size(); idx++)
     {
@@ -1251,7 +1254,11 @@ TaskGraphNodeID setupGameStepTasks(
     auto hardCodeDefenseSystemNode = builder.addToGraph<ParallelForNode<Engine, hardCodeDefenseSystem,
         Team, Position, Action, Attributes>>({agentCollisionNode});
 
-    return hardCodeDefenseSystemNode;
+    auto fillObservationsNode = builder.addToGraph<ParallelForNode<Engine, fillObservationsSystem,
+        Entity, Observations, Position, Orientation, InPossession,
+        Inbounding, Team, GrabCooldown>>({hardCodeDefenseSystemNode});
+
+    return fillObservationsNode;
 }
 
 }
