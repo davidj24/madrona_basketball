@@ -1,3 +1,5 @@
+#include <madrona/mw_gpu_entry.hpp>
+
 #include "sim.hpp"
 #include "types.hpp"
 #include "gen.hpp"
@@ -104,5 +106,11 @@ void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
     auto game_step = setupGameStepTasks(builder, {});
 
 }
+
+// This declaration is needed for the GPU backend in order to generate the
+// CUDA kernel for world initialization, which needs to be specialized to the
+// application's world data type (Sim) and config and initialization types.
+// On the CPU it is a no-op.
+MADRONA_BUILD_MWGPU_ENTRY(Engine, Sim, Sim::Config, WorldInit);
 
 }

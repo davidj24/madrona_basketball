@@ -1,6 +1,7 @@
 import math
 import os
 import sys
+import time
 
 import madrona_basketball as mba
 
@@ -20,13 +21,13 @@ class EnvWrapper:
         world_discrete_height = math.ceil(self.world_height_meters)
 
         self.worlds = mba.SimpleGridworldSimulator(
-            discrete_x = world_discrete_width,
-            discrete_y = world_discrete_height,
+            discrete_x=world_discrete_width,
+            discrete_y=world_discrete_height,
             start_x=self.world_width_meters / 2.0,
             start_y=self.world_height_meters / 2.0,
             max_episode_length=39600,
             exec_mode=mba.madrona.ExecMode.CUDA,
-            num_worlds=1,
+            num_worlds=num_worlds,
             gpu_id=0
         )
 
@@ -37,11 +38,30 @@ class EnvWrapper:
         self.rewards = self.worlds.reward_tensor().to_torch()
         self.resets = self.worlds.reset_tensor().to_torch()
 
+        print("Obs shape:", self.observations.shape)
+        print("Actions shape:", self.actions.shape)
+        print("Dones shape:", self.dones.shape)
+        print("Rewards shape:", self.rewards.shape)
+        print("Resets shape:", self.resets.shape)
 
     def step(self):
         self.worlds.step()
 
 
-env = EnvWrapper()
-for i in range(5):
-    env.step()
+# Example use case
+def main():
+    env = EnvWrapper()
+
+    n_steps = 1000
+    start_time = time.time()
+    for i in range(n_steps):
+        env.step()
+
+    end_time = time.time()
+    elapsed_frames = n_steps * num_worlds
+    print(
+        f"Average FPS: {elapsed_frames / (end_time - start_time):.2f} frames/sec")
+
+
+if __name__ == "__main__":
+    main()
