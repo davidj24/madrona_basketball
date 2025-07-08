@@ -87,9 +87,10 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
     grid(init.grid),
     maxEpisodeLength(cfg.maxEpisodeLength)
 {
-    ballQuery = ctx.query<Entity, Position, Grabbed, BallPhysics>();
-    hoopQuery = ctx.query<Entity, Position, ImAHoop>();
-    agentQuery = ctx.query<Entity, Team, InPossession, Position, Orientation, Inbounding, GrabCooldown>();
+    ballQuery = ctx.query<Entity, Position, Grabbed, BallPhysics, Reset, Done, CurStep>();
+    hoopQuery = ctx.query<Entity, Position, ImAHoop, Reset, Done, CurStep, ScoringZone>();
+    agentQuery = ctx.query<Entity, Team, InPossession, Position, Orientation, Inbounding, GrabCooldown, Reset, Action, ActionMask, Reward, Done, CurStep, Stats, Attributes>();
+    worldClockQuery = ctx.query<Reset, IsWorldClock>();
 
     // Generate the world - defined in gen.cpp
     generateWorld(ctx);

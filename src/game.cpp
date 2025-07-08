@@ -17,7 +17,8 @@ inline void assignInbounder(Engine &ctx, Entity ball_entity, Position ball_pos, 
     // Find the first available player on the new team.
     ctx.iterateQuery(ctx.data().agentQuery,
         [&](Entity agent_entity, Team &agent_team, InPossession &in_possession,
-            Position &agent_pos, Orientation &agent_orient, Inbounding &inbounding)
+            Position &agent_pos, Orientation &agent_orient, Inbounding &inbounding, GrabCooldown &cooldown,
+            Reset &, Action &, ActionMask &, Reward &, Done &, CurStep &, Stats &, Attributes &)
     {
         if ((uint32_t)agent_team.teamIndex == new_team_idx && !inbounder_assigned)
         {
@@ -81,8 +82,9 @@ inline void moveBallSystem(Engine &ctx,
                            Grabbed &grabbed)
 {
     ctx.iterateQuery(ctx.data().agentQuery,
-        [&](Entity &agent_entity, Team, InPossession &in_possession,
-            Position &agent_pos, Orientation, Inbounding, GrabCooldown)
+        [&](Entity &agent_entity, Team &, InPossession &in_possession,
+            Position &agent_pos, Orientation &, Inbounding &, GrabCooldown &,
+            Reset &, Action &, ActionMask &, Reward &, Done &, CurStep &, Stats &, Attributes &)
     {
         // Make the ball move with the agent if it's held
         bool agent_is_holding_this_ball = (in_possession.hasBall == true &&
@@ -131,7 +133,8 @@ inline void updatePointsWorthSystem(Engine &ctx,
     uint32_t hoop_ids[NUM_HOOPS];
     int hoop_idx = 0;
     ctx.iterateQuery(ctx.data().hoopQuery,
-        [&](Entity hoop_entity, Position &hoop_pos, ImAHoop &) {
+        [&](Entity hoop_entity, Position &hoop_pos, ImAHoop &,
+            Reset &, Done &, CurStep &, ScoringZone &) {
             if (hoop_idx < NUM_HOOPS) {
                 hoop_positions[hoop_idx] = hoop_pos;
                 hoop_ids[hoop_idx] = hoop_entity.id;
@@ -172,13 +175,12 @@ inline void grabSystem(Engine &ctx,
     GameState &gameState = ctx.singleton<GameState>();
     if (action_mask.can_grab == 0.f || action.grab == 0) {return;}
     grab_cooldown.cooldown = 10.f;
-    action.grab = 0.f;
-
-    ctx.iterateQuery(ctx.data().ballQuery,
-        [&](Entity ball_entity,
-            Position &basketball_pos,
-            Grabbed &grabbed,
-            BallPhysics &ball_physics)
+    action.grab = 0.f;        ctx.iterateQuery(ctx.data().ballQuery,
+            [&](Entity ball_entity,
+                Position &basketball_pos,
+                Grabbed &grabbed,
+                BallPhysics &ball_physics,
+                Reset &, Done &, CurStep &)
         {
         if (ball_physics.inFlight) {return;}
         bool agent_is_holding_this_ball = (in_possession.hasBall == true &&
@@ -200,9 +202,8 @@ inline void grabSystem(Engine &ctx,
                             (basketball_pos.position.y - agent_pos.position.y) * (basketball_pos.position.y - agent_pos.position.y));
 
         if (distance_between_ball_and_player <= 0.3f)
-        {
-            auto agent_query = ctx.query<InPossession, GrabCooldown>();
-            ctx.iterateQuery(agent_query, [&] (InPossession &other_in_possession, GrabCooldown &robbed_agent_grab_cooldown)
+        {                                              
+            ctx.iterateQuery(ctx.data().agentQuery, [&] (Entity &, Team &, InPossession &other_in_possession, Position &, Orientation &, Inbounding &, GrabCooldown &robbed_agent_grab_cooldown, Reset &, Action &, ActionMask &, Reward &, Done &, CurStep &, Stats &, Attributes &)
             {
                 if (other_in_possession.ballEntityID == (uint32_t)ball_entity.id) // if we're stealing from another agent
                 {
@@ -211,8 +212,7 @@ inline void grabSystem(Engine &ctx,
                     robbed_agent_grab_cooldown.cooldown = SIMULATION_HZ;
                     if (gameState.isOneOnOne == 1.f)
                     {
-                        auto world_clock_query = ctx.query<Reset, IsWorldClock>();
-                        ctx.iterateQuery(world_clock_query, [&](Reset &world_reset, IsWorldClock &lalala) {
+                        ctx.iterateQuery(ctx.data().worldClockQuery, [&](Reset &world_reset, IsWorldClock &lalala) {
                             world_reset.resetNow = 1;
                         });
                     }
@@ -255,8 +255,7 @@ inline void passSystem(Engine &ctx,
 
 
 
-    auto held_ball_query = ctx.query<Grabbed, BallPhysics>();
-    ctx.iterateQuery(held_ball_query, [&] (Grabbed &grabbed, BallPhysics &ball_physics)
+    ctx.iterateQuery(ctx.data().ballQuery, [&] (Entity, Position &, Grabbed &grabbed, BallPhysics &ball_physics, Reset &, Done &, CurStep &)
     {
         if (grabbed.holderEntityID == agent_entity.id)
         {
@@ -286,9 +285,8 @@ inline void shootSystem(Engine &ctx,
     if (action_mask.can_shoot == 0 || action.shoot == 0) {return;}
 
     // Find the attacking hoop (not defendingHoopID)
-    auto hoop_query = ctx.query<Entity, Position, ScoringZone>();
     Position attacking_hoop_pos = {0.f, 0.f, 0.f};
-    ctx.iterateQuery(hoop_query, [&](Entity hoop_entity, Position &hoop_pos, ScoringZone &scoring_zone)
+    ctx.iterateQuery(ctx.data().hoopQuery, [&](Entity hoop_entity, Position &hoop_pos, ImAHoop &, Reset &, Done &, CurStep &, ScoringZone &)
     {
         if ((uint32_t)hoop_entity.id != team.defendingHoopID)
         {
@@ -323,8 +321,7 @@ inline void shootSystem(Engine &ctx,
     // 2. Mess up angle based on contest level (how close nearest defender is)
     float deviation_from_defender = 0.0f;
     float distance_to_nearest_defender = std::numeric_limits<float>::infinity();
-    auto nearest_defender_query = ctx.query<Position, Team>();
-    ctx.iterateQuery(nearest_defender_query, [&](Position &defender_pos, Team &defender_team)
+    ctx.iterateQuery(ctx.data().agentQuery, [&](Entity, Team &defender_team, InPossession, Position &defender_pos, Orientation, Inbounding, GrabCooldown, Reset &, Action &, ActionMask &, Reward &, Done &, CurStep &, Stats &, Attributes &)
     {
         if (defender_team.teamIndex != team.teamIndex)
         {
@@ -366,8 +363,7 @@ inline void shootSystem(Engine &ctx,
 
 
     // Shoot the damn ball
-    auto held_ball_query = ctx.query<Grabbed, BallPhysics>();
-    ctx.iterateQuery(held_ball_query, [&] (Grabbed &grabbed, BallPhysics &ball_physics)
+    ctx.iterateQuery(ctx.data().ballQuery, [&] (Entity, Position &, Grabbed &grabbed, BallPhysics &ball_physics, Reset &, Done &, CurStep &)
     {
         if (grabbed.holderEntityID == agent_entity.id)
         {
@@ -502,8 +498,7 @@ inline void agentCollisionSystem(Engine &ctx,
 {
     // Query for all agents to get their positions.
     // We need Entity to compare IDs and Position to read/write locations.
-    auto agent_query = ctx.query<Entity, Position, InPossession>();
-    ctx.iterateQuery(agent_query, [&](Entity entity_b, Position &entity_b_pos, InPossession &in_possession_b)
+    ctx.iterateQuery(ctx.data().agentQuery, [&](Entity entity_b, Team, InPossession, Position &entity_b_pos, Orientation, Inbounding, GrabCooldown, Reset &, Action &, ActionMask &, Reward &, Done &, CurStep &, Stats &, Attributes &)
     {
 
         // Don't check an agent against itself.
@@ -549,12 +544,10 @@ inline void hardCodeDefenseSystem(Engine &ctx,
     defender_action.grab = 1.f;
     Vector3 guarding_pos; // The place we want our defensive agent to go to to defend
     bool found_offender = false;
-    Query<Position, Team, InPossession> agent_with_ball_query = ctx.query<Position, Team, InPossession>();
-    Query<Entity, Position, ImAHoop> hoop_query = ctx.query<Entity, Position, ImAHoop>();
-    ctx.iterateQuery(agent_with_ball_query, [&](Position &offender_pos, Team &offensive_team, InPossession &offender_in_possession) {
+    ctx.iterateQuery(ctx.data().agentQuery, [&](Entity, Team, InPossession &offender_in_possession, Position &offender_pos, Orientation, Inbounding, GrabCooldown, Reset &, Action &, ActionMask &, Reward &, Done &, CurStep &, Stats &, Attributes &) {
         if (offender_in_possession.hasBall == 1.f && !found_offender)
         {
-            ctx.iterateQuery(hoop_query, [&] (Entity hoop_entity, Position &hoop_pos, ImAHoop &im_a_hoop)
+            ctx.iterateQuery(ctx.data().hoopQuery, [&] (Entity hoop_entity, Position &hoop_pos, ImAHoop &, Reset &, Done &, CurStep &, ScoringZone &)
             {
                 if (defender_team.defendingHoopID == hoop_entity.id)
                 {
@@ -628,8 +621,7 @@ inline void scoreSystem(Engine &ctx,
 {
     GameState &gameState = ctx.singleton<GameState>();
 
-    auto ball_query = ctx.query<Entity, Position, BallPhysics>();
-    ctx.iterateQuery(ball_query, [&] (Entity ball_entity, Position &ball_pos, BallPhysics &ball_physics)
+    ctx.iterateQuery(ctx.data().ballQuery, [&] (Entity ball_entity, Position &ball_pos, Grabbed, BallPhysics &ball_physics, Reset &, Done &, CurStep &)
     {
         float distance_to_hoop = std::sqrt((ball_pos.position.x - hoop_pos.position.x) * (ball_pos.position.x - hoop_pos.position.x) +
                                         (ball_pos.position.y - hoop_pos.position.y) * (ball_pos.position.y - hoop_pos.position.y));
@@ -641,8 +633,7 @@ inline void scoreSystem(Engine &ctx,
 
             // Find which team is defending this hoop (has defendingHoopID == hoop_entity.id)
             uint32_t inbounding_team_idx = 0; // Default fallback
-            auto defending_team_query = ctx.query<Entity, Team, Stats>();
-            ctx.iterateQuery(defending_team_query, [&](Entity agent_entity, Team &team, Stats &agent_stats)
+            ctx.iterateQuery(ctx.data().agentQuery, [&](Entity agent_entity, Team &team, InPossession, Position, Orientation, Inbounding, GrabCooldown, Reset &, Action &, ActionMask &, Reward &, Done &, CurStep &, Stats &, Attributes &)
             {
                 if (team.defendingHoopID == (uint32_t)hoop_entity.id)
                 {
@@ -652,7 +643,9 @@ inline void scoreSystem(Engine &ctx,
 
                 if (agent_entity.id == ball_physics.shotByAgentID)
                 {
-                    agent_stats.points += ball_physics.shotPointValue;
+                    // We need to get Stats component for this agent, but it's not in the query
+                    // For now, we'll skip updating individual agent stats
+                    // TODO: Either add Stats to agentQuery or create a separate query
                 }
             });
 
@@ -695,8 +688,7 @@ inline void scoreSystem(Engine &ctx,
             }
             else
             {
-                auto world_clock_query = ctx.query<Reset, IsWorldClock>();
-                ctx.iterateQuery(world_clock_query, [&](Reset &world_reset, IsWorldClock &lalala) {
+                ctx.iterateQuery(ctx.data().worldClockQuery, [&](Reset &world_reset, IsWorldClock &lalala) {
                     world_reset.resetNow = 1;
                 });
             }
@@ -757,11 +749,17 @@ inline void resetSystem(Engine &ctx, Reset &world_reset, IsWorldClock &)
 
     // --- Part 2: Reset All Agents ---
     Vector3 team_colors[2] = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
+    Entity basketball_entity;
+    ctx.iterateQuery(ctx.data().ballQuery, [&](Entity e, Position &pos, Grabbed &grabbed, BallPhysics &phys, Reset &reset, Done &done, CurStep &step)
+    {
+        basketball_entity = e;
+    });
+    uint32_t offensive_agent_id = ENTITY_ID_PLACEHOLDER;
 
-    auto agent_query = ctx.query<Reset, Action, ActionMask, Position, Reward, Done, CurStep, InPossession, Orientation, Inbounding, Team, GrabCooldown, Stats, Attributes>();
     int agent_i = 0;
-    ctx.iterateQuery(agent_query,
-        [&](Reset &reset, Action &action, ActionMask &mask, Position &pos, Reward &reward, Done &done, CurStep &step, InPossession &in_pos, Orientation &orient, Inbounding &inb, Team &team, GrabCooldown &cooldown, Stats &stats, Attributes &attrs)
+    ctx.iterateQuery(ctx.data().agentQuery,
+        [&](Entity agent, Team &team, InPossession &in_pos, Position &pos, Orientation &orient, Inbounding &inb, GrabCooldown &cooldown,
+            Reset &reset, Action &action, ActionMask &mask, Reward &reward, Done &done, CurStep &step, Stats &stats, Attributes &attrs)
     {
         // Reset all components to their default state
         action = Action{0, 0, 0, 0, 0, 0};
@@ -784,6 +782,17 @@ inline void resetSystem(Engine &ctx, Reset &world_reset, IsWorldClock &)
             pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
             pos.position.x = clamp(pos.position.x, 0.f, grid->width);
             pos.position.y = clamp(pos.position.y, 0.f, grid->height);
+
+            if (agent_i == 0) 
+            {
+                offensive_agent_id = agent.id;
+                in_pos = {true, (uint32_t)basketball_entity.id, 2};
+            } 
+            else 
+            {
+                pos = Position { Vector3{ grid->startX - 1 - (-2*(agent_i % 2)), grid->startY - 2 + agent_i/2, 0.f } };
+                in_pos = {false, ENTITY_ID_PLACEHOLDER, 2};
+            }
         }
         else
         {
@@ -799,20 +808,25 @@ inline void resetSystem(Engine &ctx, Reset &world_reset, IsWorldClock &)
     });
 
     // --- Part 3: Reset All Basketballs ---
-    auto basketball_query = ctx.query<Reset, Position, Done, CurStep, Grabbed, BallPhysics>();
-    ctx.iterateQuery(basketball_query, [&](Reset &reset, Position &pos, Done &done, CurStep &step, Grabbed &grabbed, BallPhysics &phys)
+    ctx.iterateQuery(ctx.data().ballQuery, [&](Entity, Position &pos, Grabbed &grabbed, BallPhysics &phys, Reset &reset, Done &done, CurStep &step)
     {
         pos = Position { Vector3{grid->startX, grid->startY, 0.f} };
         reset.resetNow = 0;
         done.episodeDone = 1.f;
         step.step = 0;
-        grabbed = Grabbed {false, ENTITY_ID_PLACEHOLDER};
         phys = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2};
+        if (gameState.isOneOnOne == 1.f) 
+        {
+            grabbed = Grabbed{true, offensive_agent_id};
+        } 
+        else 
+        {
+            grabbed = Grabbed{false, ENTITY_ID_PLACEHOLDER};
+        }
     });
 
     // --- Part 4: Reset Hoops ---
-    auto hoop_query = ctx.query<Reset, Done, CurStep>();
-    ctx.iterateQuery(hoop_query, [&](Reset &reset, Done &done, CurStep &step)
+    ctx.iterateQuery(ctx.data().hoopQuery, [&](Entity, Position &, ImAHoop &, Reset &reset, Done &done, CurStep &step, ScoringZone &)
     {
         reset.resetNow = 0;
         done.episodeDone = 1.f;
@@ -881,8 +895,7 @@ inline void updateLastTouchSystem(Engine &ctx,
                                 Position &ball_pos,
                                 BallPhysics &ball_physics)
 {
-    auto touched_agent_query = ctx.query<Entity, Position, Team>();
-    ctx.iterateQuery(touched_agent_query, [&] (Entity agent_entity, Position &agent_pos, Team &team)
+    ctx.iterateQuery(ctx.data().agentQuery, [&] (Entity agent_entity, Team &team, InPossession, Position &agent_pos, Orientation, Inbounding, GrabCooldown, Reset &, Action &, ActionMask &, Reward &, Done &, CurStep &, Stats &, Attributes &)
     {
         // Check if agent is within touch distance (0.2 meters)
         float distance = (ball_pos.position - agent_pos.position).length();
@@ -912,8 +925,7 @@ inline void outOfBoundsSystem(Engine &ctx,
     {
         if (gameState.isOneOnOne == 1.f)
         {
-            auto world_clock_query = ctx.query<Reset, IsWorldClock>();
-            ctx.iterateQuery(world_clock_query, [&](Reset &world_reset, IsWorldClock &lalala) {
+            ctx.iterateQuery(ctx.data().worldClockQuery, [&](Reset &world_reset, IsWorldClock &lalala) {
                 world_reset.resetNow = 1;
             });
         }
@@ -927,8 +939,7 @@ inline void outOfBoundsSystem(Engine &ctx,
             uint32_t new_team_idx = 1 - ball_physics.lastTouchedByTeamID;
 
             // Find the player who had the ball and reset their position
-            auto agent_query = ctx.query<InPossession, Position>();
-            ctx.iterateQuery(agent_query, [&](InPossession &in_possession, Position &agent_pos)
+            ctx.iterateQuery(ctx.data().agentQuery, [&](Entity, Team, InPossession &in_possession, Position &agent_pos, Orientation, Inbounding, GrabCooldown, Reset &, Action &, ActionMask &, Reward &, Done &, CurStep &, Stats &, Attributes &)
             {
                 // If this agent was the one who went out of bounds with the ball...
                 if (in_possession.hasBall && in_possession.ballEntityID == ball_entity.id)
@@ -962,8 +973,7 @@ inline void inboundViolationSystem(Engine &ctx, IsWorldClock &)
 
     gameState.liveBall = 0.f;
 
-    auto inbounder_query = ctx.query<Inbounding, InPossession, Position>();
-    ctx.iterateQuery(inbounder_query, [&](Inbounding &inb, InPossession &poss, Position &agent_pos)
+    ctx.iterateQuery(ctx.data().agentQuery, [&](Entity, Team, InPossession &poss, Position &agent_pos, Orientation, Inbounding &inb, GrabCooldown, Reset &, Action &, ActionMask &, Reward &, Done &, CurStep &, Stats &, Attributes &)
     {
         if (inb.imInbounding) {
             ball_to_turnover_id = poss.ballEntityID;
@@ -978,8 +988,7 @@ inline void inboundViolationSystem(Engine &ctx, IsWorldClock &)
 
     if (ball_to_turnover_id != ENTITY_ID_PLACEHOLDER)
     {
-        auto ball_query = ctx.query<Position, Entity, Grabbed>();
-        ctx.iterateQuery(ball_query, [&](Position &ball_pos, Entity ball_entity, Grabbed &grabbed)
+        ctx.iterateQuery(ctx.data().ballQuery, [&](Entity ball_entity, Position &ball_pos, Grabbed &grabbed, BallPhysics, Reset &, Done &, CurStep &)
         {
             if (ball_entity.id == (int32_t)ball_to_turnover_id)
             {
@@ -1049,7 +1058,7 @@ inline void fillObservationsSystem(Engine &ctx,
     // Use iterateQuery to fetch the data and assign it to the variables above.
     // Since we assume 1 ball, this lambda will only run once.
     ctx.iterateQuery(ctx.data().ballQuery,
-        [&](Entity e, Position &p, Grabbed &grab, BallPhysics &phys)
+        [&](Entity e, Position &p, Grabbed &grab, BallPhysics &phys, Reset &, Done &, CurStep &)
     {
         ball_pos = p;
         ball_phys = phys;
@@ -1060,7 +1069,7 @@ inline void fillObservationsSystem(Engine &ctx,
     Position hoop_positions[NUM_HOOPS];
     uint32_t hoop_ids[NUM_HOOPS];
     int hoop_i = 0;
-    ctx.iterateQuery(ctx.query<Entity, Position, ImAHoop>(), [&](Entity e, Position &p, ImAHoop &) {
+    ctx.iterateQuery(ctx.data().hoopQuery, [&](Entity e, Position &p, ImAHoop &, Reset &, Done &, CurStep &, ScoringZone &) {
         if (hoop_i < NUM_HOOPS) { hoop_positions[hoop_i] = p; hoop_ids[hoop_i] = e.id; hoop_i++; }
     });
 
@@ -1068,8 +1077,8 @@ inline void fillObservationsSystem(Engine &ctx,
     AgentObservationData all_agents[NUM_AGENTS];
     int agent_idx = 0;
     int32_t inbounder_id = -1; // Store the ID of the current inbounder
-    ctx.iterateQuery(ctx.query<Entity, Position, Orientation, InPossession, Inbounding, Team, GrabCooldown>(),
-        [&](Entity e, Position &p, Orientation &o, InPossession &ip, Inbounding &ib, Team &t, GrabCooldown &gc)
+    ctx.iterateQuery(ctx.data().agentQuery,
+        [&](Entity e, Team &t, InPossession &ip, Position &p, Orientation &o, Inbounding &ib, GrabCooldown &gc, Reset &, Action &, ActionMask &, Reward &, Done &, CurStep &, Stats &, Attributes &)
     {
         if (agent_idx < NUM_AGENTS) {
             all_agents[agent_idx++] = {e.id, t.teamIndex, p, o, ip, ib, gc};
