@@ -613,11 +613,16 @@ inline void hardCodeDefenseSystem(Engine &ctx,
     defender_action.rotate = 0;
 }
 
+inline void resetRewardsSystem(Engine &ctx, Reward &rew)
+{
+    rew.r = 0.f;
+}
+
 //=================================================== Hoop Systems ===================================================
 inline void scoreSystem(Engine &ctx,
-                    Entity hoop_entity,
-                    Position &hoop_pos,
-                    ScoringZone &scoring_zone)
+                        Entity hoop_entity,
+                        Position &hoop_pos,
+                        ScoringZone &scoring_zone)
 {
     GameState &gameState = ctx.singleton<GameState>();
 
@@ -633,7 +638,10 @@ inline void scoreSystem(Engine &ctx,
 
             // Find which team is defending this hoop (has defendingHoopID == hoop_entity.id)
             uint32_t inbounding_team_idx = 0; // Default fallback
-            ctx.iterateQuery(ctx.data().agentQuery, [&](Entity agent_entity, Team &team, InPossession, Position, Orientation, Inbounding, GrabCooldown, Reset &, Action &, ActionMask &, Reward &, Done &, CurStep &, Stats &, Attributes &)
+            ctx.iterateQuery(ctx.data().agentQuery,
+                [&](Entity agent_entity, Team &team, InPossession, Position,
+                    Orientation, Inbounding, GrabCooldown, Reset &, Action &,
+                    ActionMask &, Reward &rew, Done &, CurStep &, Stats &, Attributes &)
             {
                 if (team.defendingHoopID == (uint32_t)hoop_entity.id)
                 {
@@ -643,6 +651,7 @@ inline void scoreSystem(Engine &ctx,
 
                 if (agent_entity.id == ball_physics.shotByAgentID)
                 {
+                    rew.r = (float) points_scored;
                     // We need to get Stats component for this agent, but it's not in the query
                     // For now, we'll skip updating individual agent stats
                     // TODO: Either add Stats to agentQuery or create a separate query
@@ -766,7 +775,7 @@ inline void resetSystem(Engine &ctx, Reset &world_reset, IsWorldClock &)
         mask = ActionMask{0, 0, 0, 0};
         reset.resetNow = 0;
         inb = Inbounding{false, true};
-        reward.r = 0.f;
+        // reward.r = 0.f;
         done.episodeDone = 1.f;
         step.step = 0;
         in_pos = {false, ENTITY_ID_PLACEHOLDER, 2};
@@ -1013,6 +1022,12 @@ struct AgentObservationData {
     GrabCooldown cooldown;
 };
 
+inline void rewardSystem(Engine &ctx,
+                         Entity agent_entity,
+                         Reward &reward)
+{
+}
+
 inline void fillObservationsSystem(Engine &ctx,
                                    Entity agent_entity,
                                    Observations &observations,
@@ -1223,8 +1238,11 @@ TaskGraphNodeID setupGameStepTasks(
     auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
         Position, BallPhysics, Grabbed>>({shootSystemNode});
 
+    auto resetRewardSystemNode = builder.addToGraph<ParallelForNode<Engine, resetRewardsSystem,
+        Reward>>({moveBallSystemNode});
+
     auto scoreSystemNode = builder.addToGraph<ParallelForNode<Engine, scoreSystem,
-        Entity, Position, ScoringZone>>({moveBallSystemNode});
+        Entity, Position, ScoringZone>>({resetRewardSystemNode});
 
     auto outOfBoundsSystemNode = builder.addToGraph<ParallelForNode<Engine, outOfBoundsSystem,
         Entity, Position, BallPhysics>>({scoreSystemNode});
