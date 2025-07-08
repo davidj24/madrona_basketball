@@ -92,14 +92,14 @@ namespace madBasketball {
     struct Action 
     {
         // General Actions
-        int32_t moveSpeed;  // [0, 3] - how fast to move
+        int32_t moveSpeed;  // 0/1 - move action
         int32_t moveAngle;  // [0, 7] - which direction (8 directions)
-        int32_t rotate;     // [-2, 2] - turning
+        int32_t rotate;     // [-1, 0, 1] - turning
         int32_t grab;       // 0/1 - grab action
 
         // Offensive Actions
         int32_t pass;       // 0/1 - pass action
-        int32_t shoot;      // Currently Adding
+        int32_t shoot;      // 0/1 - shoot action
 
         // Defensive Actions
         // int32_t take charge <--- later
