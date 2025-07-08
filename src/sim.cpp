@@ -479,7 +479,7 @@ namespace madsimple {
 
         // ======================== DEVIATION TUNERS ==============================
         float dist_deviation_per_meter = .2f;
-        float def_deviation_per_meter = .0f; 
+        float def_deviation_per_meter = .1f; 
         float vel_deviation_factor = 2.f;
 
 
