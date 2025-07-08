@@ -11,6 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from agent import Agent
 from env import EnvWrapper
+from ppo_stats import PPOStats
 
 
 @dataclass
@@ -95,7 +96,7 @@ if __name__ == "__main__":
     # Storage setup
     obs = torch.zeros((args.num_rollout_steps, args.num_envs, obs_size)).to(device)
     actions = torch.zeros((args.num_rollout_steps, args.num_envs, act_size)).to(device)
-    logprobs = torch.zeros((args.num_rollout_steps, args.num_envs, act_size)).to(device)
+    log_probs = torch.zeros((args.num_rollout_steps, args.num_envs, act_size)).to(device)
     rewards = torch.zeros((args.num_rollout_steps, args.num_envs)).to(device)
     dones = torch.zeros((args.num_rollout_steps, args.num_envs)).to(device)
     values = torch.zeros((args.num_rollout_steps, args.num_envs)).to(device)
@@ -112,23 +113,21 @@ if __name__ == "__main__":
             lr_now = frac * args.learning_rate
             optimizer.param_groups[0]["lr"] = lr_now
 
+        # Begin rollouts
         for step in range(0, args.num_rollout_steps):
             global_step += args.num_envs
             obs[step] = next_obs
             dones[step] = next_done
 
-            # ALGO LOGIC: action logic
+            # Query agent
             with torch.no_grad():
                 action, log_prob, value = agent(next_obs)
                 values[step] = value.flatten()
             actions[step] = action
-            logprobs[step] = log_prob
+            log_probs[step] = log_prob
 
-            # TRY NOT TO MODIFY: execute the game and log data.
             next_obs, reward, next_done = envs.step(action)
-            rewards[step] = torch.tensor(reward).to(device).view(-1)
-            next_obs, next_done = torch.Tensor(next_obs).to(
-                device), torch.Tensor(next_done).to(device)
+            rewards[step] = reward.view(-1)
 
         # bootstrap value if not done
         with torch.no_grad():
@@ -148,17 +147,19 @@ if __name__ == "__main__":
 
         # Flatten the batch
         b_obs = obs.reshape((-1, obs_size))
-        b_logprobs = logprobs.reshape((-1, act_size))
+        b_logprobs = log_probs.reshape((-1, act_size))
         b_actions = actions.reshape((-1, act_size))
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
         b_values = values.reshape(-1)
 
         # Optimization steps
+        stats = PPOStats()
+
         b_inds = np.arange(args.batch_size)
         clip_fracs = []
         for epoch in range(args.update_epochs):
-            # Sample a minibatch
+            # Sample minibatches
             np.random.shuffle(b_inds)
             for start in range(0, args.batch_size, args.minibatch_size):
                 end = start + args.minibatch_size
@@ -209,6 +210,13 @@ if __name__ == "__main__":
                 nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
                 optimizer.step()
 
+                # Update the stats
+                returns_mean, returns_stdev = torch.var_mean(b_returns[mb_inds])
+                stats.update(loss.item(), pg_loss.item(), v_loss.item(), entropy_loss.item(),
+                              returns_mean.item(), returns_stdev.item())
+
+
+            # Break if the approximate KL divergence exceeds the target
             if args.target_kl is not None and approx_kl > args.target_kl:
                 break
 
@@ -220,7 +228,24 @@ if __name__ == "__main__":
         writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), global_step)
         writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
         writer.add_scalar("losses/clipfrac", np.mean(clip_fracs), global_step)
-        print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+
+        # Print every 10 update iterations
+        if iteration % 10 == 0:
+            p_advantages = b_advantages.reshape(-1)
+            p_values = b_values.reshape(-1)
+            rewards_mean, rewards_min, rewards_max = rewards.mean(), rewards.min(), rewards.max()
+            done_count = dones.sum().item()
+            if done_count > 0:
+                rewards_done = rewards[dones > 0]
+                rewards_mean, rewards_min, rewards_max = rewards_done.mean(), rewards_done.min(), rewards_done.max()
+
+            print(f"\nUpdate: {iteration}")
+            print(f"    Loss: {stats.loss: .3e}, A: {stats.action_loss: .3e}, V: {stats.value_loss: .3e}, E: {stats.entropy_loss: .3e}")
+            print()
+            print(f"    Rewards          => Avg: {rewards_mean: .3f}, Min: {rewards_min: .3f}, Max: {rewards_max: .3f}")
+            print(f"    Values           => Avg: {p_values.mean(): .3f}, Min: {p_values.min(): .3f}, Max: {p_values.max(): .3f}")
+            print(f"    Advantages       => Avg: {p_advantages.mean(): .3f}, Min: {p_advantages.min(): .3f}, Max: {p_advantages.max(): .3f}")
+            print(f"    Returns          => Avg: {stats.returns_mean}")
 
     writer.close()
