@@ -349,7 +349,7 @@ namespace madsimple {
     Tensor Manager::observationsTensor() const
     {
         return impl_->exportTensor(ExportID::Observations, TensorElementType::Float32,
-            {impl_->cfg.numWorlds, NUM_AGENTS, 3});
+            {impl_->cfg.numWorlds, NUM_AGENTS, sizeof(Observations) / sizeof(float)});
     }
 
 

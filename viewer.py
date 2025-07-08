@@ -130,12 +130,10 @@ class MadronaPipeline:
         #    It no longer affects the drawing coordinates.
         world_discrete_width = math.ceil(self.world_width_meters)
         world_discrete_height = math.ceil(self.world_height_meters)
-        walls = np.zeros((world_discrete_height, world_discrete_width), dtype=bool)
-        rewards = np.zeros((world_discrete_height, world_discrete_width), dtype=float)
-        
+
         self.sim = mba.SimpleGridworldSimulator(
-            walls=walls,
-            rewards=rewards, 
+            discrete_x = world_discrete_width,
+            discrete_y = world_discrete_height,
             start_x=self.world_width_meters / 2.0,  # Start in the true center
             start_y=self.world_height_meters / 2.0,
             max_episode_length=39600,

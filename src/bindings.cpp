@@ -4,50 +4,10 @@
 #include <madrona/py/bindings.hpp>
 
 namespace madsimple {
-
-static void setRewards(Cell *cells,
-                       const float *rewards,
-                       int64_t grid_x,
-                       int64_t grid_y)
-{
-    for (int64_t y = 0; y < grid_y; y++) {
-        for (int64_t x = 0; x < grid_x; x++) {
-            int64_t idx = y * grid_x + x;
-            cells[idx].reward = rewards[idx];
-        }
-    }
-}
-
-static void tagWalls(Cell *cells,
-                     const bool *walls,
-                     int64_t grid_x,
-                     int64_t grid_y)
-{
-    for (int64_t y = 0; y < grid_y; y++) {
-        for (int64_t x = 0; x < grid_x; x++) {
-            int64_t idx = y * grid_x + x;
-
-            if (walls[idx]) {
-                cells[idx].flags |= CellFlag::Wall;
-            }
-        }
-    }
-}
-
-static Cell * setupCellData(
-    const nb::ndarray<bool, nb::shape<-1, -1>,
-        nb::c_contig, nb::device::cpu> &walls,
-    const nb::ndarray<float, nb::shape<-1, -1>,
-        nb::c_contig, nb::device::cpu> &rewards,
-    int64_t grid_x,
-    int64_t grid_y)
+static Cell * setupCells(int64_t grid_x, int64_t grid_y)
 
 {
     Cell *cells = new Cell[grid_x * grid_y]();
-
-    setRewards(cells, rewards.data(), grid_x, grid_y);
-    tagWalls(cells, walls.data(), grid_x, grid_y);
-    
     return cells;
 }
 
@@ -56,32 +16,22 @@ NB_MODULE(madrona_basketball, m) {
 
     nb::class_<Manager> (m, "SimpleGridworldSimulator")
         .def("__init__", [](Manager *self,
-                            nb::ndarray<bool, nb::shape<-1, -1>,
-                                nb::c_contig, nb::device::cpu> walls,
-                            nb::ndarray<float, nb::shape<-1, -1>,
-                                nb::c_contig, nb::device::cpu> rewards,
+                            int64_t discrete_x,
+                            int64_t discrete_y,
                             float start_x,  // Changed to float
                             float start_y,  // Changed to float
                             int64_t max_episode_length,
                             madrona::py::PyExecMode exec_mode,
                             int64_t num_worlds,
                             int64_t gpu_id) {
-            int64_t discrete_y = (int64_t)walls.shape(0);
-            int64_t discrete_x = (int64_t)walls.shape(1);
 
-            if ((int64_t)rewards.shape(0) != discrete_y ||
-                (int64_t)rewards.shape(1) != discrete_x) {
-                throw std::runtime_error("walls and rewards shapes don't match");
-            }
-
-            Cell *cells =
-                setupCellData(walls, rewards, discrete_x, discrete_y); 
+            Cell *cells = setupCells(discrete_x, discrete_y);
 
             // Convert discrete grid to continuous dimensions
             // Assuming 1 cell per meter resolution
             int32_t cells_per_meter = 1;
-            float width_meters = (float)discrete_x / cells_per_meter;
-            float height_meters = (float)discrete_y / cells_per_meter;
+            float width_meters = (float) discrete_x / (float) cells_per_meter;
+            float height_meters = (float) discrete_y / (float) cells_per_meter;
 
             new (self) Manager(Manager::Config {
                 .maxEpisodeLength = (uint32_t)max_episode_length,
@@ -100,8 +50,8 @@ NB_MODULE(madrona_basketball, m) {
             });
 
             delete[] cells;
-        }, nb::arg("walls"),
-           nb::arg("rewards"),
+        }, nb::arg("discrete_x"),
+           nb::arg("discrete_y"),
            nb::arg("start_x"),
            nb::arg("start_y"),
            nb::arg("max_episode_length"),
