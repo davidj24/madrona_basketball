@@ -890,7 +890,6 @@ namespace madsimple {
         const GridState *grid = ctx.data().grid;
 
         // --- Part 1: Reset GameState Singleton ---
-        // Check if the reset was triggered by the end of a period
         if (gameState.gameClock <= 0.f && gameState.isOneOnOne == 0.f)
         {
             // End-of-quarter logic (only for full games)
@@ -910,7 +909,6 @@ namespace madsimple {
         else
         {
             // This was a manual reset or a reset after a score in 1v1 mode.
-            // Reset everything to the start of a fresh episode.
             gameState = GameState {
                 .inboundingInProgress = 0.0f,
                 .liveBall = 1.0f,
@@ -931,7 +929,10 @@ namespace madsimple {
 
         // --- Part 2: Reset All Agents ---
         std::vector<Vector3> team_colors = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
-        // The query must include every component that will be modified.
+        
+        static thread_local std::mt19937 rng(std::random_device{}());
+        std::normal_distribution<float> pos_dist(0.0f, START_POS_STDDEV);
+
         auto agent_query = ctx.query<Reset, Action, ActionMask, Position, Reward, Done, CurStep, InPossession, Orientation, Inbounding, Team, GrabCooldown, Stats, Attributes>();
         int agent_i = 0;
         ctx.iterateQuery(agent_query,
@@ -950,20 +951,23 @@ namespace madsimple {
             cooldown = GrabCooldown{0.f};
             stats = {0.f, 0.f};
 
-            // Set agent position based on the game mode, exactly like in Sim::Sim
+            // FIX: Set agent position with randomness, exactly like in Sim::Sim
             if (gameState.isOneOnOne == 1.f)
             {
-                pos = Position { Vector3{ grid->startX + agent_i * 2, grid->startY, 0.f } };
+                Vector3 base_pos = { grid->startX + (agent_i * 2.f), grid->startY, 0.f };
+                float x_dev = pos_dist(rng);
+                float y_dev = pos_dist(rng);
+                pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
+                pos.position.x = std::clamp(pos.position.x, 0.f, grid->width);
+                pos.position.y = std::clamp(pos.position.y, 0.f, grid->height);
             }
             else
             {
                 pos = Position { Vector3{ grid->startX - 1 - (-2*(agent_i % 2)), grid->startY - 2 + agent_i/2, 0.f } };
             }
 
-            // Re-initialize attributes, setting the target to the new starting position
             attrs = {1.f, 0.f, 0.f, 6.5f, pos.position};
             
-            // Re-assign team and defending hoop
             uint32_t defending_hoop_id = (agent_i % 2 == 0) ? gameState.team0Hoop : gameState.team1Hoop;
             team = Team{agent_i % 2, team_colors[agent_i % 2], defending_hoop_id};
 
@@ -982,8 +986,7 @@ namespace madsimple {
             phys = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2};
         });
 
-        // --- Part 4: Reset Hoops (only per-episode data) ---
-        // The hoop positions are static and should not be changed on reset.
+        // --- Part 4: Reset Hoops ---
         auto hoop_query = ctx.query<Reset, Done, CurStep>();
         ctx.iterateQuery(hoop_query, [&](Reset &reset, Done &done, CurStep &step)
         {
@@ -992,7 +995,7 @@ namespace madsimple {
             step.step = 0;
         });
 
-        // Finally, clear the world's master reset flag so this doesn't run again until triggered.
+        // Finally, clear the world's master reset flag.
         world_reset.resetNow = 0;
     }
     
@@ -1505,6 +1508,10 @@ namespace madsimple {
             };
         }
 
+        
+        
+        static thread_local std::mt19937 rng(std::random_device{}());
+        std::normal_distribution<float> pos_dist(0.0f, START_POS_STDDEV);
         // Now create agents with proper hoop references
         std::vector<Vector3> team_colors = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
         for (int i = 0; i < NUM_AGENTS; i++) 
@@ -1512,21 +1519,31 @@ namespace madsimple {
             Entity agent = ctx.makeEntity<Agent>();
             ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0};
             ctx.get<ActionMask>(agent) = ActionMask{0.f, 0.f, 0.f, 0.f};
+            Position &agent_pos = ctx.get<Position>(agent);
             if (gameState.isOneOnOne == 1.f)
             {
-                ctx.get<Position>(agent) = Position 
-                {
-                    Vector3{
-                        grid->startX + i * 2,
-                        grid->startY,
-                        0.f
-                    }
+                // Calculate the base starting position
+                Vector3 base_pos = {
+                    grid->startX + (i * 2.f), // Spread them out for 1v1
+                    grid->startY,
+                    0.f
                 };
+
+                // Generate a random deviation
+                float x_dev = pos_dist(rng);
+                float y_dev = pos_dist(rng);
+
+                // Add the deviation to the base position
+                agent_pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
+
+                // It's good practice to clamp the final position to the world boundaries
+                agent_pos.position.x = std::clamp(agent_pos.position.x, 0.f, grid->width);
+                agent_pos.position.y = std::clamp(agent_pos.position.y, 0.f, grid->height);
             }
             else
             {
-                ctx.get<Position>(agent) = Position 
-                {
+                // Original 5v5 starting positions
+                agent_pos = Position {
                     Vector3{
                         grid->startX - 1 - (-2*(i % 2)),
                         grid->startY - 2 + i/2,
