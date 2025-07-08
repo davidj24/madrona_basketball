@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from scripts.action import DiscreteActionDistributions
+from action import DiscreteActionDistributions
 
 
 def backbone_layer_init(layer):

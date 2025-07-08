@@ -1,9 +1,7 @@
 import random
 import time
-from collections import deque
 from dataclasses import dataclass
 
-import gym
 import numpy as np
 import torch
 import torch.nn as nn
@@ -11,15 +9,15 @@ import torch.optim as optim
 import tyro
 from torch.utils.tensorboard import SummaryWriter
 
-from env import EnvWrapper
 from agent import Agent
+from env import EnvWrapper
 
 
 @dataclass
 class Args:
     seed: int = 1
     torch_deterministic: bool = True
-    use_gpu: bool = True
+    use_gpu: bool = False
 
     # Wandb
     env_id: str = "MadronaBasketball"
@@ -29,9 +27,9 @@ class Args:
 
     # Algorithm specific arguments
     total_timesteps: int = 10000000
-    learning_rate: float = 2.5e-4
     num_envs: int = 64
     num_rollout_steps: int = 32
+    learning_rate: float = 2.5e-4
     anneal_lr: bool = True
     gamma: float = 0.99
     gae_lambda: float = 0.95
