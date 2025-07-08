@@ -225,8 +225,8 @@ namespace madBasketball {
             float new_x = ball_pos.position.x + dx;
             float new_y = ball_pos.position.y + dy;
 
-            new_x = std::clamp(new_x, 0.f, grid->width);
-            new_y = std::clamp(new_y, 0.f, grid->height);
+            new_x = clamp(new_x, 0.f, grid->width);
+            new_y = clamp(new_y, 0.f, grid->height);
 
             ball_pos.position.x = new_x;
             ball_pos.position.y = new_y;
@@ -261,15 +261,15 @@ namespace madBasketball {
         float new_y = ball_pos.position.y + ball_physics.velocity[1];
         float new_z = ball_pos.position.z + ball_physics.velocity[2];
 
-        new_x = std::clamp(new_x, 0.f, grid->width);
-        new_y = std::clamp(new_y, 0.f, grid->height);
-        // new_z = std::clamp(new_z, 0.f, grid->depth);
+        new_x = clamp(new_x, 0.f, grid->width);
+        new_y = clamp(new_y, 0.f, grid->height);
+        // new_z = clamp(new_z, 0.f, grid->depth);
         
         // Convert to discrete grid for wall collision checking
         int32_t discrete_x = (int32_t)(new_x * grid->cellsPerMeter);
         int32_t discrete_y = (int32_t)(new_y * grid->cellsPerMeter);
-        discrete_x = std::clamp(discrete_x, 0, grid->discreteWidth - 1);
-        discrete_y = std::clamp(discrete_y, 0, grid->discreteHeight - 1);
+        discrete_x = clamp(discrete_x, 0, grid->discreteWidth - 1);
+        discrete_y = clamp(discrete_y, 0, grid->discreteHeight - 1);
         
         const Cell &new_cell = grid->cells[discrete_y * grid->discreteWidth + discrete_x];
         
@@ -602,14 +602,14 @@ namespace madBasketball {
             float new_y = agent_pos.position.y + dy;
 
             // Boundary checking in continuous space
-            new_x = std::clamp(new_x, 0.f, grid->width);
-            new_y = std::clamp(new_y, 0.f, grid->height);
+            new_x = clamp(new_x, 0.f, grid->width);
+            new_y = clamp(new_y, 0.f, grid->height);
 
             // Convert to discrete grid for wall collision checking
             int32_t discrete_x = (int32_t)(new_x * grid->cellsPerMeter);
             int32_t discrete_y = (int32_t)(new_y * grid->cellsPerMeter);
-            discrete_x = std::clamp(discrete_x, 0, grid->discreteWidth - 1);
-            discrete_y = std::clamp(discrete_y, 0, grid->discreteHeight - 1);
+            discrete_x = clamp(discrete_x, 0, grid->discreteWidth - 1);
+            discrete_y = clamp(discrete_y, 0, grid->discreteHeight - 1);
             
             const Cell &new_cell = grid->cells[discrete_y * grid->discreteWidth + discrete_x];
             
@@ -946,8 +946,8 @@ namespace madBasketball {
                 float x_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
                 float y_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
                 pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
-                pos.position.x = std::clamp(pos.position.x, 0.f, grid->width);
-                pos.position.y = std::clamp(pos.position.y, 0.f, grid->height);
+                pos.position.x = clamp(pos.position.x, 0.f, grid->width);
+                pos.position.y = clamp(pos.position.y, 0.f, grid->height);
             }
             else
             {
@@ -1531,8 +1531,8 @@ namespace madBasketball {
                 agent_pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
 
                 // It's good practice to clamp the final position to the world boundaries
-                agent_pos.position.x = std::clamp(agent_pos.position.x, 0.f, grid->width);
-                agent_pos.position.y = std::clamp(agent_pos.position.y, 0.f, grid->height);
+                agent_pos.position.x = clamp(agent_pos.position.x, 0.f, grid->width);
+                agent_pos.position.y = clamp(agent_pos.position.y, 0.f, grid->height);
             }
             else
             {
