@@ -25,9 +25,9 @@ class EnvWrapper:
             start_x=self.world_width_meters / 2.0,
             start_y=self.world_height_meters / 2.0,
             max_episode_length=39600,
-            exec_mode=mba.madrona.ExecMode.CPU,
+            exec_mode=mba.madrona.ExecMode.CUDA,
             num_worlds=1,
-            gpu_id=-1
+            gpu_id=0
         )
 
         # Store RL tensor references

@@ -1,12 +1,6 @@
 #include "sim.hpp"
 #include "types.hpp"
 #include "constants.hpp"
-#include <madrona/mw_gpu_entry.hpp>
-#include <cstdlib>
-#include <vector>
-#include <random>
-#include <cmath> // For acosf
-
 
 using namespace madrona;
 using namespace madrona::math;
@@ -15,6 +9,10 @@ using namespace madrona::math;
 
 namespace madBasketball {
     // =================================================== Helper Functions ===================================================
+    inline float sampleUniform(Engine &ctx, const float min, const float max)
+    {
+        return min + (max - min) * ctx.data().rng.sampleUniform();
+    }
 
     // Computes the rotation needed to align the 'start' vector with the 'target' vector.
     inline Quat findRotationBetweenVectors(Vector3 start, Vector3 target)
@@ -201,8 +199,8 @@ namespace madBasketball {
         registry.exportSingleton<GameState>((uint32_t)ExportID::GameState);
         
         // Export entity IDs for debugging
-        registry.exportColumn<Agent, madrona::Entity>((uint32_t)ExportID::AgentEntityID);
-        registry.exportColumn<Basketball, madrona::Entity>((uint32_t)ExportID::BallEntityID);
+        registry.exportColumn<Agent, Entity>((uint32_t)ExportID::AgentEntityID);
+        registry.exportColumn<Basketball, Entity>((uint32_t)ExportID::BallEntityID);
         
     }
 
@@ -214,7 +212,7 @@ namespace madBasketball {
                                  Position &ball_pos,
                                  RandomMovement &random_movement)
     {
-        random_movement.moveTimer ++;
+        random_movement.moveTimer++;
         if (random_movement.moveTimer >= random_movement.moveInterval) 
         {
             random_movement.moveTimer = 0.f;
@@ -238,9 +236,9 @@ namespace madBasketball {
 
 
     inline void moveBallSystem(Engine &ctx,
-                            Position &ball_pos,
-                            BallPhysics &ball_physics,
-                            Grabbed &grabbed)
+                               Position &ball_pos,
+                               BallPhysics &ball_physics,
+                               Grabbed &grabbed)
     {
         auto holder_query = ctx.query<Entity, Position, InPossession>();
         ctx.iterateQuery(holder_query, [&](Entity &agent_entity, Position &agent_pos, InPossession &in_possession)
@@ -473,11 +471,6 @@ namespace madBasketball {
 
         // Calculate intended angle towards hoop
         float intended_direction = std::atan2(shot_vector.x, shot_vector.y);
-        // Create a single random number generator for all deviations
-        static thread_local std::mt19937 rng(std::random_device{}());
-
-
-
 
         // ======================== DEVIATION TUNERS ==============================
         float dist_deviation_per_meter = .2f;
@@ -488,8 +481,7 @@ namespace madBasketball {
         // 1. Mess up angle based on distance
         float distance_to_hoop = shot_vector.length();
         float dist_stddev = dist_deviation_per_meter/100 * distance_to_hoop;
-        std::normal_distribution<float> dist_dist(0.0f, dist_stddev);
-        float deviation_from_distance = dist_dist(rng);
+        float deviation_from_distance = sampleUniform(ctx, -dist_stddev, dist_stddev);
 
 
         // 2. Mess up angle based on contest level (how close nearest defender is)
@@ -511,8 +503,7 @@ namespace madBasketball {
 
         if (distance_to_nearest_defender < 2.0f) { // Only apply pressure if defender is  close
             float def_stddev = (def_deviation_per_meter/100) / (distance_to_nearest_defender + 0.1f);
-            std::normal_distribution<float> def_dist(0.0f, def_stddev);
-            deviation_from_defender = def_dist(rng);
+            deviation_from_defender = sampleUniform(ctx, -def_stddev, def_stddev);
         }
 
 
@@ -520,8 +511,7 @@ namespace madBasketball {
         float deviation_from_velocity = 0.0f;
         if (action.moveSpeed > 0) {
             float vel_stddev = vel_deviation_factor/100 * action.moveSpeed;
-            std::normal_distribution<float> vel_dist(0.0f, vel_stddev);
-            deviation_from_velocity = vel_dist(rng);
+            deviation_from_velocity = sampleUniform(ctx, -vel_stddev, vel_stddev);
         }
 
         // Combine all deviations and apply to the final shot direction
@@ -953,8 +943,8 @@ namespace madBasketball {
             if (gameState.isOneOnOne == 1.f)
             {
                 Vector3 base_pos = { grid->startX + (agent_i * 2.f), grid->startY, 0.f };
-                float x_dev = ctx.data().rng.sampleUniform() * START_POS_STDDEV;
-                float y_dev = ctx.data().rng.sampleUniform() * START_POS_STDDEV;
+                float x_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
+                float y_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
                 pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
                 pos.position.x = std::clamp(pos.position.x, 0.f, grid->width);
                 pos.position.y = std::clamp(pos.position.y, 0.f, grid->height);
@@ -1534,8 +1524,8 @@ namespace madBasketball {
                 };
 
                 // Generate a random deviation
-                float x_dev = ctx.data().rng.sampleUniform() * START_POS_STDDEV;
-                float y_dev = ctx.data().rng.sampleUniform() * START_POS_STDDEV;
+                float x_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
+                float y_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
 
                 // Add the deviation to the base position
                 agent_pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
