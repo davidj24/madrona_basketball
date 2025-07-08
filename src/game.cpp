@@ -15,9 +15,9 @@ inline void assignInbounder(Engine &ctx, Entity ball_entity, Position ball_pos, 
     bool inbounder_assigned = false;
 
     // Find the first available player on the new team.
-    auto agent_query = ctx.query<Entity, Team, InPossession, Position, Orientation, Inbounding>();
-
-    ctx.iterateQuery(agent_query, [&](Entity agent_entity, Team &agent_team, InPossession &in_possession, Position &agent_pos, Orientation &agent_orient, Inbounding &inbounding)
+    ctx.iterateQuery(ctx.data().agentQuery,
+        [&](Entity agent_entity, Team &agent_team, InPossession &in_possession,
+            Position &agent_pos, Orientation &agent_orient, Inbounding &inbounding)
     {
         if ((uint32_t)agent_team.teamIndex == new_team_idx && !inbounder_assigned)
         {
@@ -80,17 +80,16 @@ inline void moveBallSystem(Engine &ctx,
                            BallPhysics &ball_physics,
                            Grabbed &grabbed)
 {
-    auto holder_query = ctx.query<Entity, Position, InPossession>();
-    ctx.iterateQuery(holder_query, [&](Entity &agent_entity, Position &agent_pos, InPossession &in_possession)
+    ctx.iterateQuery(ctx.data().agentQuery,
+        [&](Entity &agent_entity, Team, InPossession &in_possession,
+            Position &agent_pos, Orientation, Inbounding, GrabCooldown)
     {
         // Make the ball move with the agent if it's held
         bool agent_is_holding_this_ball = (in_possession.hasBall == true &&
                                             grabbed.isGrabbed &&
                                             grabbed.holderEntityID == (uint32_t)agent_entity.id);
-        if (agent_is_holding_this_ball)
-        {
+        if (agent_is_holding_this_ball) {
             ball_pos = agent_pos;  // Move basketball to agent's new position
-            return;
         }
     });
 

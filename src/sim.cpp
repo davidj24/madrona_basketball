@@ -89,6 +89,7 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
 {
     ballQuery = ctx.query<Entity, Position, Grabbed, BallPhysics>();
     hoopQuery = ctx.query<Entity, Position, ImAHoop>();
+    agentQuery = ctx.query<Entity, Team, InPossession, Position, Orientation, Inbounding, GrabCooldown>();
 
     // Generate the world - defined in gen.cpp
     generateWorld(ctx);

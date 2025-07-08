@@ -7,38 +7,41 @@
 #include "types.hpp"
 #include "init.hpp"
 
+using namespace madrona;
+
 namespace madBasketball {
 
 class Engine;
 
-struct Sim : public madrona::WorldBase {
+struct Sim : public WorldBase {
     struct Config {
-        madrona::RandKey initRandKey;
+        RandKey initRandKey;
         uint32_t maxEpisodeLength;
         bool enableViewer;
     };
 
-    static void registerTypes(madrona::ECSRegistry &registry,
-                              const Config &cfg);
+    static auto registerTypes(ECSRegistry& registry,
+                              const Config& cfg) -> void;
 
-    static void setupTasks(madrona::TaskGraphManager &taskgraph_mgr,
+    static void setupTasks(TaskGraphManager &taskgraph_mgr,
                            const Config &cfg);
 
     Sim(Engine &ctx, const Config &cfg, const WorldInit &init);
 
-    madrona::RandKey initRandKey;
-    madrona::RNG rng;
+    RandKey initRandKey;
+    RNG rng;
 
     EpisodeManager *episodeMgr;
     const GridState *grid;
     uint32_t maxEpisodeLength;
 
     // Queries for entities
-    madrona::Query<madrona::Entity, Position, Grabbed, BallPhysics> ballQuery;
-    madrona::Query<madrona::Entity, Position, ImAHoop> hoopQuery;
+    Query<Entity, Position, Grabbed, BallPhysics> ballQuery;
+    Query<Entity, Position, ImAHoop> hoopQuery;
+    Query<Entity, Team, InPossession, Position, Orientation, Inbounding, GrabCooldown> agentQuery;
 };
 
-class Engine : public ::madrona::CustomContext<Engine, Sim> {
+class Engine : public CustomContext<Engine, Sim> {
     using CustomContext::CustomContext;
 };
 
