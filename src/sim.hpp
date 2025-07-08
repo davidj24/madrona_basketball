@@ -32,6 +32,10 @@ struct Sim : public madrona::WorldBase {
     EpisodeManager *episodeMgr;
     const GridState *grid;
     uint32_t maxEpisodeLength;
+
+    // Queries for entities
+    madrona::Query<madrona::Entity, Position, Grabbed, BallPhysics> ballQuery;
+    madrona::Query<madrona::Entity, Position, ImAHoop> hoopQuery;
 };
 
 class Engine : public ::madrona::CustomContext<Engine, Sim> {

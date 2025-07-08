@@ -337,7 +337,7 @@ namespace madBasketball {
 
     Tensor Manager::actionMaskTensor() const
     {
-        return impl_->exportTensor(ExportID::ActionMask, TensorElementType::Float32,
+        return impl_->exportTensor(ExportID::ActionMask, TensorElementType::Int32,
             {impl_->cfg.numWorlds, NUM_AGENTS, 4});
     }
 

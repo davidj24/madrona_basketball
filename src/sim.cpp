@@ -291,24 +291,20 @@ namespace madBasketball {
         Position hoop_positions[NUM_HOOPS];
         uint32_t hoop_ids[NUM_HOOPS];
         int hoop_idx = 0;
-        
-        auto hoop_query = ctx.query<Entity, Position, ImAHoop>();
-        ctx.iterateQuery(hoop_query, [&](Entity hoop_entity, Position &hoop_pos, ImAHoop &) {
-            if (hoop_idx < NUM_HOOPS) {
-                hoop_positions[hoop_idx] = hoop_pos;
-                hoop_ids[hoop_idx] = hoop_entity.id;
-                hoop_idx++;
-            }
+        ctx.iterateQuery(ctx.data().hoopQuery,
+            [&](Entity hoop_entity, Position &hoop_pos, ImAHoop &) {
+                if (hoop_idx < NUM_HOOPS) {
+                    hoop_positions[hoop_idx] = hoop_pos;
+                    hoop_ids[hoop_idx] = hoop_entity.id;
+                    hoop_idx++;
+                }
         });
 
         // Find the hoop this agent should be shooting at (opposing team's hoop)
-        Position target_hoop_pos;
+        Position target_hoop_pos{};
         bool found_target_hoop = false;
-        
-        for (int i = 0; i < hoop_idx; i++) 
-        {
-            if (hoop_ids[i] != team.defendingHoopID) 
-            {
+        for (int i = 0; i < hoop_idx; i++) {
+            if (hoop_ids[i] != team.defendingHoopID) {
                 target_hoop_pos = hoop_positions[i];
                 found_target_hoop = true;
                 break;
@@ -316,12 +312,10 @@ namespace madBasketball {
         }
         
         // Calculate points worth for this agent's current position
-        if (found_target_hoop) 
-        {
+        if (found_target_hoop) {
             in_possession.pointsWorth = getShotPointValue(agent_pos, target_hoop_pos);
-        } 
-        else 
-        {
+        }
+        else {
             in_possession.pointsWorth = 2; // Default to 2 points if we can't find the target hoop
         }
     }
@@ -337,13 +331,16 @@ namespace madBasketball {
                             GrabCooldown &grab_cooldown)
     {
         GameState &gameState = ctx.singleton<GameState>();
-        auto basketball_query = ctx.query<Entity, Position, Grabbed, BallPhysics>();
-        if (action_mask.can_grab == 0.f || action.grab == 0.f) {return;}
+        if (action_mask.can_grab == 0.f || action.grab == 0) {return;}
         grab_cooldown.cooldown = 10.f;
         action.grab = 0.f;
 
-        ctx.iterateQuery(basketball_query, [&](Entity ball_entity, Position &basketball_pos, Grabbed &grabbed, BallPhysics &ball_physics) 
-        {
+        ctx.iterateQuery(ctx.data().ballQuery,
+            [&](Entity ball_entity,
+                Position &basketball_pos,
+                Grabbed &grabbed,
+                BallPhysics &ball_physics)
+            {
             if (ball_physics.inFlight) {return;}
             bool agent_is_holding_this_ball = (in_possession.hasBall == true &&
                                                 grabbed.isGrabbed &&
@@ -413,7 +410,7 @@ namespace madBasketball {
                         Inbounding &inbounding)
     {
 
-        if (action_mask.can_pass == 0.f || action.pass == 0.f) {return;}
+        if (action_mask.can_pass == 0 || action.pass == 0) {return;}
         GameState &gameState = ctx.singleton<GameState>();
 
 
@@ -447,7 +444,7 @@ namespace madBasketball {
                             InPossession &in_possession,
                             Team &team)
     {
-        if (action_mask.can_shoot == 0.f || action.shoot == 0.f) {return;}
+        if (action_mask.can_shoot == 0 || action.shoot == 0) {return;}
 
         // Find the attacking hoop (not defendingHoopID)
         auto hoop_query = ctx.query<Entity, Position, ScoringZone>();
@@ -576,7 +573,7 @@ namespace madBasketball {
             agent_orientation.orientation = turn * agent_orientation.orientation;
         }
 
-        if (action_mask.can_move == 0.f || action.moveSpeed == 0) {return;}
+        if (action_mask.can_move == 0 || action.moveSpeed == 0) {return;}
 
         if (action.moveSpeed > 0)
         {
@@ -629,31 +626,31 @@ namespace madBasketball {
     {
         GameState &gameState = ctx.singleton<GameState>();
 
-        action_mask.can_move = 1.f;
-        action_mask.can_grab = 1.f;
-        action_mask.can_pass = 0.f;
-        action_mask.can_shoot = 0.f;
+        action_mask.can_move = 1;
+        action_mask.can_grab = 1;
+        action_mask.can_pass = 0;
+        action_mask.can_shoot = 0;
 
         // Offensive actions
         if (in_possession.hasBall)
         {
-            action_mask.can_pass = 1.f;
-            action_mask.can_shoot = 1.f;
+            action_mask.can_pass = 1;
+            action_mask.can_shoot = 1;
         }
 
         if (gameState.inboundingInProgress == 1.f)
         {
-            action_mask.can_shoot = 0.f;
-            action_mask.can_grab = 0.f;
+            action_mask.can_shoot = 0;
+            action_mask.can_grab = 0;
             if (inbounding.imInbounding && gameState.liveBall == 0.f)
             {
-                action_mask.can_move = 0.f;
+                action_mask.can_move = 0;
             }
         }
 
         if (grab_cooldown.cooldown > 0.f)
         {
-            action_mask.can_grab = 0.f;
+            action_mask.can_grab = 0;
         }
     }
 
@@ -713,12 +710,12 @@ namespace madBasketball {
         defender_action.grab = 1.f;
         Vector3 guarding_pos; // The place we want our defensive agent to go to to defend
         bool found_offender = false;
-        auto agent_with_ball_query = ctx.query<Position, Team, InPossession>();
-        ctx.iterateQuery(agent_with_ball_query, [&] (Position &offender_pos, Team &offensive_team, InPossession &offender_in_possession)
-        {
+        Query<Position, Team, InPossession> agent_with_ball_query = ctx.query<Position, Team, InPossession>();
+        Query<Entity, Position, ImAHoop> hoop_query = ctx.query<Entity, Position, ImAHoop>();
+        ctx.iterateQuery(agent_with_ball_query, [&](Position &offender_pos, Team &offensive_team, InPossession &offender_in_possession) {
             if (offender_in_possession.hasBall == 1.f && !found_offender)
             {
-                ctx.iterateQuery(ctx.query<Entity, Position, ImAHoop>(), [&] (Entity hoop_entity, Position &hoop_pos, ImAHoop &im_a_hoop)
+                ctx.iterateQuery(hoop_query, [&] (Entity hoop_entity, Position &hoop_pos, ImAHoop &im_a_hoop)
                 {
                     if (defender_team.defendingHoopID == hoop_entity.id)
                     {
@@ -929,7 +926,7 @@ namespace madBasketball {
         {
             // Reset all components to their default state
             action = Action{0, 0, 0, 0, 0, 0};
-            mask = ActionMask{0.f, 0.f, 0.f, 0.f};
+            mask = ActionMask{0, 0, 0, 0};
             reset.resetNow = 0;
             inb = Inbounding{false, true};
             reward.r = 0.f;
@@ -1006,7 +1003,7 @@ namespace madBasketball {
         }
 
         // Per-step logic like cooldowns can stay here.
-        grab_cooldown.cooldown = std::max(0.f, grab_cooldown.cooldown - 1.f);
+        grab_cooldown.cooldown = fmaxf(0.f, grab_cooldown.cooldown - 1.f);
     }
 
 
@@ -1212,7 +1209,8 @@ namespace madBasketball {
 
         // Use iterateQuery to fetch the data and assign it to the variables above.
         // Since we assume 1 ball, this lambda will only run once.
-        ctx.iterateQuery(ctx.query<Position, BallPhysics, Grabbed>(),
+        Query<Position, BallPhysics, Grabbed> ball_query = ctx.query<Position, BallPhysics, Grabbed>();
+        ctx.iterateQuery(ball_query,
             [&](Position &p, BallPhysics &phys, Grabbed &grab)
         {
             ball_pos = p;
@@ -1444,6 +1442,10 @@ namespace madBasketball {
             .isOneOnOne = ONE_ON_ONE,
         };
 
+        // Make the queries now
+        ballQuery = ctx.query<Entity, Position, Grabbed, BallPhysics>();
+        hoopQuery = ctx.query<Entity, Position, ImAHoop>();
+
         // Make sure to add the Reset component to the WorldClock entity
         Entity worldClock = ctx.makeEntity<WorldClock>();
         ctx.get<IsWorldClock>(worldClock) = {};
@@ -1512,7 +1514,7 @@ namespace madBasketball {
         {
             Entity agent = ctx.makeEntity<Agent>();
             ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0};
-            ctx.get<ActionMask>(agent) = ActionMask{0.f, 0.f, 0.f, 0.f};
+            ctx.get<ActionMask>(agent) = ActionMask{0, 0, 0, 0};
             Position &agent_pos = ctx.get<Position>(agent);
             if (gameState.isOneOnOne == 1.f)
             {

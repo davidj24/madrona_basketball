@@ -107,10 +107,10 @@ namespace madBasketball {
 
     struct ActionMask
     {
-        float can_move;
-        float can_grab;
-        float can_pass;
-        float can_shoot;
+        int32_t can_move;
+        int32_t can_grab;
+        int32_t can_pass;
+        int32_t can_shoot;
     };
 
     struct Orientation
