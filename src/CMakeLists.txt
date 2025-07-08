@@ -1,5 +1,6 @@
 set(SIMULATOR_SRCS
-    types.hpp sim.hpp sim.cpp
+    sim.hpp types.hpp
+    sim.cpp helper.cpp gen.cpp game.cpp
 )
 
 add_library(madrona_basketball_cpu_impl STATIC
