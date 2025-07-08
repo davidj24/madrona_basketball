@@ -13,11 +13,11 @@ using namespace madrona::math;
 
 
 
-namespace madsimple {
+namespace madBasketball {
     // =================================================== Helper Functions ===================================================
-    
+
     // Computes the rotation needed to align the 'start' vector with the 'target' vector.
-    inline Quat findRotationBetweenVectors(Vector3 start, Vector3 target) 
+    inline Quat findRotationBetweenVectors(Vector3 start, Vector3 target)
     {
         // Ensure the vectors are normalized (unit length)
         start = start.normalize();
@@ -148,6 +148,7 @@ namespace madsimple {
 
         // ================================================== Agent Components ==================================================
         registry.registerComponent<Action>();
+        registry.registerComponent<Observations>();
         registry.registerComponent<ActionMask>();
         registry.registerComponent<Reward>();
         registry.registerComponent<Inbounding>();
@@ -180,6 +181,7 @@ namespace madsimple {
         // ================================================= Tensor Exports For Viewer =================================================
         registry.exportColumn<Agent, Reset>((uint32_t)ExportID::Reset);
         registry.exportColumn<Agent, Action>((uint32_t)ExportID::Action);
+        registry.exportColumn<Agent, Observations>((uint32_t)ExportID::Observations);
         registry.exportColumn<Agent, ActionMask>((uint32_t)ExportID::ActionMask);
         registry.exportColumn<Agent, Position>((uint32_t)ExportID::AgentPos);
         registry.exportColumn<Agent, Reward>((uint32_t)ExportID::Reward);
@@ -653,7 +655,7 @@ namespace madsimple {
         {
             action_mask.can_shoot = 0.f;
             action_mask.can_grab = 0.f;
-            if (inbounding.imInbounding == 1.f && gameState.liveBall == 0.f) 
+            if (inbounding.imInbounding && gameState.liveBall == 0.f)
             {
                 action_mask.can_move = 0.f;
             }
@@ -1378,48 +1380,53 @@ namespace madsimple {
             Action, ActionMask, Position, InPossession, Inbounding, Orientation, Attributes>>({actionMaskingNode});
 
         auto grabSystemNode = builder.addToGraph<ParallelForNode<Engine, grabSystem,
-            Entity, Action, ActionMask, Position, InPossession, Team, GrabCooldown>>({actionMaskingNode});
+            Entity, Action, ActionMask, Position, InPossession, Team, GrabCooldown>>({moveAgentSystemNode});
 
         auto passSystemNode = builder.addToGraph<ParallelForNode<Engine, passSystem,
-            Entity, Action, ActionMask, Orientation, InPossession, Inbounding>>({actionMaskingNode});
+            Entity, Action, ActionMask, Orientation, InPossession, Inbounding>>({grabSystemNode});
         
         auto shootSystemNode = builder.addToGraph<ParallelForNode<Engine, shootSystem,
-            Entity, Action, ActionMask, Position, Orientation, Inbounding, InPossession, Team>>({actionMaskingNode});
+            Entity, Action, ActionMask, Position, Orientation, Inbounding, InPossession, Team>>({passSystemNode});
 
         auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
-            Position, BallPhysics, Grabbed>>({grabSystemNode, passSystemNode, shootSystemNode});
+            Position, BallPhysics, Grabbed>>({shootSystemNode});
 
         auto scoreSystemNode = builder.addToGraph<ParallelForNode<Engine, scoreSystem,
             Entity, Position, ScoringZone>>({moveBallSystemNode});
 
         auto outOfBoundsSystemNode = builder.addToGraph<ParallelForNode<Engine, outOfBoundsSystem,
-            Entity, Position, BallPhysics>>({moveBallSystemNode});
+            Entity, Position, BallPhysics>>({scoreSystemNode});
         
         auto updateLastTouchSystemNode = builder.addToGraph<ParallelForNode<Engine, updateLastTouchSystem,
-            Position, BallPhysics>>({moveBallSystemNode});
+            Position, BallPhysics>>({outOfBoundsSystemNode});
 
         auto tickNode = builder.addToGraph<ParallelForNode<Engine, tick,
-            Reset, Done, CurStep, GrabCooldown>>({});
+            Reset, Done, CurStep, GrabCooldown>>({updateLastTouchSystemNode});
         
         auto clockSystemNode = builder.addToGraph<ParallelForNode<Engine, clockSystem,
-            Reset, IsWorldClock>>({});
+            Reset, IsWorldClock>>({tickNode});
 
         // Add the new inbound violation system to the graph
         auto inboundViolationSystemNode = builder.addToGraph<ParallelForNode<Engine, inboundViolationSystem,
             IsWorldClock>>({clockSystemNode});
 
         auto resetSystemNode = builder.addToGraph<ParallelForNode<Engine, resetSystem,
-            Reset, IsWorldClock>>({clockSystemNode, tickNode});
+            Reset, IsWorldClock>>({inboundViolationSystemNode});
 
         auto updatePointsWorthNode = builder.addToGraph<ParallelForNode<Engine, updatePointsWorthSystem,
-            Position, InPossession, Team>>({});
+            Position, InPossession, Team>>({resetSystemNode});
 
         auto agentCollisionNode = builder.addToGraph<ParallelForNode<Engine, agentCollisionSystem,
-            Entity, Position, InPossession>>({moveAgentSystemNode});
-        
+            Entity, Position, InPossession>>({updatePointsWorthNode});
 
         auto hardCodeDefenseSystemNode = builder.addToGraph<ParallelForNode<Engine, hardCodeDefenseSystem,
-            Team, Position, Action, Attributes>>({moveAgentSystemNode});
+            Team, Position, Action, Attributes>>({agentCollisionNode});
+
+        // RL Tasks
+        auto obsSystemNode = builder.addToGraph<ParallelForNode<Engine, fillObservationsSystem,
+            Entity, Observations, Position, Orientation, InPossession,
+            Inbounding, Team, GrabCooldown>>({hardCodeDefenseSystemNode});
+
     }
 
     // =================================================== Sim Creation ===================================================

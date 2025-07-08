@@ -7,7 +7,7 @@
 #include "types.hpp"
 #include "init.hpp"
 
-namespace madsimple {
+namespace madBasketball {
 
 class Engine;
 

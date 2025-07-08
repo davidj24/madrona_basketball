@@ -3,7 +3,7 @@
 #include <madrona/macros.hpp>
 #include <madrona/py/bindings.hpp>
 
-namespace madsimple {
+namespace madBasketball {
 static Cell * setupCells(int64_t grid_x, int64_t grid_y)
 
 {

@@ -1,6 +1,6 @@
 #pragma once
 
-namespace madsimple {
+namespace madBasketball {
     // ======================================== Entity Counts ========================================
     constexpr int32_t NUM_AGENTS = 2;
     constexpr int32_t NUM_BASKETBALLS = 1;

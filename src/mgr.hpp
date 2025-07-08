@@ -12,7 +12,7 @@
 
 #include "grid.hpp"
 
-namespace madsimple {
+namespace madBasketball {
 
 class Manager {
 public:

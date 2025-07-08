@@ -21,7 +21,7 @@
 using namespace madrona;
 using namespace madrona::py;
 
-namespace madsimple {
+namespace madBasketball {
 
     struct Manager::Impl 
     {

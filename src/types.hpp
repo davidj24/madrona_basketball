@@ -5,7 +5,7 @@
 
 using namespace madrona::math;
 
-namespace madsimple {
+namespace madBasketball {
 
     enum class ExportID : uint32_t 
     {
@@ -216,6 +216,7 @@ namespace madsimple {
         Reset,
         Action,
         ActionMask,
+        Observations,
         GrabCooldown,
         Position,
         Reward,

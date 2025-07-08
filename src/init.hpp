@@ -4,7 +4,7 @@
 
 #include "grid.hpp"
 
-namespace madsimple {
+namespace madBasketball {
 
 struct EpisodeManager {
     madrona::AtomicU32 curEpisode;

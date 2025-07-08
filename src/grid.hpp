@@ -1,6 +1,6 @@
 #pragma once
 
-namespace madsimple {
+namespace madBasketball {
 
 enum class CellFlag : uint32_t {
     Nothing = 0,
