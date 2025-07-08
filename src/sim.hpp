@@ -1,7 +1,7 @@
 #pragma once
 
 #include <madrona/taskgraph_builder.hpp>
-#include <madrona/math.hpp>
+#include <madrona/rand.hpp>
 #include <madrona/custom_context.hpp>
 
 #include "types.hpp"
@@ -13,6 +13,7 @@ class Engine;
 
 struct Sim : public madrona::WorldBase {
     struct Config {
+        madrona::RandKey initRandKey;
         uint32_t maxEpisodeLength;
         bool enableViewer;
     };
@@ -24,6 +25,9 @@ struct Sim : public madrona::WorldBase {
                            const Config &cfg);
 
     Sim(Engine &ctx, const Config &cfg, const WorldInit &init);
+
+    madrona::RandKey initRandKey;
+    madrona::RNG rng;
 
     EpisodeManager *episodeMgr;
     const GridState *grid;

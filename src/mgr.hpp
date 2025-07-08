@@ -17,6 +17,7 @@ namespace madBasketball {
 class Manager {
 public:
     struct Config {
+        uint32_t randSeed;
         uint32_t maxEpisodeLength;
         madrona::ExecMode execMode;
         uint32_t numWorlds;

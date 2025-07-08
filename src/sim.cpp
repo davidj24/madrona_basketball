@@ -211,8 +211,8 @@ namespace madBasketball {
 
     //=================================================== Ball Systems ===================================================
     inline void moveBallRandomly(Engine &ctx,
-                        Position &ball_pos,
-                        RandomMovement &random_movement)
+                                 Position &ball_pos,
+                                 RandomMovement &random_movement)
     {
         random_movement.moveTimer ++;
         if (random_movement.moveTimer >= random_movement.moveInterval) 
@@ -221,8 +221,8 @@ namespace madBasketball {
             const GridState *grid = ctx.data().grid;
 
             // Random movement in continuous space (0.1m steps)
-            float dx = ((rand() % 3) - 1) * 0.1f; // -0.1, 0, or 0.1 meters
-            float dy = ((rand() % 3) - 1) * 0.1f; // -0.1, 0, or 0.1 meters
+            float dx = (float) (ctx.data().rng.sampleI32(0, 3) - 1) * 0.1f; // -0.1, 0, or 0.1 meters
+            float dy = (float) (ctx.data().rng.sampleI32(0, 3) - 1) * 0.1f; // -0.1, 0, or 0.1 meters
 
             float new_x = ball_pos.position.x + dx;
             float new_y = ball_pos.position.y + dy;
@@ -930,10 +930,7 @@ namespace madBasketball {
         }
 
         // --- Part 2: Reset All Agents ---
-        std::vector<Vector3> team_colors = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
-        
-        static thread_local std::mt19937 rng(std::random_device{}());
-        std::normal_distribution<float> pos_dist(0.0f, START_POS_STDDEV);
+        Vector3 team_colors[2] = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
 
         auto agent_query = ctx.query<Reset, Action, ActionMask, Position, Reward, Done, CurStep, InPossession, Orientation, Inbounding, Team, GrabCooldown, Stats, Attributes>();
         int agent_i = 0;
@@ -956,8 +953,8 @@ namespace madBasketball {
             if (gameState.isOneOnOne == 1.f)
             {
                 Vector3 base_pos = { grid->startX + (agent_i * 2.f), grid->startY, 0.f };
-                float x_dev = pos_dist(rng);
-                float y_dev = pos_dist(rng);
+                float x_dev = ctx.data().rng.sampleUniform() * START_POS_STDDEV;
+                float y_dev = ctx.data().rng.sampleUniform() * START_POS_STDDEV;
                 pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
                 pos.position.x = std::clamp(pos.position.x, 0.f, grid->width);
                 pos.position.y = std::clamp(pos.position.y, 0.f, grid->height);
@@ -1432,10 +1429,12 @@ namespace madBasketball {
     // =================================================== Sim Creation ===================================================
 
     Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
-    : WorldBase(ctx),
-    episodeMgr(init.episodeMgr),
-    grid(init.grid),
-    maxEpisodeLength(cfg.maxEpisodeLength)
+        : WorldBase(ctx),
+        initRandKey(cfg.initRandKey),
+        rng(rand::split_i(ctx.data().initRandKey, 0, 0)),
+        episodeMgr(init.episodeMgr),
+        grid(init.grid),
+        maxEpisodeLength(cfg.maxEpisodeLength)
     {
         ctx.singleton<GameState>() = GameState 
         {
@@ -1517,12 +1516,8 @@ namespace madBasketball {
             };
         }
 
-        
-        
-        static thread_local std::mt19937 rng(std::random_device{}());
-        std::normal_distribution<float> pos_dist(0.0f, START_POS_STDDEV);
         // Now create agents with proper hoop references
-        std::vector<Vector3> team_colors = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
+        Vector3 team_colors[2] = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
         for (int i = 0; i < NUM_AGENTS; i++) 
         {
             Entity agent = ctx.makeEntity<Agent>();
@@ -1539,8 +1534,8 @@ namespace madBasketball {
                 };
 
                 // Generate a random deviation
-                float x_dev = pos_dist(rng);
-                float y_dev = pos_dist(rng);
+                float x_dev = ctx.data().rng.sampleUniform() * START_POS_STDDEV;
+                float y_dev = ctx.data().rng.sampleUniform() * START_POS_STDDEV;
 
                 // Add the deviation to the base position
                 agent_pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};

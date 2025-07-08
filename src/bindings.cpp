@@ -34,6 +34,7 @@ NB_MODULE(madrona_basketball, m) {
             float height_meters = (float) discrete_y / (float) cells_per_meter;
 
             new (self) Manager(Manager::Config {
+                .randSeed = 0,
                 .maxEpisodeLength = (uint32_t)max_episode_length,
                 .execMode = exec_mode,
                 .numWorlds = (uint32_t)num_worlds,

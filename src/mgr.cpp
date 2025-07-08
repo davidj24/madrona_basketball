@@ -152,6 +152,7 @@ namespace madBasketball {
         Sim::Config sim_cfg {
             .maxEpisodeLength = cfg.maxEpisodeLength,
             .enableViewer = false,
+            .initRandKey = rand::initKey(cfg.randSeed),
         };
 
         switch (cfg.execMode) {
