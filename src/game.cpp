@@ -931,7 +931,6 @@ inline void fillObservationsSystem(Engine &ctx,
     BallPhysics ball_phys;
     Grabbed ball_grabbed;
 
-    // Use iterateQuery to fetch the data and assign it to the variables above.
     // we assume 1 ball
     Entity ball = ctx.data().balls[0];
     ball_pos = ctx.get<Position>(ball);
@@ -990,7 +989,6 @@ inline void fillObservationsSystem(Engine &ctx,
 
     // Now fill the ball info using the variables we populated earlier.
     fill_vec3(ball_pos.position);
-    // FIX: Access velocity components correctly from the BallPhysics struct
     fill_vec3(ball_phys.velocity);
     obs[idx++] = (float)ball_grabbed.isGrabbed;
     obs[idx++] = (float)ball_phys.inFlight;

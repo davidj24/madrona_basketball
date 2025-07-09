@@ -15,5 +15,8 @@ wandb/
 *.log
 events.out.tfevents.*
 
+# Model Checkpoints
+checkpoints/
+
 # Other
 thingsToAdd.txt

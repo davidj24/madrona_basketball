@@ -68,10 +68,9 @@ class MadronaPipeline:
 
         game_state = data['game_state'][0]
         
-        # NOTE: These indices MUST match the order in your C++ GameState struct.
-        # Based on our previous discussion, we assume scoreCount is the 11th field (index 10)
+        # We assume scoreCount is the 11th field (index 10)
         # and outOfBoundsCount is the 12th field (index 11).
-        # Adjust these indices if your struct is different.
+        # Adjust these indices if struct is different.
         current_score_count = int(game_state[10])
         current_oob_count = int(game_state[11])
 
@@ -560,7 +559,6 @@ class MadronaPipeline:
         if keys[pygame.K_SPACE]: pass_ball = 1
         if keys[pygame.K_h]: shoot_ball = 1
 
-        # FIX: Send the action to the currently active agent
         self.sim.set_action(0, self.active_agent_idx, move_speed, move_angle, rotate, grab, pass_ball, shoot_ball)
 
         # You can keep a second set of controls for another agent if you wish,
@@ -601,7 +599,6 @@ class MadronaPipeline:
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_r: self.reset_simulation()
                     if event.key == pygame.K_f: auto_step = not auto_step
-                # FIX: Add mouse click event handling
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1: # Left mouse click
                         mouse_x, mouse_y = event.pos
