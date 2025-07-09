@@ -57,3 +57,8 @@ class Agent(nn.Module):
         log_probs, entropies = action_dists.action_stats(actions)
         value = self.critic(x)
         return log_probs, entropies, value
+
+    def load(self, path):
+        state_dict = torch.load(path, weights_only=True)
+        print(state_dict)
+        self.load_state_dict(state_dict)

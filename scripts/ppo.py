@@ -1,3 +1,4 @@
+import os
 import random
 import time
 from dataclasses import dataclass
@@ -18,7 +19,7 @@ from ppo_stats import PPOStats
 class Args:
     seed: int = 1
     torch_deterministic: bool = True
-    use_gpu: bool = False
+    use_gpu: bool = True
 
     # Wandb
     env_id: str = "MadronaBasketball"
@@ -27,12 +28,12 @@ class Args:
     wandb_entity: str = None
 
     # Algorithm specific arguments
-    total_timesteps: int = 10000000
-    num_envs: int = 64
-    num_rollout_steps: int = 32
+    num_iterations: int = 100_000
+    num_envs: int = 8192
+    num_rollout_steps: int = 100
     learning_rate: float = 2.5e-4
     anneal_lr: bool = True
-    gamma: float = 0.99
+    gamma: float = 0.999
     gae_lambda: float = 0.95
     num_minibatches: int = 4
     update_epochs: int = 4
@@ -45,16 +46,14 @@ class Args:
     target_kl: float = None
 
     # to be filled in runtime
-    batch_size: int = 0
+    rollout_batch_size: int = 0
     minibatch_size: int = 0
-    num_iterations: int = 0
 
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
-    args.batch_size = int(args.num_envs * args.num_rollout_steps)
-    args.minibatch_size = int(args.batch_size // args.num_minibatches)
-    args.num_iterations = args.total_timesteps // args.batch_size
+    args.rollout_batch_size = int(args.num_envs * args.num_rollout_steps)
+    args.minibatch_size = int(args.rollout_batch_size // args.num_minibatches)
     run_name = f"{args.env_id}__{args.seed}__{int(time.time())}"
     if args.wandb_track:
         import wandb
@@ -102,6 +101,7 @@ if __name__ == "__main__":
     values = torch.zeros((args.num_rollout_steps, args.num_envs)).to(device)
 
     # Train start
+    stats = PPOStats()
     global_step = 0
     start_time = time.time()
     next_obs, _, _ = envs.reset()
@@ -154,14 +154,12 @@ if __name__ == "__main__":
         b_values = values.reshape(-1)
 
         # Optimization steps
-        stats = PPOStats()
-
-        b_inds = np.arange(args.batch_size)
+        b_inds = np.arange(args.rollout_batch_size)
         clip_fracs = []
         for epoch in range(args.update_epochs):
             # Sample minibatches
             np.random.shuffle(b_inds)
-            for start in range(0, args.batch_size, args.minibatch_size):
+            for start in range(0, args.rollout_batch_size, args.minibatch_size):
                 end = start + args.minibatch_size
                 mb_inds = b_inds[start:end]
 
@@ -212,8 +210,10 @@ if __name__ == "__main__":
 
                 # Update the stats
                 returns_mean, returns_stdev = torch.var_mean(b_returns[mb_inds])
+                rewards_mean, rewards_min, rewards_max = rewards.mean(), rewards.min(), rewards.max()
                 stats.update(loss.item(), pg_loss.item(), v_loss.item(), entropy_loss.item(),
-                              returns_mean.item(), returns_stdev.item())
+                              returns_mean.item(), returns_stdev.item(), rewards_mean.item(),
+                              rewards_min.item(), rewards_max.item())
 
 
             # Break if the approximate KL divergence exceeds the target
@@ -234,18 +234,22 @@ if __name__ == "__main__":
         if iteration % 10 == 0:
             p_advantages = b_advantages.reshape(-1)
             p_values = b_values.reshape(-1)
-            rewards_mean, rewards_min, rewards_max = rewards.mean(), rewards.min(), rewards.max()
-            done_count = dones.sum().item()
-            if done_count > 0:
-                rewards_done = rewards[dones > 0]
-                rewards_mean, rewards_min, rewards_max = rewards_done.mean(), rewards_done.min(), rewards_done.max()
 
             print(f"\nUpdate: {iteration}")
             print(f"    Loss: {stats.loss: .3e}, A: {stats.action_loss: .3e}, V: {stats.value_loss: .3e}, E: {stats.entropy_loss: .3e}")
             print()
-            print(f"    Rewards          => Avg: {rewards_mean: .3f}, Min: {rewards_min: .3f}, Max: {rewards_max: .3f}")
+            print(f"    Rewards          => Avg: {stats.rewards_mean: .3f}, Min: {stats.rewards_min: .3f}, Max: {stats.rewards_max: .3f}")
             print(f"    Values           => Avg: {p_values.mean(): .3f}, Min: {p_values.min(): .3f}, Max: {p_values.max(): .3f}")
             print(f"    Advantages       => Avg: {p_advantages.mean(): .3f}, Min: {p_advantages.min(): .3f}, Max: {p_advantages.max(): .3f}")
             print(f"    Returns          => Avg: {stats.returns_mean}")
+            stats.reset()
+
+        # Every 100 iterations, save the model
+        if iteration % 100 == 0:
+            folder = "checkpoints"
+            if not os.path.exists(folder):
+                os.makedirs(folder)
+            torch.save(agent.state_dict(), os.path.join(folder, f"{iteration}.pth"))
+            print(f"Model saved at iteration {iteration}")
 
     writer.close()
