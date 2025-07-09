@@ -170,7 +170,7 @@ inline void grabSystem(Engine &ctx,
                        GrabCooldown &grab_cooldown)
 {
     GameState &gameState = ctx.singleton<GameState>();
-    if (action_mask.can_grab == 0 || action.grab == 0) {return;}
+    if (action_mask.can_grab == 0 || action.grab == 0) { return; }
     grab_cooldown.cooldown = 10.f;
     action.grab = 0;
 
@@ -178,7 +178,7 @@ inline void grabSystem(Engine &ctx,
         Entity ball = ctx.data().balls[i];
         BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
         Grabbed &grabbed = ctx.get<Grabbed>(ball);
-        if (ball_physics.inFlight) { return; }
+        if (ball_physics.inFlight) { continue; }
 
         bool agent_is_holding_this_ball = (in_possession.hasBall == true &&
                                            grabbed.isGrabbed &&
@@ -190,7 +190,7 @@ inline void grabSystem(Engine &ctx,
             in_possession.hasBall = false;
             grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER;
             grabbed.isGrabbed = false;
-            return;
+            continue;
         }
 
         // Check if ball is within grab range (0.5 meters)
@@ -497,7 +497,7 @@ inline void agentCollisionSystem(Engine &ctx,
 
         // Don't check an agent against itself.
         // Only check pairs where A's ID is less than B's to avoid checking each pair twice.
-        if (entity_a.id >= entity_b.id) {return;}
+        if (entity_a.id >= entity_b.id) { continue; }
 
         // Calculate the vector and distance between the two agents
         Vector3 vec_between_agents = (entity_b_pos.position - entity_a_pos.position);
