@@ -33,9 +33,11 @@ void generateWorld(Engine &ctx) {
     WorldClock worldClock = ctx.singleton<WorldClock>();
     worldClock.resetNow = false;
 
-    // Initialize GameState and create hoops first
+    // Initialize GameState
     const GridState* grid = ctx.data().grid;
     GameState &gameState = ctx.singleton<GameState>();
+
+    // Create hoops
     for (int i = 0; i < NUM_HOOPS; i++) {
         Entity hoop = ctx.makeEntity<Hoop>();
         ctx.data().hoops[i] = hoop;

@@ -465,7 +465,7 @@ inline void actionMaskSystem(Engine &ctx,
         action_mask.can_pass = 1;
         action_mask.can_shoot = 1;
     }
-
+    
     if (gameState.inboundingInProgress == 1.f)
     {
         action_mask.can_shoot = 0;
@@ -475,7 +475,7 @@ inline void actionMaskSystem(Engine &ctx,
             action_mask.can_move = 0;
         }
     }
-
+    
     if (grab_cooldown.cooldown > 0.f)
     {
         action_mask.can_grab = 0;
@@ -485,35 +485,35 @@ inline void actionMaskSystem(Engine &ctx,
 
 
 inline void agentCollisionSystem(Engine &ctx,
-                                 Entity entity_a,
-                                 Position &entity_a_pos,
-                                 InPossession &in_possession_a)
-{
+    Entity entity_a,
+    Position &entity_a_pos,
+    InPossession &in_possession_a)
+    {
     // Query for all agents to get their positions.
     // We need Entity to compare IDs and Position to read/write locations.
     for (CountT i = 0; i < NUM_AGENTS; i++) {
         Entity entity_b = ctx.data().agents[i];
         Position &entity_b_pos = ctx.get<Position>(entity_b);
-
+        
         // Don't check an agent against itself.
         // Only check pairs where A's ID is less than B's to avoid checking each pair twice.
         if (entity_a.id >= entity_b.id) { continue; }
-
+        
         // Calculate the vector and distance between the two agents
         Vector3 vec_between_agents = (entity_b_pos.position - entity_a_pos.position);
         float dist_between_agents = vec_between_agents.length();
-
+        
         if (dist_between_agents < AGENT_SIZE_M)
         {
             // Calculate how much they are overlapping. If dist is 0, provide a small default push.
             float penetration_depth = AGENT_SIZE_M - dist_between_agents;
             Vector3 correction_vec = (dist_between_agents > 1e-5f) ? (vec_between_agents / dist_between_agents) : Vector3{1.f, 0.f, 0.f};
-
+            
             // Move each agent away from the other by half of the overlap.
             // This "resolves" the collision by pushing them apart.
             entity_a_pos.position.x -= correction_vec.x * penetration_depth * 0.5f;
             entity_a_pos.position.y -= correction_vec.y * penetration_depth * 0.5f;
-
+            
             entity_b_pos.position.x += correction_vec.x * penetration_depth * 0.5f;
             entity_b_pos.position.y += correction_vec.y * penetration_depth * 0.5f;
         }
@@ -522,61 +522,61 @@ inline void agentCollisionSystem(Engine &ctx,
 
 
 inline void hardCodeDefenseSystem(Engine &ctx,
-                            Team &defender_team,
-                            Position &defender_pos,
-                            Action &defender_action,
-                            Attributes &defender_attributes)
-{
-    GameState &gameState = ctx.singleton<GameState>();
-
-    if (gameState.teamInPossession == defender_team.teamIndex)
+    Team &defender_team,
+    Position &defender_pos,
+    Action &defender_action,
+    Attributes &defender_attributes)
     {
-        defender_action.moveSpeed = 0;
-        return;
-    }
-
-    defender_action.grab = 1.f;
-    Vector3 guarding_pos; // The place we want our defensive agent to go to defend
-    bool found_offender = false;
-    for (CountT i = 0; i < NUM_AGENTS; i++) {
-        Entity agent = ctx.data().agents[i];
-        InPossession &offender_in_possession = ctx.get<InPossession>(agent);
-        Position &offender_pos = ctx.get<Position>(agent);
-        if (offender_in_possession.hasBall && !found_offender) {
-            for (CountT j = 0; j < NUM_HOOPS; j++) {
-                Entity hoop = ctx.data().hoops[j];
-                if (defender_team.defendingHoopID == hoop.id) {
-                    Position &hoop_pos = ctx.get<Position>(hoop);
+        GameState &gameState = ctx.singleton<GameState>();
+        
+        if (gameState.teamInPossession == defender_team.teamIndex)
+        {
+            defender_action.moveSpeed = 0;
+            return;
+        }
+        
+        defender_action.grab = 1.f;
+        Vector3 guarding_pos; // The place we want our defensive agent to go to defend
+        bool found_offender = false;
+        for (CountT i = 0; i < NUM_AGENTS; i++) {
+            Entity agent = ctx.data().agents[i];
+            InPossession &offender_in_possession = ctx.get<InPossession>(agent);
+            Position &offender_pos = ctx.get<Position>(agent);
+            if (offender_in_possession.hasBall && !found_offender) {
+                for (CountT j = 0; j < NUM_HOOPS; j++) {
+                    Entity hoop = ctx.data().hoops[j];
+                    if (defender_team.defendingHoopID == hoop.id) {
+                        Position &hoop_pos = ctx.get<Position>(hoop);
                     guarding_pos = offender_pos.position + GUARDING_DISTANCE * (hoop_pos.position - offender_pos.position).normalize();
                     found_offender = true;
                 }
             }
         }
     }
-
+    
     if (!found_offender)
     {
         defender_action.moveSpeed = 0;
         return;
     }
-
+    
     Vector3 current_target = defender_attributes.currentTargetPosition;
     Vector3 ideal_target = guarding_pos;
     float interpolation_factor = defender_attributes.reactionSpeed * TIMESTEPS_TO_SECONDS_FACTOR;
-
+    
     defender_attributes.currentTargetPosition = current_target + (ideal_target - current_target) * interpolation_factor;
-
-
-
+    
+    
+    
     Vector3 move_vector = defender_attributes.currentTargetPosition - defender_pos.position;
     if (move_vector.length2() < 0.01f)
     {
         defender_action.moveSpeed = 0;
         return;
     }
-
-
-
+    
+    
+    
     const Vector3 move_directions[] = {
         {0.f, -1.f, 0.f},  // 0: Up
         {1.f, -1.f, 0.f},  // 1: Up-Right
@@ -591,7 +591,7 @@ inline void hardCodeDefenseSystem(Engine &ctx,
     Vector3 desired_dir = move_vector.normalize();
     float max_dot = -2.f; // Initialize with a value lower than any possible dot product
     int32_t best_move_angle = 0;
-
+    
     // Find which of the 8 directions is most aligned with our desired direction
     for (int32_t i = 0; i < 8; ++i)
     {
@@ -602,12 +602,54 @@ inline void hardCodeDefenseSystem(Engine &ctx,
             best_move_angle = i;
         }
     }
-
+    
     // Set the action to the best-matching direction
     defender_action.moveSpeed = 1;
     defender_action.moveAngle = best_move_angle;
     defender_action.rotate = 0;
 }
+
+
+
+
+inline void rewardSystem(Engine &ctx,
+                         Entity agent_entity,
+                         Reward &reward,
+                         Position &agent_pos,
+                         Team &team)
+{
+    // Find attacking hoop
+    Position target_hoop_pos;
+    for (CountT i = 0; i < NUM_HOOPS; i++)
+    {
+        Entity hoop = ctx.data().hoops[i];
+        if ((uint32_t)hoop.id != team.defendingHoopID)
+        {
+            target_hoop_pos = ctx.get<Position>(hoop);
+        }
+    }
+
+    // Technically distance can be a little longer than this if agent goes out of bounds, but it shouldn't matter
+    float maximum_distance_from_hoop = (target_hoop_pos.position - Vector3{COURT_MIN_X, COURT_MIN_Y, 0}).length();
+    float distance_from_hoop = (agent_pos.position - target_hoop_pos.position).length();
+    // Using 3 multiplications becauase std:: doesn't work with GPU and I don't think madrona::math has power
+    float proximity_reward = -((distance_from_hoop*distance_from_hoop*distance_from_hoop) / maximum_distance_from_hoop);
+    reward.r += proximity_reward;
+
+    GameState &gameState = ctx.singleton<GameState>();
+    for (CountT j = 0;  j < NUM_BASKETBALLS; j++)
+    {
+        Entity ball = ctx.data().balls[j];
+        BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
+        if (ball_physics.shotByAgentID == agent_entity.id)
+        {
+            reward.r += 5*ball_physics.shotPointValue;
+        }
+    }
+}
+
+
+
 
 inline void resetRewardsSystem(Engine &ctx, Reward &rew)
 {
@@ -638,6 +680,7 @@ inline void scoreSystem(Engine &ctx,
             for (CountT j = 0; j < NUM_AGENTS; j++) {
                 Entity agent = ctx.data().agents[j];
                 Team &team = ctx.get<Team>(agent);
+                Stats &agent_stats = ctx.get<Stats>(agent);
                 if (team.defendingHoopID == (uint32_t)hoop_entity.id)
                 {
                     inbounding_team_idx = (uint32_t)team.teamIndex;
@@ -645,10 +688,7 @@ inline void scoreSystem(Engine &ctx,
 
                 if (agent.id == ball_physics.shotByAgentID)
                 {
-                    ctx.get<Reward>(agent).r = (float) points_scored;
-                    // We need to get Stats component for this agent, but it's not in the query
-                    // For now, we'll skip updating individual agent stats
-                    // TODO: Either add Stats to agentQuery or create a separate query
+                    agent_stats.points += ball_physics.shotPointValue;
                 }
             }
 
@@ -887,11 +927,6 @@ struct AgentObservationData {
     GrabCooldown cooldown;
 };
 
-inline void rewardSystem(Engine &ctx,
-                         Entity agent_entity,
-                         Reward &reward)
-{
-}
 
 inline void fillObservationsSystem(Engine &ctx,
                                    Entity agent_entity,
@@ -1114,7 +1149,6 @@ TaskGraphNodeID setupGameStepTasks(
     auto clockSystemNode = builder.addToGraph<ParallelForNode<Engine, clockSystem,
         WorldClock>>({tickNode});
 
-    // Add the new inbound violation system to the graph
     auto inboundViolationSystemNode = builder.addToGraph<ParallelForNode<Engine, inboundViolationSystem,
         WorldClock>>({clockSystemNode});
 
@@ -1133,6 +1167,9 @@ TaskGraphNodeID setupGameStepTasks(
     auto fillObservationsNode = builder.addToGraph<ParallelForNode<Engine, fillObservationsSystem,
         Entity, Observations, Position, Orientation, InPossession,
         Inbounding, Team, GrabCooldown>>({hardCodeDefenseSystemNode});
+
+    auto rewardSystemNode = builder.addToGraph<ParallelForNode<Engine, rewardSystem,
+        Entity, Reward, Position, Team>>({fillObservationsNode});
 
     return fillObservationsNode;
 }

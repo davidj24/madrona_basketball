@@ -14,8 +14,8 @@ import math
 from src.constants import *
 
 # Disable CUDA before importing anything else to avoid version conflicts
-os.environ['CUDA_VISIBLE_DEVICES'] = ''
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+# os.environ['CUDA_VISIBLE_DEVICES'] = ''
+# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 # Try to import and initialize PyTorch early to avoid issues later
 try:

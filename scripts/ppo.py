@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 import tyro
 from torch.utils.tensorboard import SummaryWriter
+from typing import Optional
 
 from agent import Agent
 from env import EnvWrapper
@@ -27,6 +28,7 @@ class Args:
     wandb_track: bool = True
     wandb_project_name: str = "MadronaBasketballPPO"
     wandb_entity: str = None
+    run_name: Optional[str] = None
 
     # Algorithm specific arguments
     num_iterations: int = 100_000
@@ -55,7 +57,10 @@ if __name__ == "__main__":
     args = tyro.cli(Args)
     args.rollout_batch_size = int(args.num_envs * args.num_rollout_steps)
     args.minibatch_size = int(args.rollout_batch_size // args.num_minibatches)
-    run_name = f"{args.env_id}__{args.seed}__{int(time.time())}"
+    if args.run_name:
+        run_name = args.run_name
+    else:
+        run_name = f"{args.env_id}__{args.seed}__{int(time.time())}"
     if args.wandb_track:
         import wandb
 
