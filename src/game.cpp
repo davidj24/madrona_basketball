@@ -543,8 +543,8 @@ inline void hardCodeDefenseSystem(Engine &ctx,
         InPossession &offender_in_possession = ctx.get<InPossession>(agent);
         Position &offender_pos = ctx.get<Position>(agent);
         if (offender_in_possession.hasBall && !found_offender) {
-            for (CountT j = 0; i < NUM_HOOPS; i++) {
-                Entity hoop = ctx.data().hoops[i];
+            for (CountT j = 0; j < NUM_HOOPS; j++) {
+                Entity hoop = ctx.data().hoops[j];
                 if (defender_team.defendingHoopID == hoop.id) {
                     Position &hoop_pos = ctx.get<Position>(hoop);
                     guarding_pos = offender_pos.position + GUARDING_DISTANCE * (hoop_pos.position - offender_pos.position).normalize();
@@ -635,8 +635,8 @@ inline void scoreSystem(Engine &ctx,
 
             // Find which team is defending this hoop (has defendingHoopID == hoop_entity.id)
             uint32_t inbounding_team_idx = 0; // Default fallback
-            for (CountT j = 0; i < NUM_AGENTS; i++) {
-                Entity agent = ctx.data().agents[i];
+            for (CountT j = 0; j < NUM_AGENTS; j++) {
+                Entity agent = ctx.data().agents[j];
                 Team &team = ctx.get<Team>(agent);
                 if (team.defendingHoopID == (uint32_t)hoop_entity.id)
                 {
