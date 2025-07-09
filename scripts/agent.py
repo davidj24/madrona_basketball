@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from action import DiscreteActionDistributions
+from .action import DiscreteActionDistributions
 
 
 def backbone_layer_init(layer):
@@ -59,6 +59,6 @@ class Agent(nn.Module):
         return log_probs, entropies, value
 
     def load(self, path):
-        state_dict = torch.load(path, weights_only=True)
+        state_dict = torch.load(path, weights_only=True, map_location="cpu")
         print(state_dict)
         self.load_state_dict(state_dict)
