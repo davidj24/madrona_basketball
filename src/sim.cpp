@@ -17,6 +17,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
     // Singletons
     registry.registerSingleton<GameState>();
+    registry.registerSingleton<WorldClock>();
 
     // General Components
     registry.registerComponent<Reset>();
@@ -24,7 +25,6 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.registerComponent<Done>();
     registry.registerComponent<CurStep>();
     registry.registerComponent<RandomMovement>();
-    registry.registerComponent<IsWorldClock>();
 
     // Agent Components
     registry.registerComponent<Action>();
@@ -51,7 +51,6 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.registerArchetype<Agent>();
     registry.registerArchetype<Basketball>();
     registry.registerArchetype<Hoop>();
-    registry.registerArchetype<WorldClock>();
 
     // Tensor Exports
     registry.exportColumn<Agent, Reset>((uint32_t)ExportID::Reset);
@@ -89,11 +88,6 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
     grid(init.grid),
     maxEpisodeLength(cfg.maxEpisodeLength)
 {
-    ballQuery = ctx.query<Entity, Position, Grabbed, BallPhysics, Reset, Done, CurStep>();
-    hoopQuery = ctx.query<Entity, Position, ImAHoop, Reset, Done, CurStep, ScoringZone>();
-    agentQuery = ctx.query<Entity, Team, InPossession, Position, Orientation, Inbounding, GrabCooldown, Reset, Action, ActionMask, Reward, Done, CurStep, Stats, Attributes>();
-    worldClockQuery = ctx.query<Reset, IsWorldClock>();
-
     // Generate the world - defined in gen.cpp
     generateWorld(ctx);
 }

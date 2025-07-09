@@ -35,11 +35,9 @@ struct Sim : public WorldBase {
     const GridState *grid;
     uint32_t maxEpisodeLength;
 
-    // Queries for entities
-    Query<Entity, Position, Grabbed, BallPhysics, Reset, Done, CurStep> ballQuery;
-    Query<Entity, Position, ImAHoop, Reset, Done, CurStep, ScoringZone> hoopQuery;
-    Query<Entity, Team, InPossession, Position, Orientation, Inbounding, GrabCooldown, Reset, Action, ActionMask, Reward, Done, CurStep, Stats, Attributes> agentQuery;
-    Query<Reset, IsWorldClock> worldClockQuery;
+    Entity balls[NUM_BASKETBALLS];
+    Entity hoops[NUM_HOOPS];
+    Entity agents[NUM_AGENTS];
 };
 
 class Engine : public CustomContext<Engine, Sim> {

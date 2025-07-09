@@ -65,6 +65,9 @@ namespace madBasketball {
 
     };
 
+    struct WorldClock {
+        bool resetNow;
+    };
 
 
 // ======================================================================================================= General Components =======================================================================================================
@@ -84,8 +87,6 @@ namespace madBasketball {
         float moveTimer;
         float moveInterval;
     };
-
-    struct IsWorldClock {};
 
 // ======================================================================================================= Agent Components =======================================================================================================
 
@@ -248,11 +249,6 @@ namespace madBasketball {
         // RandomMovement,
         Done,
         CurStep
-    > {};
-
-    struct WorldClock : public madrona::Archetype<
-        IsWorldClock,
-        Reset
     > {};
 }
 
