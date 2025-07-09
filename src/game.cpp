@@ -629,8 +629,7 @@ inline void scoreSystem(Engine &ctx,
         float distance_to_hoop = std::sqrt((ball_pos.position.x - hoop_pos.position.x) * (ball_pos.position.x - hoop_pos.position.x) +
                                         (ball_pos.position.y - hoop_pos.position.y) * (ball_pos.position.y - hoop_pos.position.y));
 
-        if (distance_to_hoop <= scoring_zone.radius && ball_physics.inFlight)
-        {
+        if (distance_to_hoop <= scoring_zone.radius && ball_physics.inFlight) {
             // Use the point value that was calculated when the shot was taken
             int32_t points_scored = ball_physics.shotPointValue;
 
@@ -642,7 +641,6 @@ inline void scoreSystem(Engine &ctx,
                 if (team.defendingHoopID == (uint32_t)hoop_entity.id)
                 {
                     inbounding_team_idx = (uint32_t)team.teamIndex;
-                    return; // Found the defending team
                 }
 
                 if (agent.id == ball_physics.shotByAgentID)
