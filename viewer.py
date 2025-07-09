@@ -47,7 +47,7 @@ def rotate_vec(q, v):
         v (list or np.array): The 3D vector [x, y, z] to rotate.
     
     Returns:
-        np.array: The rotated 3D vector.
+        np.array: The ro    tated 3D vector.
     """
     scalar = q[0]
     pure = np.array([q[1], q[2], q[3]])
@@ -56,7 +56,7 @@ def rotate_vec(q, v):
     pure_x_pure_x_v = np.cross(pure, pure_x_v)
     return v_vec + 2.0 * ((pure_x_v * scalar) + pure_x_pure_x_v)
 
-class MadronaPipeline:
+class ViewerClass:
     """
     Simple pipeline that connects to your Madrona simulation and displays the data
     """
@@ -86,7 +86,7 @@ class MadronaPipeline:
         self.last_score_count = current_score_count
         self.last_oob_count = current_oob_count
 
-    def __init__(self):
+    def __init__(self, sim_instance):
         pygame.init()
         pygame.mixer.init()
 
@@ -125,21 +125,7 @@ class MadronaPipeline:
         
         print("Initializing Madrona simulation...")
 
-        # 4. The discrete grid is only needed to create the legacy `walls` array.
-        #    It no longer affects the drawing coordinates.
-        world_discrete_width = math.ceil(self.world_width_meters)
-        world_discrete_height = math.ceil(self.world_height_meters)
-
-        self.sim = mba.SimpleGridworldSimulator(
-            discrete_x = world_discrete_width,
-            discrete_y = world_discrete_height,
-            start_x=self.world_width_meters / 2.0,  # Start in the true center
-            start_y=self.world_height_meters / 2.0,
-            max_episode_length=39600,
-            exec_mode=ExecMode.CUDA,
-            num_worlds=1,
-            gpu_id=0
-        )
+        self.sim = sim_instance
         
         print(f"✓ Madrona simulation initialized! World is {self.world_width_meters:.2f}m x {self.world_height_meters:.2f}m")
         self.step_count = 0
@@ -587,49 +573,34 @@ class MadronaPipeline:
         # self.sim.set_action(0, 0, move_speed, move_angle, rotate, grab, pass_ball, shoot_ball)
         # self.sim.set_action(0, 1, move_speed1, move_angle1, rotate1, grab1, pass_ball1, shoot_ball1)
 
-    def run(self):
-        running, auto_step = True, True
-        print("Madrona Pipeline Started!\n- Press F to toggle auto-stepping | R to reset | ESC to quit")
-        while running:
-            data = self.get_simulation_data() # Get data at the start of the loop
+    def tick(self):
+        self.step_count += 1
+        data = self.get_simulation_data() # Get data at the start of the loop
 
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
-                    running = False
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_r: self.reset_simulation()
-                    if event.key == pygame.K_f: auto_step = not auto_step
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1: # Left mouse click
-                        mouse_x, mouse_y = event.pos
-                        # Check if the click was on any agent
-                        if data and 'agent_pos' in data:
-                            agent_positions = data['agent_pos'][0]
-                            for i, pos in enumerate(agent_positions):
-                                screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
-                                agent_rect = pygame.Rect(screen_x - 10, screen_y - 10, 20, 20) # A small clickable area
-                                if agent_rect.collidepoint(mouse_x, mouse_y):
-                                    self.active_agent_idx = i
-                                    print(f"Switched control to Agent {i}")
-                                    break # Stop after finding the first clicked agent
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r: self.reset_simulation()
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1: # Left mouse click
+                    mouse_x, mouse_y = event.pos
+                    # Check if the click was on any agent
+                    if data and 'agent_pos' in data:
+                        agent_positions = data['agent_pos'][0]
+                        for i, pos in enumerate(agent_positions):
+                            screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+                            agent_rect = pygame.Rect(screen_x - 10, screen_y - 10, 20, 20) # A small clickable area
+                            if agent_rect.collidepoint(mouse_x, mouse_y):
+                                self.active_agent_idx = i
+                                print(f"Switched control to Agent {i}")
+                                break # Stop after finding the first clicked agent
 
-            self.handle_input()
-            if auto_step: self.step_simulation()
-            
-            self.handle_audio_events(data)
-            self.draw_simulation_data(data)
+        self.handle_input()
+        
+        self.handle_audio_events(data)
+        self.draw_simulation_data(data)
 
-            pygame.display.flip()
-            self.clock.tick(60)
-        pygame.quit()
-        print(f"Pipeline ended after {self.step_count} steps")
-
-if __name__ == "__main__":
-    try:
-        pipeline = MadronaPipeline()
-        pipeline.run()
-    except Exception as e:
-        print(f"Pipeline failed: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+        pygame.display.flip()
+        self.clock.tick(60)

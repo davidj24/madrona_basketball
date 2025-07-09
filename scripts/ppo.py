@@ -20,6 +20,7 @@ class Args:
     seed: int = 1
     torch_deterministic: bool = True
     use_gpu: bool = True
+    viewer: bool = False
 
     # Wandb
     env_id: str = "MadronaBasketball"
@@ -83,7 +84,7 @@ if __name__ == "__main__":
         "cuda" if torch.cuda.is_available() and args.use_gpu else "cpu")
 
     # Environment setup
-    envs = EnvWrapper(args.num_envs, use_gpu=args.use_gpu, gpu_id=0)
+    envs = EnvWrapper(args.num_envs, use_gpu=args.use_gpu, gpu_id=0, viewer=args.viewer)
     obs_size = envs.get_input_dim()
     act_size = envs.get_action_space_size()
     action_buckets = envs.get_action_buckets()

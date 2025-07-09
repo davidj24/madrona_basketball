@@ -8,10 +8,11 @@ import madrona_basketball as mba
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.')))
 from src.constants import *
+from viewer import ViewerClass
 
 
 class EnvWrapper:
-    def __init__(self, num_worlds: int, use_gpu: bool, gpu_id: int = 0):
+    def __init__(self, num_worlds: int, use_gpu: bool, gpu_id: int = 0, viewer: bool = False):
         self.world_width_meters = WORLD_WIDTH_M
         self.world_height_meters = WORLD_HEIGHT_M
 
@@ -29,6 +30,12 @@ class EnvWrapper:
             num_worlds=num_worlds,
             gpu_id=gpu_id
         )
+
+        self.viewer = None
+        if viewer:
+            if num_worlds > 1:
+                print("Viewer is enabled. Only rendering world 0")
+            self.viewer = ViewerClass(sim_instance=self.worlds)
 
         # Store RL tensor references
         self.observations = self.worlds.observations_tensor().to_torch()
@@ -52,6 +59,8 @@ class EnvWrapper:
         # Shoot            [0, 1]
         self.action_buckets = [2, 8, 3, 2, 2, 2]
 
+
+
     def get_action_space_size(self):
         return len(self.action_buckets)
 
@@ -68,6 +77,9 @@ class EnvWrapper:
         self.actions[:, self.agent_idx] = actions
 
         self.worlds.step()
+        if self.viewer is not None:
+            self.viewer.tick()
+            
         obs = self.observations[:, self.agent_idx].detach().clone()
         rew = self.rewards[:, self.agent_idx].detach().clone()
         done = self.dones[:, self.agent_idx].detach().clone()
