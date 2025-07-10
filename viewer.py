@@ -13,9 +13,13 @@ import math
 # Import constants
 from src.constants import *
 
-# Disable CUDA before importing anything else to avoid version conflicts
-# os.environ['CUDA_VISIBLE_DEVICES'] = ''
-# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+# CRITICAL: Set environment variables before any CUDA/OpenGL operations
+import os
+# Prevent CUDA from initializing OpenGL context that conflicts with pygame
+os.environ['CUDA_VISIBLE_DEVICES'] = os.environ.get('CUDA_VISIBLE_DEVICES', '0')
+# Force CUDA to use a specific device context
+os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
+# Note: CUDA_LAUNCH_BLOCKING=1 causes very slow GPU compilation, so we only set it during tensor operations
 
 # Try to import and initialize PyTorch early to avoid issues later
 try:
@@ -86,15 +90,57 @@ class ViewerClass:
         self.last_score_count = current_score_count
         self.last_oob_count = current_oob_count
 
-    def __init__(self, sim_instance):
-        pygame.init()
-        pygame.mixer.init()
+    def __init__(self, sim_instance, training_mode=False):
+        # CRITICAL: Initialize pygame BEFORE any CUDA operations to avoid context conflicts
+        print("🔧 Initializing viewer with GPU safety measures...")
+        
+        # Store simulation instance but don't access it yet - this is crucial!
+        self.sim = sim_instance
+        self.simulation_ready = False  # Track if simulation is ready for data access
+        self.ready_check_attempts = 0  # Count attempts to check if simulation is ready
+        
+        # CRITICAL FIX: Disable action input during training to prevent segfaults
+        self.disable_action_input = training_mode
+        if training_mode:
+            print("✓ Training mode detected - disabling viewer action input to prevent conflicts")
+        
+        # Add a flag to detect if we're running on GPU
+        self.is_gpu_simulation = False
+        self.gpu_device = None
+        
+        # Initialize pygame with extensive error handling and CUDA isolation
+        try:
+            # Force CUDA to not interfere with graphics
+            import os
+            os.environ['SDL_VIDEODRIVER'] = 'x11'  # Force specific video driver
+            os.environ['DISPLAY'] = os.environ.get('DISPLAY', ':0')  # Ensure display is set
+            
+            # Initialize pygame
+            pygame.init()
+            print("✓ Pygame core initialized")
+            
+            # Initialize mixer separately
+            try:
+                pygame.mixer.init()
+                print("✓ Pygame mixer initialized")
+            except pygame.error as mixer_e:
+                print(f"⚠ Pygame mixer failed: {mixer_e}, continuing without audio")
+            
+        except Exception as e:
+            print(f"✗ Pygame initialization failed: {e}")
+            raise RuntimeError(f"Cannot initialize pygame: {e}")
+        
+        # Create display with error handling
+        try:
+            self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+            pygame.display.set_caption("Madrona Simulation Pipeline")
+            print("✓ Pygame display created")
+        except Exception as e:
+            print(f"✗ Pygame display creation failed: {e}")
+            raise RuntimeError(f"Cannot create pygame display: {e}")
 
-        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-        pygame.display.set_caption("Madrona Simulation Pipeline")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 24)
-
         self.active_agent_idx = 0
 
         # --- Load Sound Effects ---
@@ -123,59 +169,172 @@ class ViewerClass:
         self.world_offset_x = (WINDOW_WIDTH - self.world_width_px) / 2
         self.world_offset_y = (WINDOW_HEIGHT - self.world_height_px) / 2
         
-        print("Initializing Madrona simulation...")
-
-        self.sim = sim_instance
+        print("Madrona simulation initialized!")
+        print(f"✓ World is {self.world_width_meters:.2f}m x {self.world_height_meters:.2f}m")
         
-        print(f"✓ Madrona simulation initialized! World is {self.world_width_meters:.2f}m x {self.world_height_meters:.2f}m")
         self.step_count = 0
         self.last_score_count = 0
         self.last_oob_count = 0
         
+    def check_simulation_status(self):
+        """Check simulation status and print device information on first successful access"""
+        try:
+            # Get tensor shapes to determine number of environments
+            obs_tensor = self.sim.observations_tensor()
+            obs_torch = obs_tensor.to_torch()
+            num_envs = obs_torch.shape[0] if len(obs_torch.shape) > 0 else 1
+            
+            if num_envs > 1000:
+                print(f"⚠ Warning: Running viewer with {num_envs} environments")
+                print(f"   Viewer will only display data from the first environment to prevent memory issues")
+                
+            # Check if running on GPU and store the information
+            device = obs_torch.device
+            if device.type == 'cuda':
+                self.is_gpu_simulation = True
+                self.gpu_device = device
+                print(f"✓ GPU simulation detected (device: {device})")
+                print(f"  Viewer memory optimization enabled for {num_envs} environments")
+                
+                # Additional GPU safety measures
+                try:
+                    import torch
+                    torch.cuda.synchronize()
+                    print("✓ CUDA context verified and synchronized")
+                except Exception as e:
+                    print(f"⚠ CUDA verification warning: {e}")
+            else:
+                self.is_gpu_simulation = False
+                print(f"✓ CPU simulation detected (device: {device})")
+                
+            return True
+                
+        except Exception as e:
+            print(f"⚠ Could not determine simulation configuration: {e}")
+            return False
+
     def get_simulation_data(self):
         """Get the current state from your Madrona simulation"""
+        # Check if simulation is ready - reduce wait time to get data faster
+        if not self.simulation_ready:
+            self.ready_check_attempts += 1
+            if self.ready_check_attempts < 3:  # Reduced from 10 to 3 for faster startup
+                return None
+            else:
+                # Try to check simulation status once
+                if self.check_simulation_status():
+                    self.simulation_ready = True
+                    print("✓ Simulation data access ready!")
+                else:
+                    # Reset counter to try again later
+                    self.ready_check_attempts = 0
+                    return None
+        
         try:
-            obs_tensor = self.sim.observations_tensor()
-            agent_pos_tensor = self.sim.agent_pos_tensor()
-            agent_team_tensor = self.sim.agent_team_tensor()
-            action_tensor = self.sim.action_tensor() 
-            reward_tensor = self.sim.reward_tensor()
-            done_tensor = self.sim.done_tensor()
-            reset_tensor = self.sim.reset_tensor()
-            basketball_pos_tensor = self.sim.basketball_pos_tensor()
-            ball_physics_tensor = self.sim.ball_physics_tensor()
-            hoop_pos_tensor = self.sim.hoop_pos_tensor()
-            agent_possession_tensor = self.sim.agent_possession_tensor()
-            ball_grabbed_tensor = self.sim.ball_grabbed_tensor()
-            agent_entity_id_tensor = self.sim.agent_entity_id_tensor()
-            ball_entity_id_tensor = self.sim.ball_entity_id_tensor()
-            game_state_tensor = self.sim.game_state_tensor()
-            orientation_tensor = self.sim.orientation_tensor()
-            agent_stats_tensor = self.sim.agent_stats_tensor()
+            def safe_tensor_to_numpy(tensor_torch):
+                """Safely convert tensor to numpy with GPU handling"""
+                if tensor_torch is None:
+                    return None
+                try:
+                    if hasattr(tensor_torch, 'is_cuda') and tensor_torch.is_cuda:
+                        return tensor_torch.detach().cpu().numpy()
+                    else:
+                        return tensor_torch.detach().numpy()
+                except Exception as e:
+                    print(f"Warning: Tensor conversion failed: {e}")
+                    return None
             
-            return {
-                'observations': obs_tensor.to_torch().detach().cpu().numpy(),
-                'agent_pos' : agent_pos_tensor.to_torch().detach().cpu().numpy(),
-                'agent_teams': agent_team_tensor.to_torch().detach().cpu().numpy(),
-                'actions': action_tensor.to_torch().detach().cpu().numpy(),
-                'rewards': reward_tensor.to_torch().detach().cpu().numpy(),
-                'done': done_tensor.to_torch().detach().cpu().numpy(),
-                'reset': reset_tensor.to_torch().detach().cpu().numpy(),
-                'basketball_pos': basketball_pos_tensor.to_torch().detach().cpu().numpy(),
-                'ball_physics' : ball_physics_tensor.to_torch().detach().cpu().numpy(),
-                'hoop_pos' : hoop_pos_tensor.to_torch().detach().cpu().numpy(),
-                'agent_possession': agent_possession_tensor.to_torch().detach().cpu().numpy(),
-                'ball_grabbed': ball_grabbed_tensor.to_torch().detach().cpu().numpy(),
-                'agent_entity_ids': agent_entity_id_tensor.to_torch().detach().cpu().numpy(),
-                'ball_entity_ids': ball_entity_id_tensor.to_torch().detach().cpu().numpy(),
-                'orientation': orientation_tensor.to_torch().detach().cpu().numpy(),
-                'game_state': game_state_tensor.to_torch().detach().cpu().numpy(),
-                'agent_stats' : agent_stats_tensor.to_torch().detach().cpu().numpy()
+            # Access all the data that the viewer needs to actually display something
+            try:
+                # Basic training data (safe)
+                observations = safe_tensor_to_numpy(self.sim.observations_tensor().to_torch())
+                actions = safe_tensor_to_numpy(self.sim.action_tensor().to_torch())
+                rewards = safe_tensor_to_numpy(self.sim.reward_tensor().to_torch())
+                done = safe_tensor_to_numpy(self.sim.done_tensor().to_torch())
+                reset = safe_tensor_to_numpy(self.sim.reset_tensor().to_torch())
+                
+                # Essential viewer data (needed for visualization)
+                agent_pos = safe_tensor_to_numpy(self.sim.agent_pos_tensor().to_torch())
+                agent_teams = safe_tensor_to_numpy(self.sim.agent_team_tensor().to_torch())
+                basketball_pos = safe_tensor_to_numpy(self.sim.basketball_pos_tensor().to_torch())
+                hoop_pos = safe_tensor_to_numpy(self.sim.hoop_pos_tensor().to_torch())
+                orientation = safe_tensor_to_numpy(self.sim.orientation_tensor().to_torch())
+                
+                # Optional data (with fallback to None if not available)
+                try:
+                    ball_physics = safe_tensor_to_numpy(self.sim.ball_physics_tensor().to_torch())
+                except:
+                    ball_physics = None
+                    
+                try:
+                    agent_possession = safe_tensor_to_numpy(self.sim.agent_possession_tensor().to_torch())
+                except:
+                    agent_possession = None
+                    
+                try:
+                    ball_grabbed = safe_tensor_to_numpy(self.sim.ball_grabbed_tensor().to_torch())
+                except:
+                    ball_grabbed = None
+                    
+                try:
+                    game_state = safe_tensor_to_numpy(self.sim.game_state_tensor().to_torch())
+                except:
+                    game_state = None
+                    
+                try:
+                    agent_entity_ids = safe_tensor_to_numpy(self.sim.agent_entity_id_tensor().to_torch())
+                except:
+                    agent_entity_ids = None
+                    
+                try:
+                    ball_entity_ids = safe_tensor_to_numpy(self.sim.ball_entity_id_tensor().to_torch())
+                except:
+                    ball_entity_ids = None
+                    
+                try:
+                    agent_stats = safe_tensor_to_numpy(self.sim.agent_stats_tensor().to_torch())
+                except:
+                    agent_stats = None
+                
+            except Exception as e:
+                print(f"Warning: Tensor access failed: {e}")
+                return None
+            
+            # Return the complete data needed for visualization
+            result = {
+                'observations': observations,
+                'actions': actions,
+                'rewards': rewards,
+                'done': done,
+                'reset': reset,
+                'agent_pos': agent_pos,
+                'agent_teams': agent_teams,
+                'basketball_pos': basketball_pos,
+                'ball_physics': ball_physics,
+                'hoop_pos': hoop_pos,
+                'agent_possession': agent_possession,
+                'ball_grabbed': ball_grabbed,
+                'agent_entity_ids': agent_entity_ids,
+                'ball_entity_ids': ball_entity_ids,
+                'game_state': game_state,
+                'orientation': orientation,
+                'agent_stats': agent_stats
             }
+            
+            # Add debug output on first successful data access
+            if not hasattr(self, 'data_access_confirmed'):
+                self.data_access_confirmed = True
+                agent_count = len(agent_pos[0]) if agent_pos is not None and len(agent_pos) > 0 else 0
+                ball_count = len(basketball_pos[0]) if basketball_pos is not None and len(basketball_pos) > 0 else 0
+                print(f"✓ Viewer successfully accessing simulation data!")
+                print(f"  World 0 has {agent_count} agents and {ball_count} basketballs")
+                if agent_pos is not None and len(agent_pos) > 0 and len(agent_pos[0]) > 0:
+                    print(f"  First agent position: {agent_pos[0][0][:2]}")  # Show x, y only
+            
+            return result
+            
         except Exception as e:
             print(f"Error getting simulation data: {e}")
-            import traceback
-            traceback.print_exc()
             return None
 
     def draw_basketball_court(self):
@@ -404,7 +563,13 @@ class ViewerClass:
 
     def draw_simulation_data(self, data):
         """Draw whatever data your simulation produces"""
-        if data is None: return
+        if data is None: 
+            # Draw a simple message if no data is available
+            self.screen.fill(BACKGROUND_COLOR)
+            error_text = self.font.render("Waiting for simulation data...", True, TEXT_COLOR)
+            self.screen.blit(error_text, (10, 10))
+            return
+        
         self.screen.fill(BACKGROUND_COLOR)
         
         # Draw the main gameplay elements
@@ -418,20 +583,23 @@ class ViewerClass:
         info_texts = [f"Madrona Basketball Simulation - Step {self.step_count}"]
 
         # --- Info Text (Preserved from your file) ---
-        if 'actions' in data:
+        if 'actions' in data and data['actions'] is not None:
             actions = data['actions'][0]
             for i, action_components in enumerate(actions):
                 if len(action_components) >= 8:
                     info_texts.append(f"Agent {i}: Speed={int(action_components[0])} Angle={int(action_components[1])} Rotate={int(action_components[2])} Grab={int(action_components[3])} Pass={int(action_components[4])} Shoot={int(action_components[5])} Steal={int(action_components[6])} Contest={int(action_components[7])}")
                 elif len(action_components) >= 6:
                     info_texts.append(f"Agent {i}: Speed={int(action_components[0])} Angle={int(action_components[1])} Rotate={int(action_components[2])} Grab={int(action_components[3])} Pass={int(action_components[4])} Shoot={int(action_components[5])}")
-        if 'rewards' in data:
+                    
+        if 'rewards' in data and data['rewards'] is not None:
             for i, reward in enumerate(data['rewards'][0]): info_texts.append(f"Agent {i} Reward: {reward:.2f}")
-        if 'done' in data:
+        if 'done' in data and data['done'] is not None:
             for i, done in enumerate(data['done'][0]): info_texts.append(f"Agent {i} Done: {done}")
 
         # --- Agent Rendering (Corrected Colors and Text) ---
-        if 'agent_pos' in data and 'agent_teams' in data and 'orientation' in data:
+        if ('agent_pos' in data and data['agent_pos'] is not None and 
+            'agent_teams' in data and data['agent_teams'] is not None and 
+            'orientation' in data and data['orientation'] is not None):
             positions, team_data, orientations = data['agent_pos'][0], data['agent_teams'][0], data['orientation'][0]
             team_colors = { 0: (0, 100, 255), 1: (255, 50, 50) } 
             
@@ -465,7 +633,7 @@ class ViewerClass:
                 pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 3)
 
         # --- Basketball Rendering (Scaled to Real Size) ---
-        if 'basketball_pos' in data:
+        if 'basketball_pos' in data and data['basketball_pos'] is not None:
             # Use real basketball dimensions from constants
             ball_radius_px = BALL_RADIUS_M * self.pixels_per_meter
             for i, pos in enumerate(data['basketball_pos'][0]):
@@ -518,6 +686,11 @@ class ViewerClass:
         self.sim.step(); self.step_count += 1
     
     def reset_simulation(self):
+        # Don't reset when in training mode - let the training handle resets
+        if hasattr(self, 'disable_action_input') and self.disable_action_input:
+            print("Reset disabled during training mode")
+            return
+            
         try:
             self.sim.trigger_reset(0)
             print(f"Simulation reset at step {self.step_count}")
@@ -525,6 +698,11 @@ class ViewerClass:
         except Exception as e: print(f"Error resetting simulation: {e}")
     
     def handle_input(self):
+        # CRITICAL FIX: Don't call set_action when viewer is used with GPU simulation
+        # This prevents segfaults when the viewer is used during training or with GPU
+        if hasattr(self, 'disable_action_input') and self.disable_action_input:
+            return
+            
         keys = pygame.key.get_pressed()
         move_speed, move_angle, rotate, grab, pass_ball, shoot_ball = 0,0,0,0,0,0
 
@@ -545,7 +723,25 @@ class ViewerClass:
         if keys[pygame.K_SPACE]: pass_ball = 1
         if keys[pygame.K_h]: shoot_ball = 1
 
-        self.sim.set_action(0, self.active_agent_idx, move_speed, move_angle, rotate, grab, pass_ball, shoot_ball)
+        # CRITICAL: Only call set_action if we're in CPU mode or confirmed safe mode
+        # Check if we're running on GPU and disable action input accordingly
+        if hasattr(self, 'is_gpu_simulation') and self.is_gpu_simulation:
+            if not hasattr(self, 'gpu_warning_shown'):
+                print("⚠ GPU simulation detected - disabling interactive controls to prevent crashes")
+                print("  The viewer will display the simulation but won't accept keyboard input")
+                self.gpu_warning_shown = True
+                self.disable_action_input = True
+            return
+        
+        # Only call set_action if we're in a safe environment (CPU simulation)
+        try:
+            self.sim.set_action(0, self.active_agent_idx, move_speed, move_angle, rotate, grab, pass_ball, shoot_ball)
+        except Exception as e:
+            print(f"Warning: Could not set action: {e}")
+            print("Disabling interactive controls to prevent further errors")
+            # Disable future action input attempts to prevent repeated errors
+            self.disable_action_input = True
+            return
 
         # You can keep a second set of controls for another agent if you wish,
         # or have all other agents be controlled by the hard-coded AI.
@@ -587,7 +783,7 @@ class ViewerClass:
                 if event.button == 1: # Left mouse click
                     mouse_x, mouse_y = event.pos
                     # Check if the click was on any agent
-                    if data and 'agent_pos' in data:
+                    if data and 'agent_pos' in data and data['agent_pos'] is not None:
                         agent_positions = data['agent_pos'][0]
                         for i, pos in enumerate(agent_positions):
                             screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])

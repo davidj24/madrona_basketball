@@ -30,12 +30,47 @@ class EnvWrapper:
             num_worlds=num_worlds,
             gpu_id=gpu_id
         )
+        
+        print("✓ Simulation created and compiled successfully!")
 
         self.viewer = None
         if viewer:
             if num_worlds > 1:
                 print("Viewer is enabled. Only rendering world 0")
-            self.viewer = ViewerClass(sim_instance=self.worlds)
+            try:
+                # CRITICAL: Wait for GPU compilation to complete before creating viewer
+                if use_gpu:
+                    print("🔧 GPU simulation ready, now initializing viewer...")
+                    # Ensure GPU compilation is completely finished
+                    try:
+                        import torch
+                        if torch.cuda.is_available():
+                            torch.cuda.synchronize()
+                            torch.cuda.empty_cache()
+                            print("✓ CUDA context ready for viewer integration")
+                    except Exception as cuda_e:
+                        print(f"⚠ CUDA sync warning before viewer: {cuda_e}")
+                else:
+                    print("🔧 CPU simulation ready, now initializing viewer...")
+                
+                # Test simulation access before creating viewer
+                print("Testing simulation access...")
+                test_obs = self.worlds.observations_tensor().to_torch()
+                print(f"✓ Simulation accessible, obs shape: {test_obs.shape}")
+                
+                # Now it's safe to create the viewer
+                print("Creating viewer...")
+                # Create viewer with training mode flag to prevent action input conflicts
+                self.viewer = ViewerClass(sim_instance=self.worlds, training_mode=True)
+                print("✓ Viewer created successfully!")
+                
+            except Exception as e:
+                print(f"❌ CRITICAL: Failed to create viewer: {e}")
+                print("This is the likely source of the GPU compilation hang!")
+                import traceback
+                traceback.print_exc()
+                print("Continuing without viewer to prevent crash")
+                self.viewer = None
 
         # Store RL tensor references
         self.observations = self.worlds.observations_tensor().to_torch()
@@ -44,6 +79,9 @@ class EnvWrapper:
         self.rewards = self.worlds.reward_tensor().to_torch()
         self.resets = self.worlds.reset_tensor().to_torch()
         self.agent_idx = 0
+        
+        # Track if this is the first step to avoid calling viewer too early
+        self.first_reset_done = False
 
         print("Obs shape:", self.observations.shape)
         print("Actions shape:", self.actions.shape)
@@ -77,8 +115,16 @@ class EnvWrapper:
         self.actions[:, self.agent_idx] = actions
 
         self.worlds.step()
-        if self.viewer is not None:
-            self.viewer.tick()
+        
+        # Only call viewer after first reset is complete and tensors are ready
+        if self.viewer is not None and self.first_reset_done:
+            try:
+                self.viewer.tick()
+            except Exception as e:
+                print(f"Warning: Viewer error: {e}")
+                # Disable viewer on error to prevent crashes
+                print("Disabling viewer due to error")
+                self.viewer = None
             
         obs = self.observations[:, self.agent_idx].detach().clone()
         rew = self.rewards[:, self.agent_idx].detach().clone()
@@ -93,4 +139,8 @@ class EnvWrapper:
         dummy_actions = torch.zeros_like(self.actions[:, self.agent_idx])
         obs, rew, done = self.step(dummy_actions)
         self.resets.fill_(0)
+        
+        # Mark that first reset is complete - now safe to use viewer
+        self.first_reset_done = True
+        
         return obs, rew, done
