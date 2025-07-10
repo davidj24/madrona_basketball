@@ -85,6 +85,9 @@ class EnvWrapper:
         done = self.dones[:, self.agent_idx].detach().clone()
         return obs, rew, done
 
+    def get_blank_actions(self):
+        return torch.zeros_like(self.actions[:, self.agent_idx])
+
     def reset(self):
         self.resets.fill_(1)
         dummy_actions = torch.zeros_like(self.actions[:, self.agent_idx])

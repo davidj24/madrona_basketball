@@ -4,14 +4,14 @@ from env import EnvWrapper
 
 
 def main():
-    env = EnvWrapper(num_worlds, use_gpu=False, gpu_id=0)
+    env = EnvWrapper(num_worlds, use_gpu=True, gpu_id=0)
     env.set_agent_idx(0)
 
     n_steps = 1000
     start_time = time.time()
     for i in range(n_steps):
-        obs, rew, done = env.step()
-        print("Step:", i, "Obs:", obs.shape, "Reward:", rew, "Done:", done)
+        actions = env.get_blank_actions()
+        obs, rew, done = env.step(actions)
 
     end_time = time.time()
     elapsed_frames = n_steps * num_worlds
