@@ -674,15 +674,8 @@ inline void scoreSystem(Engine &ctx,
 
                 if (agent.id == ball_physics.shotByAgentID)
                 {
-                    agent_stats.points += ball_physics.shotPointValue;
-                    if (team.defendingHoopID == (uint32_t)hoop_entity.id) // If they scored on their own goal
-                    {
-                        agent_reward.r -= ball_physics.shotPointValue;
-                    }
-                    else
-                    {
-                        agent_reward.r += ball_physics.shotPointValue;
-                    }
+                    agent_stats.points += (team.defendingHoopID == (uint32_t)hoop_entity.id) ? -ball_physics.shotPointValue : ball_physics.shotPointValue;
+                    agent_reward.r += (team.defendingHoopID == (uint32_t)hoop_entity.id) ? -ball_physics.shotPointValue : ball_physics.shotPointValue;
                 }
             }
 
