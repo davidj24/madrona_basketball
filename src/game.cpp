@@ -618,6 +618,8 @@ inline void rewardSystem(Engine &ctx,
                          Position &agent_pos,
                          Team &team)
 {
+    reward.r = 0.f;
+
     // Find attacking hoop
     Position target_hoop_pos;
     for (CountT i = 0; i < NUM_HOOPS; i++)
@@ -643,17 +645,9 @@ inline void rewardSystem(Engine &ctx,
         BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
         if (ball_physics.shotByAgentID == agent_entity.id)
         {
-            reward.r += 5*ball_physics.shotPointValue;
+            reward.r += 5.f * ball_physics.shotPointValue;
         }
     }
-}
-
-
-
-
-inline void resetRewardsSystem(Engine &ctx, Reward &rew)
-{
-    rew.r = 0.f;
 }
 
 //=================================================== Hoop Systems ===================================================
@@ -1131,11 +1125,8 @@ TaskGraphNodeID setupGameStepTasks(
     auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
         Position, BallPhysics, Grabbed>>({shootSystemNode});
 
-    auto resetRewardSystemNode = builder.addToGraph<ParallelForNode<Engine, resetRewardsSystem,
-        Reward>>({moveBallSystemNode});
-
     auto scoreSystemNode = builder.addToGraph<ParallelForNode<Engine, scoreSystem,
-        Entity, Position, ScoringZone>>({resetRewardSystemNode});
+        Entity, Position, ScoringZone>>({moveBallSystemNode});
 
     auto outOfBoundsSystemNode = builder.addToGraph<ParallelForNode<Engine, outOfBoundsSystem,
         Entity, Position, BallPhysics>>({scoreSystemNode});
