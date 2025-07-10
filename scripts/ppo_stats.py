@@ -30,13 +30,14 @@ class PPOStats:
         self.rewards_max = max(self.rewards_max, rewards_max) if self.num_stats > 1 else rewards_max
 
     def reset(self):
+        self.num_stats = 0
+
         self.loss = 0
         self.action_loss = 0
         self.value_loss = 0
         self.entropy_loss = 0
         self.returns_mean = 0
         self.returns_stddev = 0
-        self.num_stats = 0
         self.rewards_mean = 0
         self.rewards_min = float('inf')
         self.rewards_max = float('-inf')

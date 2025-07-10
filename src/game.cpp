@@ -1171,7 +1171,7 @@ TaskGraphNodeID setupGameStepTasks(
     auto rewardSystemNode = builder.addToGraph<ParallelForNode<Engine, rewardSystem,
         Entity, Reward, Position, Team>>({fillObservationsNode});
 
-    return fillObservationsNode;
+    return rewardSystemNode;
 }
 
 }
