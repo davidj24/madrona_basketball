@@ -20,3 +20,7 @@ checkpoints/
 
 # Other
 thingsToAdd.txt
+
+# JetBrains IDEs (CLion, PyCharm, etc.)
+.idea/
+*.iml

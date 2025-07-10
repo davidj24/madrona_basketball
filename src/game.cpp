@@ -91,7 +91,8 @@ inline void moveBallSystem(Engine &ctx,
         bool agent_is_holding_this_ball = (in_possession.hasBall == true &&
                                            grabbed.isGrabbed &&
                                            grabbed.holderEntityID == (uint32_t)agent.id);
-        if (agent_is_holding_this_ball) {
+        if (agent_is_holding_this_ball) 
+        {
             ball_pos = agent_pos;  // Move basketball to agent's new position
         }
     }
@@ -368,7 +369,7 @@ inline void shootSystem(Engine &ctx,
             in_possession.hasBall = false;
             in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
             inbounding.imInbounding = false;
-            ball_physics.velocity = final_shot_vec * .1f;
+            ball_physics.velocity = final_shot_vec * 1.f;
             ball_physics.inFlight = true;
 
             // Set who shot the ball for scoring system (these don't change after touching)
@@ -635,19 +636,9 @@ inline void rewardSystem(Engine &ctx,
     float maximum_distance_from_hoop = (target_hoop_pos.position - Vector3{COURT_MIN_X, COURT_MIN_Y, 0}).length();
     float distance_from_hoop = (agent_pos.position - target_hoop_pos.position).length();
     // Using 3 multiplications becauase std:: doesn't work with GPU and I don't think madrona::math has power
-    float proximity_reward = -((distance_from_hoop*distance_from_hoop*distance_from_hoop) / maximum_distance_from_hoop);
+    // float proximity_reward = -((distance_from_hoop*distance_from_hoop*distance_from_hoop) / maximum_distance_from_hoop); <-- Scaled version
+    float proximity_reward = exp(-.1f * distance_from_hoop);
     reward.r += proximity_reward;
-
-    GameState &gameState = ctx.singleton<GameState>();
-    for (CountT j = 0;  j < NUM_BASKETBALLS; j++)
-    {
-        Entity ball = ctx.data().balls[j];
-        BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
-        if (ball_physics.shotByAgentID == agent_entity.id)
-        {
-            reward.r += 5.f * ball_physics.shotPointValue;
-        }
-    }
 }
 
 //=================================================== Hoop Systems ===================================================
@@ -675,6 +666,7 @@ inline void scoreSystem(Engine &ctx,
                 Entity agent = ctx.data().agents[j];
                 Team &team = ctx.get<Team>(agent);
                 Stats &agent_stats = ctx.get<Stats>(agent);
+                Reward &agent_reward = ctx.get<Reward>(agent);
                 if (team.defendingHoopID == (uint32_t)hoop_entity.id)
                 {
                     inbounding_team_idx = (uint32_t)team.teamIndex;
@@ -683,6 +675,14 @@ inline void scoreSystem(Engine &ctx,
                 if (agent.id == ball_physics.shotByAgentID)
                 {
                     agent_stats.points += ball_physics.shotPointValue;
+                    if (team.defendingHoopID == (uint32_t)hoop_entity.id) // If they scored on their own goal
+                    {
+                        agent_reward.r -= ball_physics.shotPointValue;
+                    }
+                    else
+                    {
+                        agent_reward.r += ball_physics.shotPointValue;
+                    }
                 }
             }
 
