@@ -92,12 +92,45 @@ Sim::Sim(Engine &ctx, const Config &cfg, const WorldInit &init)
     generateWorld(ctx);
 }
 
+// On GPU, we need to sort by world any entities whose data is exported
+#ifdef MADRONA_GPU_MODE
+template <typename ArchetypeT>
+TaskGraphNodeID queueSortByWorld(TaskGraphBuilder &builder,
+                                 Span<const TaskGraphNodeID> deps)
+{
+    auto sort_sys =
+        builder.addToGraph<SortArchetypeNode<ArchetypeT, WorldID>>(
+            deps);
+    auto post_sort_reset_tmp =
+        builder.addToGraph<ResetTmpAllocNode>({sort_sys});
+
+    return post_sort_reset_tmp;
+}
+
+static TaskGraphNodeID sortEntities(TaskGraphBuilder &builder,
+                                    Span<const TaskGraphNodeID> deps)
+{
+    auto sort_sys = queueSortByWorld<Agent>(
+        builder, deps);
+    sort_sys = queueSortByWorld<Basketball>(
+        builder, {sort_sys});
+    sort_sys = queueSortByWorld<Hoop>(
+        builder, {sort_sys});
+    return sort_sys;
+}
+#endif
+
+
 void Sim::setupTasks(TaskGraphManager &taskgraph_mgr,
                 const Config &)
 {
     TaskGraphBuilder &builder = taskgraph_mgr.init(0);
 
-    auto game_step = setupGameStepTasks(builder, {});
+    auto cur_node = setupGameStepTasks(builder, {});
+
+#ifdef MADRONA_GPU_MODE
+    cur_node = sortEntities(builder, {cur_node});
+#endif
 
 }
 
