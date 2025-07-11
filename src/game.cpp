@@ -200,7 +200,7 @@ inline void grabSystem(Engine &ctx,
 
         if (distance_between_ball_and_player <= 0.3f) {
             // Check if we're stealing from another agent
-            for (CountT j = 0; i < NUM_AGENTS; i++) {
+            for (CountT j = 0; j < NUM_AGENTS; j++) {
                 Entity agent = ctx.data().agents[j];
                 InPossession &other_in_possession = ctx.get<InPossession>(agent);
                 GrabCooldown &robbed_agent_grab_cooldown = ctx.get<GrabCooldown>(agent);
