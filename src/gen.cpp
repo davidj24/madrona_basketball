@@ -38,57 +38,138 @@ void generateWorld(Engine &ctx) {
     GameState &gameState = ctx.singleton<GameState>();
 
     // Create hoops
-    for (int i = 0; i < NUM_HOOPS; i++) {
-        Entity hoop = ctx.makeEntity<Hoop>();
-        ctx.data().hoops[i] = hoop;
-        Position hoop_pos;
+    // for (int i = 0; i < NUM_HOOPS; i++) {
+    //     Entity hoop = ctx.makeEntity<Hoop>();
+    //     ctx.data().hoops[i] = hoop;
+    //     Position hoop_pos;
 
-        float court_start_x = (grid->width - COURT_LENGTH_M) / 2.0f;
-        float court_center_y = grid->height / 2.0f;
+    //     float court_start_x = (grid->width - COURT_LENGTH_M) / 2.0f;
+    //     float court_center_y = grid->height / 2.0f;
 
-        if (i == 0) {
-            gameState.team0Hoop = hoop.id;
-            hoop_pos = Position {
-                Vector3{
-                    court_start_x + HOOP_FROM_BASELINE_M,
-                    court_center_y,
-                    0.f
-                }
-            };
-        }
-        else if (i == 1) {
-            gameState.team1Hoop = hoop.id;
-            hoop_pos = Position {
-                Vector3{
-                    court_start_x + COURT_LENGTH_M - HOOP_FROM_BASELINE_M,
-                    court_center_y,
-                    0.f
-                }
-            };
-        }
-        else {
-            hoop_pos = Position
-            {
-                Vector3{
-                    grid->startX + 10.0f + i * 5.0f,
-                    grid->startY + 10.0f,
-                    0.f
-                }
-            };
-        }
+    //     if (i == 0) {
+    //         gameState.team0Hoop = hoop.id;
+    //         hoop_pos = Position {
+    //             Vector3{
+    //                 court_start_x + HOOP_FROM_BASELINE_M,
+    //                 court_center_y,
+    //                 0.f
+    //             }
+    //         };
+    //     }
+    //     else if (i == 1) {
+    //         gameState.team1Hoop = hoop.id;
+    //         hoop_pos = Position {
+    //             Vector3{
+    //                 court_start_x + COURT_LENGTH_M - HOOP_FROM_BASELINE_M,
+    //                 court_center_y,
+    //                 0.f
+    //             }
+    //         };
+    //     }
+    //     else {
+    //         hoop_pos = Position
+    //         {
+    //             Vector3{
+    //                 grid->startX + 10.0f + i * 5.0f,
+    //                 grid->startY + 10.0f,
+    //                 0.f
+    //             }
+    //         };
+    //     }
 
-        ctx.get<Position>(hoop) = hoop_pos;
-        ctx.get<Reset>(hoop) = Reset{0};
-        ctx.get<Done>(hoop).episodeDone = 0.f;
-        ctx.get<CurStep>(hoop).step = 0;
-        ctx.get<ImAHoop>(hoop) = ImAHoop{};
-        ctx.get<ScoringZone>(hoop) = ScoringZone
-        {
-            HOOP_SCORE_ZONE_SIZE,
-            .1f,
-            Vector3{hoop_pos.position.x, hoop_pos.position.y, hoop_pos.position.z}
-        };
-    }
+    //     ctx.get<Position>(hoop) = hoop_pos;
+    //     ctx.get<Reset>(hoop) = Reset{0};
+    //     ctx.get<Done>(hoop).episodeDone = 0.f;
+    //     ctx.get<CurStep>(hoop).step = 0;
+    //     ctx.get<ImAHoop>(hoop) = ImAHoop{};
+    //     ctx.get<ScoringZone>(hoop) = ScoringZone
+    //     {
+    //         HOOP_SCORE_ZONE_SIZE,
+    //         .1f,
+    //         Vector3{hoop_pos.position.x, hoop_pos.position.y, hoop_pos.position.z}
+    //     };
+    // }
+
+
+    
+    
+    float court_start_x = (grid->width - COURT_LENGTH_M) / 2.0f;
+    float court_center_y = grid->height / 2.0f;
+    
+    
+    // Create hoop 0
+    Entity hoop = ctx.makeEntity<Hoop>();
+    ctx.data().hoops[0] = hoop;
+    gameState.team0Hoop = hoop.id;
+    Position hoop0_pos;
+    hoop0_pos = Position 
+    {
+        Vector3{
+            court_start_x + HOOP_FROM_BASELINE_M,
+            court_center_y,
+            0.f
+        }
+    };
+
+    // Print the calculated position for hoop 0 before assigning it
+    printf("Hoop 0 calculated position: (%f, %f, %f, %d)\n", hoop0_pos.position.x, hoop0_pos.position.y, hoop0_pos.position.z, ctx.worldID().idx);
+
+    ctx.get<Position>(hoop) = hoop0_pos;
+
+    // Get the position back from the entity and print it to confirm the assignment
+    Position assigned_pos0 = ctx.get<Position>(hoop);
+    printf("Hoop 0 assigned position from entity: (%f, %f, %f, %d)\n", assigned_pos0.position.x, assigned_pos0.position.y, assigned_pos0.position.z,ctx.worldID().idx);
+
+    ctx.get<Reset>(hoop) = Reset{0};
+    ctx.get<Done>(hoop).episodeDone = 0.f;
+    ctx.get<CurStep>(hoop).step = 0;
+    ctx.get<ImAHoop>(hoop) = ImAHoop{};
+    ctx.get<ScoringZone>(hoop) = ScoringZone
+    {
+        HOOP_SCORE_ZONE_SIZE,
+        .1f,
+        Vector3{hoop0_pos.position.x, hoop0_pos.position.y, hoop0_pos.position.z}
+    };
+
+
+    // create hoop 1
+    Entity hoop1 = ctx.makeEntity<Hoop>();
+    ctx.data().hoops[1] = hoop1;
+    gameState.team1Hoop = hoop1.id;
+    Position hoop1_pos;
+    hoop1_pos = Position {
+        Vector3{
+            court_start_x + COURT_LENGTH_M - HOOP_FROM_BASELINE_M,
+            court_center_y, 
+            0.f
+        }
+    };
+
+    // Print the calculated position for hoop 1 before assigning it
+    printf("Hoop 1 calculated position: (%f, %f, %f, %d)\n", hoop1_pos.position.x, hoop1_pos.position.y, hoop1_pos.position.z, ctx.worldID().idx);
+    
+    ctx.get<Position>(hoop1) = hoop1_pos;
+
+    // Get the position back from the entity and print it to confirm the assignment
+    Position assigned_pos1 = ctx.get<Position>(hoop1);
+    printf("Hoop 1 assigned position from entity: (%f, %f, %f, %d)\n", assigned_pos1.position.x, assigned_pos1.position.y, assigned_pos1.position.z, ctx.worldID().idx);
+
+    ctx.get<Reset>(hoop1) = Reset{0};
+    ctx.get<Done>(hoop1).episodeDone = 0.f;
+    ctx.get<CurStep>(hoop1).step = 0;
+    ctx.get<ImAHoop>(hoop1) = ImAHoop{};
+    ctx.get<ScoringZone>(hoop1) = ScoringZone
+    {
+        HOOP_SCORE_ZONE_SIZE,
+        .1f,
+        Vector3{hoop1_pos.position.x, hoop1_pos.position.y, hoop1_pos.position.z}
+    };
+
+
+
+
+
+    
 
 
 
@@ -110,7 +191,7 @@ void generateWorld(Engine &ctx) {
     {
         Entity agent = ctx.makeEntity<Agent>();
         ctx.data().agents[i] = agent;
-        ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0};
+        ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 1};
         ctx.get<ActionMask>(agent) = ActionMask{0, 0, 0, 0};
         Position &agent_pos = ctx.get<Position>(agent);
         if (gameState.isOneOnOne == 1.f)

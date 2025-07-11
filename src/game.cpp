@@ -297,9 +297,9 @@ inline void shootSystem(Engine &ctx,
     float intended_direction = std::atan2(shot_vector.x, shot_vector.y);
 
     // ======================== DEVIATION TUNERS ==============================
-    float dist_deviation_per_meter = .2f;
-    float def_deviation_per_meter = .1f;
-    float vel_deviation_factor = 2.f;
+    float dist_deviation_per_meter = .0f;
+    float def_deviation_per_meter = .0f;
+    float vel_deviation_factor = 0.f;
 
 
     // 1. Mess up angle based on distance
@@ -481,6 +481,7 @@ inline void actionMaskSystem(Engine &ctx,
     {
         action_mask.can_grab = 0;
     }
+    action_mask.can_pass = 0; // DEBUG
 }
 
 
@@ -784,6 +785,12 @@ inline void clockSystem(Engine &ctx, WorldClock &world_clock)
     {
         gameState.shotClock = 0.f;
     }
+    Position hoop0_pos = ctx.get<Position>(ctx.data().hoops[0]);
+    Position hoop1_pos = ctx.get<Position>(ctx.data().hoops[1]);
+    // printf("WorldID: %d: End of clockSystem. Hoop0 position is: (%f, %f, %f) and hoop1 position is: (%f, %f, %f)\n", ctx.worldID().idx, hoop0_pos.position.x, hoop0_pos.position.y, hoop0_pos.position.z, hoop1_pos.position.x, hoop1_pos.position.y, hoop1_pos.position.z);
+    float agent0_team = ctx.get<Team>(ctx.data().agents[0]).teamIndex;
+    float agent1_team = ctx.get<Team>(ctx.data().agents[1]).teamIndex;
+    // printf("WorldID: %d: End of clockSystem. Agent0 team is: (%f) and Agent1 position is: (%f)\n", ctx.worldID().idx, agent0_team, agent1_team);
 }
 
 

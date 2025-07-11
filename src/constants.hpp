@@ -37,7 +37,7 @@ namespace madBasketball {
     constexpr float AGENT_ORIENTATION_ARROW_LENGTH_M = 0.5f; // Length of orientation arrow
     constexpr uint32_t NUM_OBSERVATIONS_PER_AGENT = 10; 
     constexpr float GUARDING_DISTANCE = .2f; // How many meters to guard away from for hard-coded defense
-    constexpr float START_POS_STDDEV = 1.f; 
+    constexpr float START_POS_STDDEV = 0.f; 
     constexpr float DEFENDER_SLOWDOWN = .1f; // The speed of the defender is 1 - DEFENDER_SLOWDOWN
     
     // Movement

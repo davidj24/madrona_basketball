@@ -108,6 +108,10 @@ class ViewerClass:
         self.is_gpu_simulation = False
         self.gpu_device = None
         
+        # DEBUG: Add ability to override which world index to display (for debugging)
+        self.debug_world_index = 0  # Default to world 0
+        self.max_worlds_available = 1  # Will be updated when data is available
+        
         # Initialize pygame with extensive error handling and CUDA isolation
         try:
             # Force CUDA to not interfere with graphics
@@ -321,15 +325,14 @@ class ViewerClass:
                 'agent_stats': agent_stats
             }
             
-            # Add debug output on first successful data access
+            # Add comprehensive debug output on first successful data access
             if not hasattr(self, 'data_access_confirmed'):
                 self.data_access_confirmed = True
-                agent_count = len(agent_pos[0]) if agent_pos is not None and len(agent_pos) > 0 else 0
-                ball_count = len(basketball_pos[0]) if basketball_pos is not None and len(basketball_pos) > 0 else 0
-                print(f"✓ Viewer successfully accessing simulation data!")
-                print(f"  World 0 has {agent_count} agents and {ball_count} basketballs")
-                if agent_pos is not None and len(agent_pos) > 0 and len(agent_pos[0]) > 0:
-                    print(f"  First agent position: {agent_pos[0][0][:2]}")  # Show x, y only
+                self.debug_data_shapes_and_indexing(result)
+            
+            # Add periodic debugging every 60 steps to monitor data consistency
+            if hasattr(self, 'step_count') and self.step_count % 60 == 0:
+                self.debug_world_indexing(result)
             
             return result
             
@@ -570,6 +573,10 @@ class ViewerClass:
             self.screen.blit(error_text, (10, 10))
             return
         
+        # Debug: Show exactly what render data is being extracted every 30 steps
+        if self.step_count % 30 == 0:
+            self.debug_render_data_extraction(data)
+        
         self.screen.fill(BACKGROUND_COLOR)
         
         # Draw the main gameplay elements
@@ -578,6 +585,11 @@ class ViewerClass:
         
         # Draw the new inbound clock (it will only appear when needed)
         self.draw_inbound_clock(data)
+        
+        # DEBUG: Draw world index indicator
+        world_debug_text = f"Displaying World {self.debug_world_index}/{self.max_worlds_available-1} (Press 1/2/3 to switch, 0 for info)"
+        world_debug_surface = self.font.render(world_debug_text, True, (255, 255, 0))
+        self.screen.blit(world_debug_surface, (10, WINDOW_HEIGHT - 30))
 
         y_offset = 20
         info_texts = [f"Madrona Basketball Simulation - Step {self.step_count}"]
@@ -600,7 +612,26 @@ class ViewerClass:
         if ('agent_pos' in data and data['agent_pos'] is not None and 
             'agent_teams' in data and data['agent_teams'] is not None and 
             'orientation' in data and data['orientation'] is not None):
-            positions, team_data, orientations = data['agent_pos'][0], data['agent_teams'][0], data['orientation'][0]
+            # Update max worlds available for debugging
+            self.max_worlds_available = len(data['agent_pos'])
+            
+            # Use debug world index (can be changed for testing)
+            world_idx = min(self.debug_world_index, len(data['agent_pos']) - 1)
+            positions, team_data, orientations = data['agent_pos'][world_idx], data['agent_teams'][world_idx], data['orientation'][world_idx]
+            
+            # DEBUG: Print the exact indexing and data being used for rendering
+            if self.step_count % 60 == 0:  # Every 60 steps
+                print(f"\n🖼️  RENDERING DEBUG (Step {self.step_count}):")
+                print(f"   Using data from world index [{world_idx}] (debug_world_index={self.debug_world_index})")
+                print(f"   Available worlds: {self.max_worlds_available}")
+                print(f"   Agent positions shape: {len(positions)} agents")
+                print(f"   Agent teams shape: {len(team_data)} teams")
+                print(f"   First 2 agents being rendered:")
+                for i in range(min(2, len(positions))):
+                    team_idx = int(team_data[i][0]) if i < len(team_data) else 0
+                    screen_x, screen_y = self.meters_to_screen(positions[i][0], positions[i][1])
+                    print(f"     Agent {i}: pos=({positions[i][0]:.3f}, {positions[i][1]:.3f}) team={team_idx} screen=({screen_x}, {screen_y})")
+            
             team_colors = { 0: (0, 100, 255), 1: (255, 50, 50) } 
             
             for i, pos in enumerate(positions):
@@ -634,9 +665,21 @@ class ViewerClass:
 
         # --- Basketball Rendering (Scaled to Real Size) ---
         if 'basketball_pos' in data and data['basketball_pos'] is not None:
+            world_idx = min(self.debug_world_index, len(data['basketball_pos']) - 1)
+            basketball_positions = data['basketball_pos'][world_idx]  # Extract basketball positions from debug world
+            
+            # DEBUG: Print basketball rendering data every 60 steps
+            if self.step_count % 60 == 0:
+                print(f"   🏀 BASKETBALL RENDERING DEBUG:")
+                print(f"      Using basketball data from world index [{world_idx}]")
+                print(f"      Found {len(basketball_positions)} basketballs to render")
+                for i, pos in enumerate(basketball_positions):
+                    screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+                    print(f"      Ball {i}: world=({pos[0]:.3f}, {pos[1]:.3f}) → screen=({screen_x}, {screen_y})")
+            
             # Use real basketball dimensions from constants
             ball_radius_px = BALL_RADIUS_M * self.pixels_per_meter
-            for i, pos in enumerate(data['basketball_pos'][0]):
+            for i, pos in enumerate(basketball_positions):
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
                 # Draw filled orange ball
                 pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), int(ball_radius_px))
@@ -650,7 +693,19 @@ class ViewerClass:
 
         # --- Hoop Rendering ---
         if 'hoop_pos' in data:
-            for i, pos in enumerate(data['hoop_pos'][0]):
+            world_idx = min(self.debug_world_index, len(data['hoop_pos']) - 1)
+            hoop_positions = data['hoop_pos'][world_idx]  # Extract hoop positions from debug world
+            
+            # DEBUG: Print hoop rendering data every 60 steps
+            if self.step_count % 60 == 0:
+                print(f"   🎯 HOOP RENDERING DEBUG:")
+                print(f"      Using hoop data from world index [{world_idx}]")
+                print(f"      Found {len(hoop_positions)} hoops to render")
+                for i, pos in enumerate(hoop_positions):
+                    screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+                    print(f"      Hoop {i}: world=({pos[0]:.3f}, {pos[1]:.3f}) → screen=({screen_x}, {screen_y})")
+            
+            for i, pos in enumerate(hoop_positions):
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
                 backboard_width_px = BACKBOARD_WIDTH_M * self.pixels_per_meter
                 rim_radius_px = (RIM_DIAMETER_M / 2) * self.pixels_per_meter
@@ -773,12 +828,83 @@ class ViewerClass:
         self.step_count += 1
         data = self.get_simulation_data() # Get data at the start of the loop
 
+        # Add critical debugging summary every 120 steps (every 2 seconds at 60 FPS)
+        if self.step_count % 120 == 0 and data is not None:
+            print(f"\n🔍 CRITICAL VIEWER DEBUG SUMMARY (Step {self.step_count}):")
+            print("="*60)
+            
+            # Show world indexing clearly
+            if 'agent_pos' in data and data['agent_pos'] is not None:
+                total_worlds = len(data['agent_pos'])
+                world0_agents = len(data['agent_pos'][0]) if total_worlds > 0 else 0
+                print(f"📊 Total worlds in simulation: {total_worlds}")
+                print(f"🎯 Viewer displays data from: World 0 only")
+                print(f"👥 Agents in World 0: {world0_agents}")
+                
+                if total_worlds > 1 and len(data['agent_pos'][1]) > 0:
+                    world1_agents = len(data['agent_pos'][1])
+                    print(f"👥 Agents in World 1: {world1_agents}")
+                    
+                    # Compare first agent positions between worlds
+                    if world0_agents > 0 and world1_agents > 0:
+                        pos0 = data['agent_pos'][0][0]
+                        pos1 = data['agent_pos'][1][0]
+                        print(f"🔄 Agent 0 comparison:")
+                        print(f"   World 0: ({pos0[0]:.3f}, {pos0[1]:.3f})")
+                        print(f"   World 1: ({pos1[0]:.3f}, {pos1[1]:.3f})")
+            
+            # Show hoop data clearly
+            if 'hoop_pos' in data and data['hoop_pos'] is not None:
+                world0_hoops = data['hoop_pos'][0] if len(data['hoop_pos']) > 0 else []
+                print(f"🏀 Hoops being rendered from World 0:")
+                for i, pos in enumerate(world0_hoops):
+                    print(f"   Hoop {i}: ({pos[0]:.3f}, {pos[1]:.3f})")
+                    
+                if len(data['hoop_pos']) > 1:
+                    world1_hoops = data['hoop_pos'][1]
+                    print(f"🏀 Hoops in World 1 (NOT rendered):")
+                    for i, pos in enumerate(world1_hoops):
+                        print(f"   Hoop {i}: ({pos[0]:.3f}, {pos[1]:.3f})")
+            
+            # Show team data clearly
+            if 'agent_teams' in data and data['agent_teams'] is not None:
+                world0_teams = data['agent_teams'][0] if len(data['agent_teams']) > 0 else []
+                print(f"🏀 Agent teams being rendered from World 0:")
+                for i, team_data in enumerate(world0_teams[:4]):  # Show first 4
+                    team_id = int(team_data[0]) if len(team_data) > 0 else "Unknown"
+                    print(f"   Agent {i}: Team {team_id}")
+            
+            print("="*60)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 pygame.quit()
                 sys.exit()
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_r: self.reset_simulation()
+                if event.key == pygame.K_r: 
+                    self.reset_simulation()
+                elif event.key == pygame.K_1:
+                    # DEBUG: Switch to world 0
+                    self.debug_world_index = 0
+                    print(f"🔧 DEBUG: Switched to displaying World {self.debug_world_index}")
+                elif event.key == pygame.K_2:
+                    # DEBUG: Switch to world 1 (if available)
+                    if self.max_worlds_available > 1:
+                        self.debug_world_index = 1
+                        print(f"🔧 DEBUG: Switched to displaying World {self.debug_world_index}")
+                    else:
+                        print(f"🔧 DEBUG: World 1 not available (only {self.max_worlds_available} worlds)")
+                elif event.key == pygame.K_3:
+                    # DEBUG: Switch to world 2 (if available)
+                    if self.max_worlds_available > 2:
+                        self.debug_world_index = 2
+                        print(f"🔧 DEBUG: Switched to displaying World {self.debug_world_index}")
+                    else:
+                        print(f"🔧 DEBUG: World 2 not available (only {self.max_worlds_available} worlds)")
+                elif event.key == pygame.K_0:
+                    # DEBUG: Print current world info
+                    print(f"🔧 DEBUG: Currently displaying World {self.debug_world_index} of {self.max_worlds_available} available worlds")
+                    print(f"   Press 1/2/3 to switch worlds, 0 to show this info")
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1: # Left mouse click
                     mouse_x, mouse_y = event.pos
@@ -800,3 +926,166 @@ class ViewerClass:
 
         pygame.display.flip()
         self.clock.tick(60)
+
+    def debug_data_shapes_and_indexing(self, data):
+        """Comprehensive debugging of data shapes and indexing behavior"""
+        print("\n" + "="*80)
+        print("🔍 VIEWER DATA DEBUGGING - SHAPES AND INDEXING")
+        print("="*80)
+        
+        if data is None:
+            print("❌ Data is None!")
+            return
+            
+        for key, value in data.items():
+            if value is None:
+                print(f"📊 {key}: None")
+                continue
+                
+            try:
+                shape = value.shape if hasattr(value, 'shape') else f"Length: {len(value)}"
+                print(f"📊 {key}: {shape}")
+                
+                # Show first few values for critical data
+                if key in ['agent_pos', 'agent_teams', 'hoop_pos', 'basketball_pos']:
+                    if len(value) > 0:
+                        print(f"   🔍 Total worlds: {len(value)}")
+                        print(f"   🎯 World 0 data shape: {value[0].shape if hasattr(value[0], 'shape') else len(value[0])}")
+                        
+                        if key == 'agent_pos':
+                            print(f"   👥 World 0 agent positions:")
+                            for i, pos in enumerate(value[0][:min(4, len(value[0]))]):  # Show first 4 agents
+                                print(f"      Agent {i}: x={pos[0]:.3f}, y={pos[1]:.3f}, z={pos[2]:.3f}")
+                        
+                        elif key == 'agent_teams':
+                            print(f"   🏀 World 0 agent teams:")
+                            for i, team_data in enumerate(value[0][:min(4, len(value[0]))]):
+                                team_id = int(team_data[0]) if len(team_data) > 0 else "Unknown"
+                                print(f"      Agent {i}: Team {team_id}")
+                        
+                        elif key == 'hoop_pos':
+                            print(f"   🏀 World 0 hoop positions:")
+                            for i, pos in enumerate(value[0]):
+                                print(f"      Hoop {i}: x={pos[0]:.3f}, y={pos[1]:.3f}, z={pos[2]:.3f}")
+                        
+                        elif key == 'basketball_pos':
+                            print(f"   🏀 World 0 basketball positions:")
+                            for i, pos in enumerate(value[0]):
+                                print(f"      Ball {i}: x={pos[0]:.3f}, y={pos[1]:.3f}, z={pos[2]:.3f}")
+                        
+                        # Check if we have multiple worlds and show differences
+                        if len(value) > 1:
+                            print(f"   🔄 Comparing World 0 vs World 1:")
+                            if key == 'hoop_pos':
+                                world0_hoop0 = value[0][0] if len(value[0]) > 0 else None
+                                world1_hoop0 = value[1][0] if len(value[1]) > 0 else None
+                                if world0_hoop0 is not None and world1_hoop0 is not None:
+                                    print(f"      World 0 Hoop 0: x={world0_hoop0[0]:.3f}, y={world0_hoop0[1]:.3f}")
+                                    print(f"      World 1 Hoop 0: x={world1_hoop0[0]:.3f}, y={world1_hoop0[1]:.3f}")
+                                    diff = ((world0_hoop0[0] - world1_hoop0[0])**2 + (world0_hoop0[1] - world1_hoop0[1])**2)**0.5
+                                    print(f"      Distance difference: {diff:.6f}")
+                    
+            except Exception as e:
+                print(f"❌ Error analyzing {key}: {e}")
+        
+        print("="*80)
+        print("🎯 VIEWER INDEXING BEHAVIOR:")
+        print("   The viewer always uses index [0] to access the first world")
+        print("   All visualization is based on data from World 0 only")
+        print("="*80)
+
+    def debug_world_indexing(self, data):
+        """Debug how the viewer indexes into worlds and what data it actually uses for rendering"""
+        print("\n" + "="*60)
+        print(f"🎯 STEP {self.step_count}: WORLD INDEXING DEBUG")
+        print("="*60)
+        
+        if data is None:
+            print("❌ No data available for rendering")
+            return
+            
+        try:
+            # Show exactly what the renderer will use
+            print("🖼️  RENDERER DATA EXTRACTION:")
+            
+            # Agent positions (what draw_simulation_data uses)
+            if 'agent_pos' in data and data['agent_pos'] is not None:
+                positions = data['agent_pos'][0]  # This is the [0] indexing the viewer uses!
+                print(f"   👥 Agent positions from World 0: {len(positions)} agents")
+                for i, pos in enumerate(positions):
+                    screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+                    print(f"      Agent {i}: world=({pos[0]:.3f}, {pos[1]:.3f}) → screen=({screen_x}, {screen_y})")
+            
+            # Agent teams (what draw_simulation_data uses)
+            if 'agent_teams' in data and data['agent_teams'] is not None:
+                team_data = data['agent_teams'][0]  # This is the [0] indexing the viewer uses!
+                print(f"   🏀 Agent teams from World 0:")
+                for i, team_info in enumerate(team_data):
+                    team_index = int(team_info[0]) if len(team_info) > 0 else "Unknown"
+                    print(f"      Agent {i}: Team {team_index}")
+            
+            # Hoop positions (what draw_simulation_data uses)
+            if 'hoop_pos' in data and data['hoop_pos'] is not None:
+                hoop_positions = data['hoop_pos'][0]  # This is the [0] indexing the viewer uses!
+                print(f"   🎯 Hoop positions from World 0:")
+                for i, pos in enumerate(hoop_positions):
+                    screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+                    print(f"      Hoop {i}: world=({pos[0]:.3f}, {pos[1]:.3f}) → screen=({screen_x}, {screen_y})")
+            
+            # Basketball positions (what draw_simulation_data uses)
+            if 'basketball_pos' in data and data['basketball_pos'] is not None:
+                ball_positions = data['basketball_pos'][0]  # This is the [0] indexing the viewer uses!
+                print(f"   🏀 Basketball positions from World 0:")
+                for i, pos in enumerate(ball_positions):
+                    screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+                    print(f"      Ball {i}: world=({pos[0]:.3f}, {pos[1]:.3f}) → screen=({screen_x}, {screen_y})")
+            
+            # Game state (what draw_score_display uses)
+            if 'game_state' in data and data['game_state'] is not None:
+                game_state = data['game_state'][0]  # This is the [0] indexing the viewer uses!
+                print(f"   🎮 Game state from World 0:")
+                print(f"      Team 0 Score: {int(game_state[5])}")
+                print(f"      Team 1 Score: {int(game_state[7])}")
+                print(f"      Game Clock: {float(game_state[8]):.1f}")
+            
+            print("="*60)
+            
+        except Exception as e:
+            print(f"❌ Error in world indexing debug: {e}")
+
+    def debug_render_data_extraction(self, data):
+        """Debug the exact data that gets extracted in draw_simulation_data"""
+        if data is None:
+            print("🖼️  RENDER DEBUG: No data to render")
+            return
+            
+        print(f"\n🖼️  RENDER DATA EXTRACTION (Step {self.step_count}):")
+        
+        # This mirrors exactly what draw_simulation_data does
+        try:
+            if ('agent_pos' in data and data['agent_pos'] is not None and 
+                'agent_teams' in data and data['agent_teams'] is not None and 
+                'orientation' in data and data['orientation'] is not None):
+                
+                positions = data['agent_pos'][0]      # The exact line from draw_simulation_data
+                team_data = data['agent_teams'][0]    # The exact line from draw_simulation_data  
+                orientations = data['orientation'][0] # The exact line from draw_simulation_data
+                
+                print(f"   Extracted {len(positions)} agent positions from world index [0]")
+                print(f"   Extracted {len(team_data)} team assignments from world index [0]")
+                print(f"   Extracted {len(orientations)} orientations from world index [0]")
+                
+                for i in range(min(2, len(positions))):  # Show first 2 agents
+                    screen_x, screen_y = self.meters_to_screen(positions[i][0], positions[i][1])
+                    team_index = int(team_data[i][0]) if i < len(team_data) else 0
+                    print(f"   Agent {i}: pos=({positions[i][0]:.3f},{positions[i][1]:.3f}) team={team_index} screen=({screen_x},{screen_y})")
+            
+            if 'hoop_pos' in data and data['hoop_pos'] is not None:
+                hoop_positions = data['hoop_pos'][0]  # The exact line from draw_simulation_data
+                print(f"   Extracted {len(hoop_positions)} hoop positions from world index [0]")
+                for i, pos in enumerate(hoop_positions):
+                    screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+                    print(f"   Hoop {i}: pos=({pos[0]:.3f},{pos[1]:.3f}) screen=({screen_x},{screen_y})")
+                    
+        except Exception as e:
+            print(f"   ❌ Error extracting render data: {e}")
