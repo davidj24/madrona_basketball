@@ -134,6 +134,7 @@ if __name__ == "__main__":
 
             next_obs, reward, next_done = envs.step(action)
             rewards[step] = reward.view(-1)
+            # time.sleep(1)
 
         # bootstrap value if not done
         with torch.no_grad():
