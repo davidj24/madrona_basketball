@@ -295,7 +295,7 @@ inline void shootSystem(Engine &ctx,
     float intended_direction = std::atan2(ideal_shot_vector.x, ideal_shot_vector.y);
 
     // ======================== DEVIATION TUNERS ==============================
-    float dist_deviation_per_meter = .0f;
+    float dist_deviation_per_meter = .6f;
     float def_deviation_per_meter = .0f;
     float vel_deviation_factor = 0.f;
 
@@ -380,7 +380,7 @@ inline void shootSystem(Engine &ctx,
             in_possession.hasBall = false;
             in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
             inbounding.imInbounding = false;
-            ball_physics.velocity = final_shot_vec * 1.f;
+            ball_physics.velocity = final_shot_vec * .1f;
             ball_physics.inFlight = true;
 
             // Set who shot the ball for scoring system (these don't change after touching)
@@ -492,7 +492,7 @@ inline void actionMaskSystem(Engine &ctx,
     {
         action_mask.can_grab = 0;
     }
-    action_mask.can_move = 0;
+    action_mask.can_pass = 0;
 }
 
 
