@@ -111,14 +111,9 @@ void generateWorld(Engine &ctx) {
         }
     };
 
-    // Print the calculated position for hoop 0 before assigning it
-    printf("Hoop 0 calculated position: (%f, %f, %f, %d)\n", hoop0_pos.position.x, hoop0_pos.position.y, hoop0_pos.position.z, ctx.worldID().idx);
 
     ctx.get<Position>(hoop) = hoop0_pos;
 
-    // Get the position back from the entity and print it to confirm the assignment
-    Position assigned_pos0 = ctx.get<Position>(hoop);
-    printf("Hoop 0 assigned position from entity: (%f, %f, %f, %d)\n", assigned_pos0.position.x, assigned_pos0.position.y, assigned_pos0.position.z,ctx.worldID().idx);
 
     ctx.get<Reset>(hoop) = Reset{0};
     ctx.get<Done>(hoop).episodeDone = 0.f;
@@ -145,14 +140,9 @@ void generateWorld(Engine &ctx) {
         }
     };
 
-    // Print the calculated position for hoop 1 before assigning it
-    printf("Hoop 1 calculated position: (%f, %f, %f, %d)\n", hoop1_pos.position.x, hoop1_pos.position.y, hoop1_pos.position.z, ctx.worldID().idx);
     
     ctx.get<Position>(hoop1) = hoop1_pos;
 
-    // Get the position back from the entity and print it to confirm the assignment
-    Position assigned_pos1 = ctx.get<Position>(hoop1);
-    printf("Hoop 1 assigned position from entity: (%f, %f, %f, %d)\n", assigned_pos1.position.x, assigned_pos1.position.y, assigned_pos1.position.z, ctx.worldID().idx);
 
     ctx.get<Reset>(hoop1) = Reset{0};
     ctx.get<Done>(hoop1).episodeDone = 0.f;

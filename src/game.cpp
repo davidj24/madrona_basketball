@@ -481,7 +481,6 @@ inline void actionMaskSystem(Engine &ctx,
     {
         action_mask.can_grab = 0;
     }
-    action_mask.can_pass = 0; // DEBUG
 }
 
 
