@@ -47,9 +47,9 @@ Vector3 findVectorToCenter(Engine &ctx, Position pos)
     return (Vector3{grid->startX, grid->startY, 0.f} - pos.position).normalize();
 }
 
-int32_t getShotPointValue(Position shot_pos, Position hoop_pos)
+int32_t getShotPointValue(Position shot_pos, Vector3 hoop_score_zone)
 {
-    float distance_to_hoop = (shot_pos.position - hoop_pos.position).length();
+    float distance_to_hoop = (shot_pos.position - hoop_score_zone).length();
 
     // 1. Check if the shot is in the corner lane, relative to the court's position.
     bool isInCornerLane = (shot_pos.position.y < COURT_MIN_Y + CORNER_3_FROM_SIDELINE_M ||
@@ -57,7 +57,7 @@ int32_t getShotPointValue(Position shot_pos, Position hoop_pos)
 
     if (isInCornerLane) {
         // 2. If so, check if the shot is within the corner's length, relative to the court's position.
-        bool isShootingAtLeftHoop = hoop_pos.position.x < WORLD_WIDTH_M / 2.0f;
+        bool isShootingAtLeftHoop = hoop_score_zone.x < WORLD_WIDTH_M / 2.0f;
 
         if (isShootingAtLeftHoop) {
             if (shot_pos.position.x <= COURT_MIN_X + CORNER_3_LENGTH_FROM_BASELINE_M) {
@@ -79,5 +79,6 @@ int32_t getShotPointValue(Position shot_pos, Position hoop_pos)
     // 4. If none of the 3-point conditions are met, it is a 2-point shot.
     return 2;
 }
+
 
 }

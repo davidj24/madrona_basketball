@@ -131,21 +131,20 @@ inline void updatePointsWorthSystem(Engine &ctx,
                                     Team &team)
 {
     // Get all hoop positions
-    Position hoop_positions[NUM_HOOPS];
+    Vector3 hoop_score_zones[NUM_HOOPS];
     uint32_t hoop_ids[NUM_HOOPS];
     for (CountT i = 0; i < NUM_HOOPS; i++) {
         Entity hoop = ctx.data().hoops[i];
-        Position &hoop_pos = ctx.get<Position>(hoop);
-        hoop_positions[i] = hoop_pos;
+        hoop_score_zones[i] = ctx.get<ScoringZone>(hoop).center;
         hoop_ids[i] = hoop.id;
     };
 
     // Find the hoop this agent should be shooting at (opposing team's hoop)
-    Position target_hoop_pos{};
+    Vector3 target_hoop_score_zone{};
     bool found_target_hoop = false;
     for (int i = 0; i < NUM_HOOPS; i++) {
         if (hoop_ids[i] != team.defendingHoopID) {
-            target_hoop_pos = hoop_positions[i];
+            target_hoop_score_zone = hoop_score_zones[i];
             found_target_hoop = true;
             break;
         }
@@ -153,7 +152,7 @@ inline void updatePointsWorthSystem(Engine &ctx,
 
     // Calculate points worth for this agent's current position
     if (found_target_hoop) {
-        in_possession.pointsWorth = getShotPointValue(agent_pos, target_hoop_pos);
+        in_possession.pointsWorth = getShotPointValue(agent_pos, target_hoop_score_zone);
     }
     else {
         in_possession.pointsWorth = 2; // Default to 2 points if we can't find the target hoop
@@ -273,28 +272,27 @@ inline void shootSystem(Engine &ctx,
                         Orientation &agent_orientation,
                         Inbounding &inbounding,
                         InPossession &in_possession,
-                        Team &team)
+                        Team &team,
+                        Reward &reward)
 {
     if (action_mask.can_shoot == 0 || action.shoot == 0) {return;}
 
     // Find the attacking hoop (not defendingHoopID)
-    Position attacking_hoop_pos = {0.f, 0.f, 0.f};
+    Vector3 attacking_hoop_score_zone = {0.f, 0.f, 0.f};
+    float scoring_radius = 0.f;
     for (CountT i = 0; i < NUM_HOOPS; i++) {
         Entity hoop = ctx.data().hoops[i];
         if ((uint32_t)hoop.id != team.defendingHoopID) {
-            attacking_hoop_pos = ctx.get<Position>(hoop);
+            attacking_hoop_score_zone = ctx.get<ScoringZone>(hoop).center;
+            scoring_radius = ctx.get<ScoringZone>(hoop).radius;
         }
     }
 
     // Calculate vector to attacking hoop
-    Vector3 shot_vector = Vector3{
-        attacking_hoop_pos.position.x - agent_pos.position.x,
-        attacking_hoop_pos.position.y - agent_pos.position.y,
-        0.f
-    };
+    Vector3 ideal_shot_vector = attacking_hoop_score_zone - agent_pos.position;
 
     // Calculate intended angle towards hoop
-    float intended_direction = std::atan2(shot_vector.x, shot_vector.y);
+    float intended_direction = std::atan2(ideal_shot_vector.x, ideal_shot_vector.y);
 
     // ======================== DEVIATION TUNERS ==============================
     float dist_deviation_per_meter = .0f;
@@ -303,7 +301,7 @@ inline void shootSystem(Engine &ctx,
 
 
     // 1. Mess up angle based on distance
-    float distance_to_hoop = shot_vector.length();
+    float distance_to_hoop = ideal_shot_vector.length();
     float dist_stddev = dist_deviation_per_meter/100 * distance_to_hoop;
     float deviation_from_distance = sampleUniform(ctx, -dist_stddev, dist_stddev);
 
@@ -343,15 +341,27 @@ inline void shootSystem(Engine &ctx,
     float total_deviation = deviation_from_distance + deviation_from_defender + deviation_from_velocity;
     float shot_direction = intended_direction + total_deviation;
 
-    // This is the final, correct trajectory vector for the ball - Preserved from your code
+    // This is the final, correct trajectory vector for the ball
     Vector3 final_shot_vec = {sinf(shot_direction), cosf(shot_direction), 0.f};
+    bool shot_is_going_in = false;
+    float how_far_to_go_along_shot_to_be_closest_to_hoop = ideal_shot_vector.dot(final_shot_vec);
+    if (how_far_to_go_along_shot_to_be_closest_to_hoop < 0) {shot_is_going_in = false;}
+    else
+    {
+        float closest_distance_to_hoop = ideal_shot_vector.length2() - how_far_to_go_along_shot_to_be_closest_to_hoop * how_far_to_go_along_shot_to_be_closest_to_hoop;
+        shot_is_going_in = closest_distance_to_hoop <= scoring_radius * scoring_radius;
+    }
 
+    
 
-    const Vector3 base_forward = {0.0f, 1.0f, 0.0f};
+    
 
 
     // Find the rotation that aligns the agent's orientation with the final shot direction vector.
+    const Vector3 base_forward = {0.0f, 1.0f, 0.0f};
     agent_orientation.orientation = findRotationBetweenVectors(base_forward, final_shot_vec);
+
+
 
 
     // Shoot the damn ball
@@ -362,7 +372,8 @@ inline void shootSystem(Engine &ctx,
         if (grabbed.holderEntityID == agent_entity.id)
         {
             // Calculate the point value of this shot from the agent's current position
-            int32_t shot_point_value = getShotPointValue(agent_pos, attacking_hoop_pos);
+            int32_t shot_point_value = getShotPointValue(agent_pos, attacking_hoop_score_zone);
+            if(shot_is_going_in == true) {reward.r += 5*shot_point_value;}
 
             grabbed.isGrabbed = false;
             grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER;
@@ -665,7 +676,6 @@ inline void scoreSystem(Engine &ctx,
                 Entity agent = ctx.data().agents[j];
                 Team &team = ctx.get<Team>(agent);
                 Stats &agent_stats = ctx.get<Stats>(agent);
-                Reward &agent_reward = ctx.get<Reward>(agent);
                 if (team.defendingHoopID == (uint32_t)hoop_entity.id)
                 {
                     inbounding_team_idx = (uint32_t)team.teamIndex;
@@ -674,7 +684,6 @@ inline void scoreSystem(Engine &ctx,
                 if (agent.id == ball_physics.shotByAgentID)
                 {
                     agent_stats.points += (team.defendingHoopID == (uint32_t)hoop_entity.id) ? -ball_physics.shotPointValue : ball_physics.shotPointValue;
-                    agent_reward.r += (team.defendingHoopID == (uint32_t)hoop_entity.id) ? -5*ball_physics.shotPointValue : 5*ball_physics.shotPointValue;
                 }
             }
 
@@ -1107,9 +1116,12 @@ inline void fillObservationsSystem(Engine &ctx,
 TaskGraphNodeID setupGameStepTasks(
     TaskGraphBuilder &builder,
     Span<const TaskGraphNodeID> deps)
-{
+    {
+    auto tickNode = builder.addToGraph<ParallelForNode<Engine, tick,
+        Reset, Done, CurStep, GrabCooldown, Reward>>(deps);
+
     auto actionMaskingNode = builder.addToGraph<ParallelForNode<Engine, actionMaskSystem,
-        ActionMask, GrabCooldown, InPossession, Inbounding>>(deps);
+        ActionMask, GrabCooldown, InPossession, Inbounding>>({tickNode});
 
     auto moveAgentSystemNode = builder.addToGraph<ParallelForNode<Engine, moveAgentSystem,
         Action, ActionMask, Position, InPossession, Inbounding, Orientation, Attributes>>({actionMaskingNode});
@@ -1121,7 +1133,7 @@ TaskGraphNodeID setupGameStepTasks(
         Entity, Action, ActionMask, Orientation, InPossession, Inbounding>>({grabSystemNode});
 
     auto shootSystemNode = builder.addToGraph<ParallelForNode<Engine, shootSystem,
-        Entity, Action, ActionMask, Position, Orientation, Inbounding, InPossession, Team>>({passSystemNode});
+        Entity, Action, ActionMask, Position, Orientation, Inbounding, InPossession, Team, Reward>>({passSystemNode});
 
     auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
         Position, BallPhysics, Grabbed>>({shootSystemNode});
@@ -1135,11 +1147,8 @@ TaskGraphNodeID setupGameStepTasks(
     auto updateLastTouchSystemNode = builder.addToGraph<ParallelForNode<Engine, updateLastTouchSystem,
         Position, BallPhysics>>({outOfBoundsSystemNode});
 
-    auto tickNode = builder.addToGraph<ParallelForNode<Engine, tick,
-        Reset, Done, CurStep, GrabCooldown, Reward>>({updateLastTouchSystemNode});
-
     auto clockSystemNode = builder.addToGraph<ParallelForNode<Engine, clockSystem,
-        WorldClock>>({tickNode});
+        WorldClock>>({updateLastTouchSystemNode});
 
     auto inboundViolationSystemNode = builder.addToGraph<ParallelForNode<Engine, inboundViolationSystem,
         WorldClock>>({clockSystemNode});
