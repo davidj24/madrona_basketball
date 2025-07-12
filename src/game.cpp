@@ -481,6 +481,7 @@ inline void actionMaskSystem(Engine &ctx,
     {
         action_mask.can_grab = 0;
     }
+    action_mask.can_move = 0;
 }
 
 
@@ -619,8 +620,6 @@ inline void rewardSystem(Engine &ctx,
                          Position &agent_pos,
                          Team &team)
 {
-    reward.r = 0.f;
-
     // Find attacking hoop
     Position target_hoop_pos;
     for (CountT i = 0; i < NUM_HOOPS; i++)
@@ -675,7 +674,7 @@ inline void scoreSystem(Engine &ctx,
                 if (agent.id == ball_physics.shotByAgentID)
                 {
                     agent_stats.points += (team.defendingHoopID == (uint32_t)hoop_entity.id) ? -ball_physics.shotPointValue : ball_physics.shotPointValue;
-                    agent_reward.r += (team.defendingHoopID == (uint32_t)hoop_entity.id) ? -ball_physics.shotPointValue : ball_physics.shotPointValue;
+                    agent_reward.r += (team.defendingHoopID == (uint32_t)hoop_entity.id) ? -5*ball_physics.shotPointValue : 5*ball_physics.shotPointValue;
                 }
             }
 
@@ -716,7 +715,8 @@ inline void scoreSystem(Engine &ctx,
                 inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, findVectorToCenter(ctx, ball_pos));
                 assignInbounder(ctx, ball, inbound_spot, inbounding_team_idx, inbound_orientation, false);
             }
-            else {
+            else 
+            {
                 ctx.singleton<WorldClock>().resetNow = true;
             }
         }
@@ -741,8 +741,10 @@ inline void tick(Engine &ctx,
                  Reset &reset,
                  Done &done,
                  CurStep &episode_step,
-                 GrabCooldown &grab_cooldown)
+                 GrabCooldown &grab_cooldown,
+                 Reward &reward)
 {
+    reward.r = 0.f;
     // If a reset has been triggered, mark the agent as done for the learning side.
     if (reset.resetNow == 1) {
         done.episodeDone = 1.f;
@@ -1134,7 +1136,7 @@ TaskGraphNodeID setupGameStepTasks(
         Position, BallPhysics>>({outOfBoundsSystemNode});
 
     auto tickNode = builder.addToGraph<ParallelForNode<Engine, tick,
-        Reset, Done, CurStep, GrabCooldown>>({updateLastTouchSystemNode});
+        Reset, Done, CurStep, GrabCooldown, Reward>>({updateLastTouchSystemNode});
 
     auto clockSystemNode = builder.addToGraph<ParallelForNode<Engine, clockSystem,
         WorldClock>>({tickNode});

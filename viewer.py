@@ -282,8 +282,10 @@ class ViewerClass:
                     ball_grabbed = None
                     
                 try:
-                    game_state = safe_tensor_to_numpy(self.sim.game_state_tensor().to_torch())
-                except:
+                    game_state_tensor = self.sim.game_state_tensor().to_torch()
+                    game_state = safe_tensor_to_numpy(game_state_tensor)
+                except Exception as e:
+                    print(f"Warning: Could not access game_state_tensor: {e}")
                     game_state = None
                     
                 try:
@@ -706,7 +708,15 @@ class ViewerClass:
 
     def step_simulation(self):
         self.sim.step(); self.step_count += 1
-    
+        
+        # Debug: Print GameState tensor information
+        if self.step_count % 60 == 0:  # Print every 60 steps to avoid spam
+            game_state_tensor = self.sim.game_state_tensor()
+            print(f"\n=== DEBUG: GameState tensor at step {self.step_count} ===")
+            print(f"Shape: {game_state_tensor.shape}")
+            print(f"Data: {game_state_tensor}")
+            print("=== END DEBUG ===\n")
+
     def reset_simulation(self):
         # Don't reset when in training mode - let the training handle resets
         if hasattr(self, 'disable_action_input') and self.disable_action_input:

@@ -49,9 +49,9 @@ namespace madBasketball {
 
         float period;
         float teamInPossession; // The index of the team that is currently in possession of the ball
-        uint32_t team0Hoop; // Entity id of team 0's hoop (will switch at half time)
+        float team0Hoop; // Entity id of team 0's hoop (will switch at half time) - changed from uint32_t to float for tensor export
         float team0Score;
-        uint32_t team1Hoop;
+        float team1Hoop; // Entity id of team 1's hoop - changed from uint32_t to float for tensor export
         float team1Score;
 
         float gameClock; // Time left, figure out if this is in seconds or timesteps, and how it should work with tickSystem
