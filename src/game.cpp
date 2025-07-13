@@ -295,7 +295,7 @@ inline void shootSystem(Engine &ctx,
     float intended_direction = std::atan2(ideal_shot_vector.x, ideal_shot_vector.y);
 
     // ======================== DEVIATION TUNERS ==============================
-    float dist_deviation_per_meter = .6f;
+    float dist_deviation_per_meter = 10.f;
     float def_deviation_per_meter = .0f;
     float vel_deviation_factor = 0.f;
 
@@ -362,7 +362,7 @@ inline void shootSystem(Engine &ctx,
     agent_orientation.orientation = findRotationBetweenVectors(base_forward, final_shot_vec);
 
 
-
+    GameState &gameState = ctx.singleton<GameState>();
 
     // Shoot the damn ball
     for (CountT i = 0; i < NUM_BASKETBALLS; i++) {
@@ -373,14 +373,25 @@ inline void shootSystem(Engine &ctx,
         {
             // Calculate the point value of this shot from the agent's current position
             int32_t shot_point_value = getShotPointValue(agent_pos, attacking_hoop_score_zone);
-            if(shot_is_going_in == true) {reward.r += 5*shot_point_value;}
+            if(shot_is_going_in == true) 
+            {
+                reward.r += 5*shot_point_value;
+                gameState.scoredBaskets++;
+            }
 
             grabbed.isGrabbed = false;
             grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER;
             in_possession.hasBall = false;
             in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
             inbounding.imInbounding = false;
+
+
+            // DEBUG
+            if (distance_to_hoop <= 5.f) {final_shot_vec = ideal_shot_vector;} // Ball only goes in if agent shoots from <= 5m away
             ball_physics.velocity = final_shot_vec * .1f;
+
+
+
             ball_physics.inFlight = true;
 
             // Set who shot the ball for scoring system (these don't change after touching)
@@ -540,6 +551,7 @@ inline void hardCodeDefenseSystem(Engine &ctx,
     Action &defender_action,
     Attributes &defender_attributes)
     {
+        return; // DEBUG
         GameState &gameState = ctx.singleton<GameState>();
         
         if (gameState.teamInPossession == defender_team.teamIndex)
