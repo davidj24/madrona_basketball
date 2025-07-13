@@ -36,8 +36,6 @@ class SimpleControllerManager:
         if self.human_control_active and viewer_instance is not None:
             human_action = self.human_controller.get_action(obs_tensor, viewer_instance)
             # Debug: Print when human action is actually used
-            if torch.any(human_action != 0):
-                print(f"🎮 Using human action: {human_action}")
             return human_action
         else:
             return self.rl_controller.get_action(obs_tensor, viewer_instance)

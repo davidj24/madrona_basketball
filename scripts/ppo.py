@@ -160,25 +160,22 @@ if __name__ == "__main__":
                 rl_action, log_prob, value = agent(next_obs)
                 values[step] = value.flatten()
                 
-                # Use controller manager to get final actions (RL or human override)
-                # Only apply human control to the first environment (world 0) for performance
-                final_action = rl_action.clone()  # Start with all RL actions
-                
-                if (hasattr(envs, 'viewer') and envs.viewer is not None and 
-                    controller_manager.is_human_control_active()):
-                    # Only override the first environment's action with human input
-                    try:
-                        human_action = controller_manager.get_action(next_obs[0], envs.viewer)
-                        final_action[0] = human_action  # Only affect world 0
-                    except Exception as e:
-                        print(f"Warning: Human control error: {e}")
-                        # Fall back to RL action for world 0
-                
             actions[step] = rl_action  # Always store RL actions for training
             log_probs[step] = log_prob
 
             # Step environment with final actions (RL or human override)
-            next_obs, reward, next_done = envs.step(final_action)
+            # Use the new method that can handle world-specific actions
+            if (hasattr(envs, 'viewer') and envs.viewer is not None and 
+                controller_manager.is_human_control_active()):
+                # Get human action for world 0
+                try:
+                    human_action_world_0 = controller_manager.get_action(next_obs[0], envs.viewer)
+                    next_obs, reward, next_done = envs.step_with_world_actions(rl_action, human_action_world_0)
+                except Exception as e:
+                    print(f"Warning: Human control error in step: {e}")
+                    next_obs, reward, next_done = envs.step(rl_action)
+            else:
+                next_obs, reward, next_done = envs.step(rl_action)
             rewards[step] = reward.view(-1)
             # time.sleep(1)
 
@@ -284,7 +281,7 @@ if __name__ == "__main__":
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
         # Print every 10 update iterations
-        if iteration % 10 == 0:
+        if iteration % 100 == 0:
             p_advantages = b_advantages.reshape(-1)
             p_values = b_values.reshape(-1)
 

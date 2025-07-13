@@ -103,10 +103,11 @@ class ViewerClass:
         self.simulation_ready = False  # Track if simulation is ready for data access
         self.ready_check_attempts = 0  # Count attempts to check if simulation is ready
         
-        # CRITICAL FIX: Disable action input during training to prevent segfaults
-        self.disable_action_input = training_mode
+        # CRITICAL FIX: We want interactive input during training, but disable the old handle_input method
+        self.disable_action_input = False  # Allow interactive input for human control
+        self.training_mode = training_mode
         if training_mode:
-            print("✓ Training mode detected - disabling viewer action input to prevent conflicts")
+            print("✓ Training mode detected - interactive human control enabled")
         
         # Interactive training support
         self.controller_manager = None
@@ -745,10 +746,10 @@ class ViewerClass:
         except Exception as e: print(f"Error resetting simulation: {e}")
     
     def handle_input(self):
-        # CRITICAL FIX: Don't call set_action when viewer is used with GPU simulation
-        # This prevents segfaults when the viewer is used during training or with GPU
-        if hasattr(self, 'disable_action_input') and self.disable_action_input:
-            return
+        # CRITICAL FIX: In training mode, we use handle_interactive_input instead
+        # This method is for standalone viewer mode only
+        if self.training_mode:
+            return  # Skip this method entirely in training mode
             
         keys = pygame.key.get_pressed()
         move_speed, move_angle, rotate, grab, pass_ball, shoot_ball = 0,0,0,0,0,0
@@ -902,7 +903,11 @@ class ViewerClass:
     
     def handle_interactive_input(self):
         """Handle keyboard input for interactive training control"""
-        if self.disable_action_input or self.controller_manager is None:
+        if self.controller_manager is None:
+            # Debug: Print when controller manager is missing
+            if not hasattr(self, '_controller_manager_warning_shown'):
+                print("🔧 Debug: No controller manager set, interactive input disabled")
+                self._controller_manager_warning_shown = True
             return
             
         keys = pygame.key.get_pressed()
@@ -915,31 +920,31 @@ class ViewerClass:
         pass_ball = 0
         shoot_ball = 0
         
-        # Movement controls (WASD)
-        if keys[pygame.K_w]:
+        # Movement controls (WASD) - Allow diagonal movement
+        if keys[pygame.K_w] and keys[pygame.K_d]:
+            move_speed = 1
+            move_angle = 1  # Northeast
+        elif keys[pygame.K_d] and keys[pygame.K_s]:
+            move_speed = 1
+            move_angle = 3  # Southeast
+        elif keys[pygame.K_s] and keys[pygame.K_a]:
+            move_speed = 1
+            move_angle = 5  # Southwest
+        elif keys[pygame.K_a] and keys[pygame.K_w]:
+            move_speed = 1
+            move_angle = 7  # Northwest
+        elif keys[pygame.K_w]:
             move_speed = 1
             move_angle = 0  # North
+        elif keys[pygame.K_d]:
+            move_speed = 1
+            move_angle = 2  # East
         elif keys[pygame.K_s]:
             move_speed = 1
             move_angle = 4  # South
         elif keys[pygame.K_a]:
             move_speed = 1
             move_angle = 6  # West
-        elif keys[pygame.K_d]:
-            move_speed = 1
-            move_angle = 2  # East
-        elif keys[pygame.K_q]:
-            move_speed = 1
-            move_angle = 7  # Northwest
-        elif keys[pygame.K_e]:
-            move_speed = 1
-            move_angle = 1  # Northeast
-        elif keys[pygame.K_z]:
-            move_speed = 1
-            move_angle = 5  # Southwest
-        elif keys[pygame.K_c]:
-            move_speed = 1
-            move_angle = 3  # Southeast
         
         # Rotation (Q/E or comma/period)
         if keys[pygame.K_COMMA] or keys[pygame.K_j]:
@@ -974,12 +979,15 @@ class ViewerClass:
         if action_changed:
             self.human_action = new_action
             self.action_changed = True
-            # Debug: Print non-zero actions to verify input is working (reduced frequency)
-            if (any(val != 0 for val in [move_speed, move_angle, rotate, grab, pass_ball, shoot_ball]) and 
-                hasattr(self, '_last_debug_frame') and 
-                (not hasattr(self, '_last_debug_frame') or self.step_count - getattr(self, '_last_debug_frame', 0) > 30)):
-                print(f"🎮 Human input: move={move_speed}, angle={move_angle}, rot={rotate}, grab={grab}, pass={pass_ball}, shoot={shoot_ball}")
+            # Debug: Print when any input is detected (reduced frequency)
+            if (hasattr(self, '_last_debug_frame') and 
+                (not hasattr(self, '_last_debug_frame') or self.step_count - getattr(self, '_last_debug_frame', 0) > 10)):
+                print(f"🎮 Human input detected: move={move_speed}, angle={move_angle}, rot={rotate}, grab={grab}, pass={pass_ball}, shoot={shoot_ball}")
                 self._last_debug_frame = self.step_count
+                
+            # Also print non-zero actions for immediate feedback
+            if any(val != 0 for val in [move_speed, move_angle, rotate, grab, pass_ball, shoot_ball]):
+                print(f"🎮 Active human input: move={move_speed}, angle={move_angle}, rot={rotate}, grab={grab}, pass={pass_ball}, shoot={shoot_ball}")
 
 
 

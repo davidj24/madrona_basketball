@@ -116,6 +116,7 @@ class EnvWrapper:
         self.agent_idx = agent_idx
 
     def step(self, actions):
+        # Set actions for all worlds and the specified agent
         self.actions[:, self.agent_idx] = actions
 
         # Sync pause state from viewer if available
@@ -176,3 +177,44 @@ class EnvWrapper:
         self.training_paused = paused
         if self.viewer is not None:
             self.viewer.set_training_paused(paused)
+
+    def set_action_for_world(self, world_idx: int, agent_idx: int, action):
+        """Set action for a specific agent in a specific world"""
+        if world_idx < self.actions.shape[0] and agent_idx < self.actions.shape[1]:
+            self.actions[world_idx, agent_idx] = action
+    
+    def step_with_world_actions(self, actions, human_action_world_0=None):
+        """Step with actions, optionally overriding world 0 with human action"""
+        # Set actions for all worlds and the specified agent
+        self.actions[:, self.agent_idx] = actions
+        
+        # Override world 0 with human action if provided
+        if human_action_world_0 is not None:
+            self.set_action_for_world(0, self.agent_idx, human_action_world_0)
+
+        # Sync pause state from viewer if available
+        if self.viewer is not None and hasattr(self.viewer, 'training_paused'):
+            self.training_paused = self.viewer.training_paused
+            
+            # If paused, set world 0 actions to zero to freeze the agent visually
+            if self.training_paused:
+                self.actions[0, self.agent_idx] = 0
+
+        # Only step simulation if not paused
+        if not self.training_paused:
+            self.worlds.step()
+        
+        # Always call viewer for interaction handling, regardless of pause state
+        if self.viewer is not None and self.first_reset_done:
+            try:
+                self.viewer.tick()
+            except Exception as e:
+                print(f"Warning: Viewer error: {e}")
+                # Disable viewer on error to prevent crashes
+                print("Disabling viewer due to error")
+                self.viewer = None
+            
+        obs = self.observations[:, self.agent_idx].detach().clone()
+        rew = self.rewards[:, self.agent_idx].detach().clone()
+        done = self.dones[:, self.agent_idx].detach().clone()
+        return obs, rew, done
