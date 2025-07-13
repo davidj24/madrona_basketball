@@ -343,6 +343,8 @@ inline void shootSystem(Engine &ctx,
 
     // This is the final, correct trajectory vector for the ball
     Vector3 final_shot_vec = {sinf(shot_direction), cosf(shot_direction), 0.f};
+    // DEBUG
+    final_shot_vec = (distance_to_hoop <= 5.f) ? ideal_shot_vector : Vector3{0, 1, 0};
     bool shot_is_going_in = false;
     float how_far_to_go_along_shot_to_be_closest_to_hoop = ideal_shot_vector.dot(final_shot_vec);
     if (how_far_to_go_along_shot_to_be_closest_to_hoop < 0) {shot_is_going_in = false;}
@@ -375,8 +377,12 @@ inline void shootSystem(Engine &ctx,
             int32_t shot_point_value = getShotPointValue(agent_pos, attacking_hoop_score_zone);
             if(shot_is_going_in == true) 
             {
-                reward.r += 5*shot_point_value;
+                reward.r += 10*shot_point_value;
                 gameState.scoredBaskets++;
+            }
+            else
+            {
+                reward.r -= .5f;
             }
 
             grabbed.isGrabbed = false;
@@ -385,9 +391,6 @@ inline void shootSystem(Engine &ctx,
             in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
             inbounding.imInbounding = false;
 
-
-            // DEBUG
-            if (distance_to_hoop <= 5.f) {final_shot_vec = ideal_shot_vector;} // Ball only goes in if agent shoots from <= 5m away
             ball_physics.velocity = final_shot_vec * .1f;
 
 

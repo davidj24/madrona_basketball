@@ -26,8 +26,11 @@ try:
     import torch
     torch.set_num_threads(1)  # Limit CPU threads
     print("✓ PyTorch imported successfully")
+    TORCH_AVAILABLE = True
 except Exception as e:
     print(f"⚠ PyTorch import issue: {e}")
+    torch = None
+    TORCH_AVAILABLE = False  # Fallback for systems without torch
 
 # Add build directory to path for the C++ module
 sys.path.append('./build')
@@ -104,6 +107,18 @@ class ViewerClass:
         self.disable_action_input = training_mode
         if training_mode:
             print("✓ Training mode detected - disabling viewer action input to prevent conflicts")
+        
+        # Interactive training support
+        self.controller_manager = None
+        self.training_paused = False
+        self.selected_world = 0
+        self.selected_agent = 0
+        # Initialize human action 
+        if TORCH_AVAILABLE and torch is not None:
+            self.human_action = torch.tensor([0, 0, 0, 0, 0, 0], dtype=torch.int32)
+        else:
+            self.human_action = [0, 0, 0, 0, 0, 0]  # Fallback to list
+        self.action_changed = False
         
         # Add a flag to detect if we're running on GPU
         self.is_gpu_simulation = False
@@ -827,6 +842,17 @@ class ViewerClass:
                         print(f"Switched to displaying World {self.debug_world_index}")
                     else:
                         print(f"World 2 not available (only {self.max_worlds_available} worlds)")
+                # Interactive training controls
+                elif event.key == pygame.K_h and self.controller_manager is not None:
+                    # Toggle human control for current agent
+                    current_state = self.controller_manager.is_human_control_active()
+                    self.controller_manager.set_human_control(not current_state)
+                    state_msg = "enabled" if not current_state else "disabled"
+                    print(f"Human control {state_msg}")
+                elif event.key == pygame.K_PAUSE or (event.key == pygame.K_p and pygame.key.get_pressed()[pygame.K_LCTRL]):
+                    # Toggle training pause (Ctrl+P to avoid conflict with pass action)
+                    self.training_paused = not self.training_paused
+                    print(f"Training {'paused' if self.training_paused else 'resumed'}")
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1: # Left mouse click
                     mouse_x, mouse_y = event.pos
@@ -843,12 +869,104 @@ class ViewerClass:
                                 break # Stop after finding the first clicked agent
 
         self.handle_input()
+        self.handle_interactive_input()  # Handle human control input
         
         self.handle_audio_events(data)
         self.draw_simulation_data(data)
 
         pygame.display.flip()
         self.clock.tick(60)
+
+    def set_controller_manager(self, controller_manager):
+        """Set the controller manager for interactive training"""
+        self.controller_manager = controller_manager
+    
+    def set_training_paused(self, paused: bool):
+        """Set training pause state"""
+        self.training_paused = paused
+    
+    def get_human_action(self):
+        """Get the current human action for the HumanController"""
+        # Return a copy to prevent external modification
+        if TORCH_AVAILABLE and torch is not None and hasattr(self.human_action, 'clone'):
+            return self.human_action.clone()
+        elif TORCH_AVAILABLE and torch is not None and isinstance(self.human_action, list):
+            return torch.tensor(self.human_action, dtype=torch.int32)
+        elif hasattr(self.human_action, 'copy'):
+            return self.human_action.copy()
+        else:
+            return list(self.human_action)  # Fallback to list copy
+    
+    def handle_interactive_input(self):
+        """Handle keyboard input for interactive training control"""
+        if self.disable_action_input or self.controller_manager is None:
+            return
+            
+        keys = pygame.key.get_pressed()
+        
+        # Reset action
+        move_speed = 0
+        move_angle = 0  # Default angle
+        rotate = 0
+        grab = 0
+        pass_ball = 0
+        shoot_ball = 0
+        
+        # Movement controls (WASD)
+        if keys[pygame.K_w]:
+            move_speed = 1
+            move_angle = 0  # North
+        elif keys[pygame.K_s]:
+            move_speed = 1
+            move_angle = 4  # South
+        elif keys[pygame.K_a]:
+            move_speed = 1
+            move_angle = 6  # West
+        elif keys[pygame.K_d]:
+            move_speed = 1
+            move_angle = 2  # East
+        elif keys[pygame.K_q]:
+            move_speed = 1
+            move_angle = 7  # Northwest
+        elif keys[pygame.K_e]:
+            move_speed = 1
+            move_angle = 1  # Northeast
+        elif keys[pygame.K_z]:
+            move_speed = 1
+            move_angle = 5  # Southwest
+        elif keys[pygame.K_c]:
+            move_speed = 1
+            move_angle = 3  # Southeast
+        
+        # Rotation (Q/E or comma/period)
+        if keys[pygame.K_COMMA] or keys[pygame.K_j]:
+            rotate = 1  # Counter-clockwise
+        elif keys[pygame.K_PERIOD] or keys[pygame.K_k]:
+            rotate = 2  # Clockwise
+        
+        # Actions
+        if keys[pygame.K_SPACE]:
+            grab = 1
+        if keys[pygame.K_f]:  # Changed from 'p' to 'f' to avoid pause conflict
+            pass_ball = 1
+        if keys[pygame.K_RETURN] or keys[pygame.K_RSHIFT]:
+            shoot_ball = 1
+        
+        # Convert to tensor format [move_speed, move_angle, rotate, grab, pass_ball, shoot_ball]
+        if TORCH_AVAILABLE and torch is not None:
+            new_action = torch.tensor([move_speed, move_angle, rotate, grab, pass_ball, shoot_ball], dtype=torch.int32)
+        else:
+            new_action = [move_speed, move_angle, rotate, grab, pass_ball, shoot_ball]
+        
+        # Only update if action changed to reduce processing
+        if TORCH_AVAILABLE and torch is not None and hasattr(self.human_action, 'equal'):
+            action_changed = not torch.equal(self.human_action, new_action)
+        else:
+            action_changed = self.human_action != new_action
+            
+        if action_changed:
+            self.human_action = new_action
+            self.action_changed = True
 
 
 

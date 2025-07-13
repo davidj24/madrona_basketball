@@ -10,11 +10,37 @@ class Controller():
         
         Args:
             obs_tensor: The observation tensor from the environment
-            world_idx: the index of the world that the agent to control is in
-            agent_idx: The index of the agent in the world to control
+            viewer_instance: The viewer instance for human input
         """
         raise NotImplementedError
+
+
+class SimpleControllerManager:
+    """Simplified controller manager for single-agent training with human override capability"""
     
+    def __init__(self, rl_agent: Agent, device: str):
+        self.device = device
+        self.rl_controller = RLController(rl_agent, device)
+        self.human_controller = HumanController()
+        
+        # Simple flag to determine if human is controlling the current agent
+        self.human_control_active = False
+        
+    def set_human_control(self, active: bool):
+        """Enable or disable human control"""
+        self.human_control_active = active
+        print(f"Human control {'enabled' if active else 'disabled'}")
+    
+    def get_action(self, obs_tensor: torch.Tensor, viewer_instance=None) -> torch.Tensor:
+        """Get action for the current agent"""
+        if self.human_control_active and viewer_instance is not None:
+            return self.human_controller.get_action(obs_tensor, viewer_instance)
+        else:
+            return self.rl_controller.get_action(obs_tensor, viewer_instance)
+    
+    def is_human_control_active(self) -> bool:
+        """Check if human control is currently active"""
+        return self.human_control_active
 
 
 class RLController(Controller):
@@ -37,7 +63,16 @@ class RLController(Controller):
 class HumanController(Controller):
     """Controller for direct interaction with simulation using keyboard inputs"""
     def get_action(self, obs_tensor, viewer_instance):
-        return viewer_instance.get_human_action()
+        if viewer_instance is not None:
+            human_action = viewer_instance.get_human_action()
+            # Ensure we return a tensor in the correct format
+            if isinstance(human_action, torch.Tensor):
+                return human_action
+            else:
+                return torch.tensor(human_action, dtype=torch.int32)
+        else:
+            # Return default action if no viewer
+            return torch.tensor([0, 0, 0, 0, 0, 0], dtype=torch.int32)
         
     
 
@@ -50,8 +85,7 @@ class RulesController(Controller):
             return torch.tensor([0, 0, 0, 0, 0, 1], dtype=torch.int32)  # Shoot
         else:
             return torch.tensor([0, 0, 0, 1, 0, 0], dtype=torch.int32)  # Grab
-        
 
-        
-        
-         
+
+
+

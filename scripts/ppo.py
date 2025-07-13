@@ -14,6 +14,7 @@ from typing import Optional
 from agent import Agent
 from env import EnvWrapper
 from ppo_stats import PPOStats
+from controllers import SimpleControllerManager
 
 
 @dataclass
@@ -98,6 +99,32 @@ if __name__ == "__main__":
                   action_buckets=action_buckets).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
+    # Initialize SimpleControllerManager for interactive training
+    controller_manager = SimpleControllerManager(agent, device)
+    
+    # Connect controller manager to environment for interactive training
+    envs.set_controller_manager(controller_manager)
+    
+    # Print interactive training instructions if viewer is enabled
+    if args.viewer:
+        print("\n" + "="*60)
+        print("🎮 INTERACTIVE TRAINING MODE ENABLED")
+        print("="*60)
+        print("Controls:")
+        print("  H                - Toggle human control for current agent")
+        print("  Ctrl+P           - Pause/resume training") 
+        print("  R                - Reset simulation")
+        print("  Left Click       - Select agent")
+        print("")
+        print("Human Control (when active):")
+        print("  WASD             - Move agent")
+        print("  J/K or ,/.       - Rotate agent")
+        print("  Space            - Grab ball")
+        print("  F                - Pass ball")
+        print("  Enter/Right Shift - Shoot ball")
+        print("="*60)
+        print("Training will proceed normally. Use H to take control when needed.\n")
+
     # Storage setup
     obs = torch.zeros((args.num_rollout_steps, args.num_envs, obs_size)).to(device)
     actions = torch.zeros((args.num_rollout_steps, args.num_envs, act_size)).to(device)
@@ -125,14 +152,28 @@ if __name__ == "__main__":
             obs[step] = next_obs
             dones[step] = next_done
 
-            # Query agent
+            # Use SimpleControllerManager to potentially override RL actions with human input
             with torch.no_grad():
-                action, log_prob, value = agent(next_obs)
+                # Get RL actions for policy gradient and value estimation
+                rl_action, log_prob, value = agent(next_obs)
                 values[step] = value.flatten()
-            actions[step] = action
+                
+                # Use controller manager to get final actions (RL or human override)
+                if hasattr(envs, 'viewer') and envs.viewer is not None:
+                    # Use controller manager to potentially override with human actions
+                    final_action = torch.stack([
+                        controller_manager.get_action(obs, envs.viewer) 
+                        for obs in next_obs
+                    ])
+                else:
+                    # No viewer, use pure RL actions
+                    final_action = rl_action
+                
+            actions[step] = rl_action  # Always store RL actions for training
             log_probs[step] = log_prob
 
-            next_obs, reward, next_done = envs.step(action)
+            # Step environment with final actions (RL or human override)
+            next_obs, reward, next_done = envs.step(final_action)
             rewards[step] = reward.view(-1)
             # time.sleep(1)
 

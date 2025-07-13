@@ -82,6 +82,10 @@ class EnvWrapper:
         
         # Track if this is the first step to avoid calling viewer too early
         self.first_reset_done = False
+        
+        # Interactive training support
+        self.training_paused = False
+        self.controller_manager = None  # Will be set by training script
 
         print("Obs shape:", self.observations.shape)
         print("Actions shape:", self.actions.shape)
@@ -114,9 +118,15 @@ class EnvWrapper:
     def step(self, actions):
         self.actions[:, self.agent_idx] = actions
 
-        self.worlds.step()
+        # Sync pause state from viewer if available
+        if self.viewer is not None and hasattr(self.viewer, 'training_paused'):
+            self.training_paused = self.viewer.training_paused
+
+        # Only step simulation if not paused
+        if not self.training_paused:
+            self.worlds.step()
         
-        # Only call viewer after first reset is complete and tensors are ready
+        # Always call viewer for interaction handling, regardless of pause state
         if self.viewer is not None and self.first_reset_done:
             try:
                 self.viewer.tick()
@@ -144,3 +154,25 @@ class EnvWrapper:
         self.first_reset_done = True
         
         return obs, rew, done
+    
+    def set_controller_manager(self, controller_manager):
+        """Set the controller manager for interactive training"""
+        self.controller_manager = controller_manager
+        if self.viewer is not None:
+            self.viewer.set_controller_manager(controller_manager)
+    
+    def toggle_human_control(self):
+        """Toggle human control for the current agent"""
+        if self.controller_manager is not None:
+            current_state = self.controller_manager.is_human_control_active()
+            self.controller_manager.set_human_control(not current_state)
+    
+    def is_training_paused(self):
+        """Check if training is currently paused for human interaction"""
+        return self.training_paused
+    
+    def set_training_paused(self, paused: bool):
+        """Pause or resume training"""
+        self.training_paused = paused
+        if self.viewer is not None:
+            self.viewer.set_training_paused(paused)
