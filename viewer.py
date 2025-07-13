@@ -425,7 +425,7 @@ class ViewerClass:
                     start_angle = -clip_angle
                     end_angle = clip_angle
                 else: # Right hoop (arc is on the left of the hoop)
-                    # Starts from the top-left quadrant, goes to the bottom-left
+                    # Starts from the top-left quadrant, goes to thebottom-left
                     start_angle = np.pi - clip_angle
                     end_angle = np.pi + clip_angle
                 
@@ -849,7 +849,7 @@ class ViewerClass:
                     current_state = self.controller_manager.is_human_control_active()
                     self.controller_manager.set_human_control(not current_state)
                     state_msg = "enabled" if not current_state else "disabled"
-                    print(f"🎮 Human control {state_msg} for world 0")
+                    print(f"🎮 Human control {state_msg} for Agent {self.active_agent_idx} in world 0")
                 elif event.key == pygame.K_PAUSE or (event.key == pygame.K_p and pygame.key.get_pressed()[pygame.K_LCTRL]):
                     # Toggle training pause (Ctrl+P to avoid conflict with pass action)
                     self.training_paused = not self.training_paused
@@ -982,10 +982,14 @@ class ViewerClass:
             # Debug: Print when any input is detected (reduced frequency)
             if (hasattr(self, '_last_debug_frame') and 
                 (not hasattr(self, '_last_debug_frame') or self.step_count - getattr(self, '_last_debug_frame', 0) > 10)):
-                print(f"🎮 Human input detected: move={move_speed}, angle={move_angle}, rot={rotate}, grab={grab}, pass={pass_ball}, shoot={shoot_ball}")
+                print(f"🎮 Human input detected for Agent {self.active_agent_idx}: move={move_speed}, angle={move_angle}, rot={rotate}, grab={grab}, pass={pass_ball}, shoot={shoot_ball}")
                 self._last_debug_frame = self.step_count
-                
-            
+
+    def get_selected_agent_index(self):
+        """Get the index of the currently selected agent for human control"""
+        return self.active_agent_idx
+
+
 
 
 

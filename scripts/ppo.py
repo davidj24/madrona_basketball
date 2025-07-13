@@ -111,16 +111,16 @@ if __name__ == "__main__":
         print("🎮 INTERACTIVE TRAINING MODE ENABLED")
         print("="*60)
         print("Controls:")
-        print("  H                - Toggle human control for WORLD 0 ONLY")
+        print("  H                - Toggle human control for selected agent in WORLD 0")
         print("  Ctrl+P           - Pause/resume training") 
         print("  R                - Reset simulation")
-        print("  Left Click       - Select agent")
+        print("  Left Click       - Select agent to control")
         print("")
         print("Human Control (when active on World 0):")
-        print("  WASD             - Move agent")
-        print("  J/K or ,/.       - Rotate agent")
-        print("  Space            - Grab ball")
-        print("  F                - Pass ball")
+        print("  WASD             - Move selected agent")
+        print("  Q/E or ,/.       - Rotate selected agent")
+        print("  Left Shift       - Grab ball")
+        print("  B                - Pass ball")
         print("  Enter/Right Shift - Shoot ball")
         print("")
         print("="*60)
@@ -166,10 +166,11 @@ if __name__ == "__main__":
             # Use the new method that can handle world-specific actions
             if (hasattr(envs, 'viewer') and envs.viewer is not None and 
                 controller_manager.is_human_control_active()):
-                # Get human action for world 0
+                # Get human action for world 0 and the selected agent
                 try:
+                    selected_agent_idx = envs.viewer.get_selected_agent_index()
                     human_action_world_0 = controller_manager.get_action(next_obs[0], envs.viewer)
-                    next_obs, reward, next_done = envs.step_with_world_actions(rl_action, human_action_world_0)
+                    next_obs, reward, next_done = envs.step_with_world_actions(rl_action, human_action_world_0, selected_agent_idx)
                 except Exception as e:
                     print(f"Warning: Human control error in step: {e}")
                     next_obs, reward, next_done = envs.step(rl_action)

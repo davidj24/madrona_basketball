@@ -183,14 +183,16 @@ class EnvWrapper:
         if world_idx < self.actions.shape[0] and agent_idx < self.actions.shape[1]:
             self.actions[world_idx, agent_idx] = action
     
-    def step_with_world_actions(self, actions, human_action_world_0=None):
-        """Step with actions, optionally overriding world 0 with human action"""
+    def step_with_world_actions(self, actions, human_action_world_0=None, human_agent_idx=None):
+        """Step with actions, optionally overriding world 0 with human action for specific agent"""
         # Set actions for all worlds and the specified agent
         self.actions[:, self.agent_idx] = actions
         
         # Override world 0 with human action if provided
         if human_action_world_0 is not None:
-            self.set_action_for_world(0, self.agent_idx, human_action_world_0)
+            # Use the specified agent index, or default to self.agent_idx
+            target_agent_idx = human_agent_idx if human_agent_idx is not None else self.agent_idx
+            self.set_action_for_world(0, target_agent_idx, human_action_world_0)
 
         # Sync pause state from viewer if available
         if self.viewer is not None and hasattr(self.viewer, 'training_paused'):
@@ -198,7 +200,9 @@ class EnvWrapper:
             
             # If paused, set world 0 actions to zero to freeze the agent visually
             if self.training_paused:
-                self.actions[0, self.agent_idx] = 0
+                # Use the specified agent index, or default to self.agent_idx
+                target_agent_idx = human_agent_idx if human_agent_idx is not None else self.agent_idx
+                self.actions[0, target_agent_idx] = 0
 
         # Only step simulation if not paused
         if not self.training_paused:
