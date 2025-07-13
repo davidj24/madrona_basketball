@@ -235,7 +235,7 @@ void generateWorld(Engine &ctx) {
         ctx.get<Orientation>(agent) = Orientation {Quat::id()};
         ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
         ctx.get<Stats>(agent) = {0.f, 0.f};
-        ctx.get<Attributes>(agent) = {1 - i*DEFENDER_SLOWDOWN, 0.f, 0.f, 6.5f, ctx.get<Position>(agent).position};
+        ctx.get<Attributes>(agent) = {1 - i*DEFENDER_SLOWDOWN, 0.f, 0.f, 4.5f, ctx.get<Position>(agent).position};
 
         // Use actual hoop entity IDs from gameState
         uint32_t defending_hoop_id = (i % 2 == 0) ? (uint32_t)gameState.team0Hoop : (uint32_t)gameState.team1Hoop;
@@ -290,7 +290,6 @@ void resetWorld(Engine &ctx) {
         };
     }
 
-    // --- Part 2: Reset All Agents ---
     Vector3 team_colors[2] = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
     Entity basketball_entity;
     for (CountT i = 0; i < NUM_BASKETBALLS; i++) {
@@ -344,7 +343,7 @@ void resetWorld(Engine &ctx) {
             pos = Position { Vector3{ grid->startX - 1 - (-2*(agent_i % 2)), grid->startY - 2 + agent_i/2, 0.f } };
         }
 
-        ctx.get<Attributes>(agent) = {1.f - agent_i*DEFENDER_SLOWDOWN, 0.f, 0.f, 6.5f, pos.position};
+        ctx.get<Attributes>(agent) = {1.f - agent_i*DEFENDER_SLOWDOWN, 0.f, 0.f, 4.5f, pos.position};
 
         uint32_t defending_hoop_id = (agent_i % 2 == 0) ? (uint32_t)gameState.team0Hoop : (uint32_t)gameState.team1Hoop;
         ctx.get<Team>(agent) = Team{agent_i % 2, team_colors[agent_i % 2], defending_hoop_id};

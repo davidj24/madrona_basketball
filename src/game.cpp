@@ -295,7 +295,7 @@ inline void shootSystem(Engine &ctx,
     float intended_direction = std::atan2(ideal_shot_vector.x, ideal_shot_vector.y);
 
     // ======================== DEVIATION TUNERS ==============================
-    float dist_deviation_per_meter = 10.f;
+    float dist_deviation_per_meter = .6f;
     float def_deviation_per_meter = .0f;
     float vel_deviation_factor = 0.f;
 
@@ -343,15 +343,14 @@ inline void shootSystem(Engine &ctx,
 
     // This is the final, correct trajectory vector for the ball
     Vector3 final_shot_vec = {sinf(shot_direction), cosf(shot_direction), 0.f};
-    // DEBUG
-    final_shot_vec = (distance_to_hoop <= 5.f) ? ideal_shot_vector : Vector3{0, 1, 0};
+    // final_shot_vec = (distance_to_hoop <= 5.f) ? ideal_shot_vector : Vector3{0, 1, 0}; // DEBUG
     bool shot_is_going_in = false;
     float how_far_to_go_along_shot_to_be_closest_to_hoop = ideal_shot_vector.dot(final_shot_vec);
     if (how_far_to_go_along_shot_to_be_closest_to_hoop < 0) {shot_is_going_in = false;}
     else
     {
-        float closest_distance_to_hoop = ideal_shot_vector.length2() - how_far_to_go_along_shot_to_be_closest_to_hoop * how_far_to_go_along_shot_to_be_closest_to_hoop;
-        shot_is_going_in = closest_distance_to_hoop <= scoring_radius * scoring_radius;
+        float closest_distance_to_hoop_sq = ideal_shot_vector.length2() - how_far_to_go_along_shot_to_be_closest_to_hoop * how_far_to_go_along_shot_to_be_closest_to_hoop;
+        shot_is_going_in = closest_distance_to_hoop_sq <= scoring_radius * scoring_radius;
     }
 
     
@@ -506,7 +505,6 @@ inline void actionMaskSystem(Engine &ctx,
     {
         action_mask.can_grab = 0;
     }
-    action_mask.can_pass = 0;
 }
 
 
@@ -663,7 +661,7 @@ inline void rewardSystem(Engine &ctx,
     // Using 3 multiplications becauase std:: doesn't work with GPU and I don't think madrona::math has power
     // float proximity_reward = -((distance_from_hoop*distance_from_hoop*distance_from_hoop) / maximum_distance_from_hoop); <-- Scaled version
     float proximity_reward = exp(-.1f * distance_from_hoop);
-    reward.r += proximity_reward * in_possession.hasBall; // DEBUG
+    reward.r += proximity_reward * in_possession.hasBall;
 }
 
 //=================================================== Hoop Systems ===================================================

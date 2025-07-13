@@ -295,7 +295,7 @@ if __name__ == "__main__":
             stats.reset()
 
         # Every 100 iterations, save the model
-        if iteration % 100 == 0:
+        if iteration % 1000 == 0:
             folder = "checkpoints"
             if not os.path.exists(folder):
                 os.makedirs(folder)
