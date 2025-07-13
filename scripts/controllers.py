@@ -34,7 +34,11 @@ class SimpleControllerManager:
     def get_action(self, obs_tensor: torch.Tensor, viewer_instance=None) -> torch.Tensor:
         """Get action for the current agent"""
         if self.human_control_active and viewer_instance is not None:
-            return self.human_controller.get_action(obs_tensor, viewer_instance)
+            human_action = self.human_controller.get_action(obs_tensor, viewer_instance)
+            # Debug: Print when human action is actually used
+            if torch.any(human_action != 0):
+                print(f"🎮 Using human action: {human_action}")
+            return human_action
         else:
             return self.rl_controller.get_action(obs_tensor, viewer_instance)
     
@@ -65,14 +69,18 @@ class HumanController(Controller):
     def get_action(self, obs_tensor, viewer_instance):
         if viewer_instance is not None:
             human_action = viewer_instance.get_human_action()
-            # Ensure we return a tensor in the correct format
+            # Ensure we return a tensor in the correct format and device
             if isinstance(human_action, torch.Tensor):
-                return human_action
+                # Make sure it's on the same device as obs_tensor
+                return human_action.to(obs_tensor.device)
             else:
-                return torch.tensor(human_action, dtype=torch.int32)
+                # Convert list to tensor and put on correct device
+                tensor_action = torch.tensor(human_action, dtype=torch.int32)
+                return tensor_action.to(obs_tensor.device)
         else:
-            # Return default action if no viewer
-            return torch.tensor([0, 0, 0, 0, 0, 0], dtype=torch.int32)
+            # Return default action if no viewer, on same device as obs
+            default_action = torch.tensor([0, 0, 0, 0, 0, 0], dtype=torch.int32)
+            return default_action.to(obs_tensor.device)
         
     
 

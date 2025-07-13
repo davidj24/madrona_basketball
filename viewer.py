@@ -848,11 +848,11 @@ class ViewerClass:
                     current_state = self.controller_manager.is_human_control_active()
                     self.controller_manager.set_human_control(not current_state)
                     state_msg = "enabled" if not current_state else "disabled"
-                    print(f"Human control {state_msg}")
+                    print(f"🎮 Human control {state_msg} for world 0")
                 elif event.key == pygame.K_PAUSE or (event.key == pygame.K_p and pygame.key.get_pressed()[pygame.K_LCTRL]):
                     # Toggle training pause (Ctrl+P to avoid conflict with pass action)
                     self.training_paused = not self.training_paused
-                    print(f"Training {'paused' if self.training_paused else 'resumed'}")
+                    print(f"⏸ Training {'paused' if self.training_paused else 'resumed'}")
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1: # Left mouse click
                     mouse_x, mouse_y = event.pos
@@ -887,15 +887,18 @@ class ViewerClass:
     
     def get_human_action(self):
         """Get the current human action for the HumanController"""
-        # Return a copy to prevent external modification
-        if TORCH_AVAILABLE and torch is not None and hasattr(self.human_action, 'clone'):
-            return self.human_action.clone()
-        elif TORCH_AVAILABLE and torch is not None and isinstance(self.human_action, list):
-            return torch.tensor(self.human_action, dtype=torch.int32)
-        elif hasattr(self.human_action, 'copy'):
-            return self.human_action.copy()
+        # Always return a torch tensor to ensure compatibility
+        if TORCH_AVAILABLE and torch is not None:
+            if hasattr(self.human_action, 'clone'):
+                return self.human_action.clone()
+            elif isinstance(self.human_action, list):
+                return torch.tensor(self.human_action, dtype=torch.int32)
+            else:
+                # Fallback: convert whatever we have to tensor
+                return torch.tensor([0, 0, 0, 0, 0, 0], dtype=torch.int32)
         else:
-            return list(self.human_action)  # Fallback to list copy
+            # If torch not available, return list (should not happen in training)
+            return list(self.human_action) if hasattr(self.human_action, '__iter__') else [0, 0, 0, 0, 0, 0]
     
     def handle_interactive_input(self):
         """Handle keyboard input for interactive training control"""
@@ -943,6 +946,8 @@ class ViewerClass:
             rotate = 1  # Counter-clockwise
         elif keys[pygame.K_PERIOD] or keys[pygame.K_k]:
             rotate = 2  # Clockwise
+        else:
+            rotate = 0  # No rotation
         
         # Actions
         if keys[pygame.K_SPACE]:
@@ -953,20 +958,28 @@ class ViewerClass:
             shoot_ball = 1
         
         # Convert to tensor format [move_speed, move_angle, rotate, grab, pass_ball, shoot_ball]
+        # Always use tensor for consistency
         if TORCH_AVAILABLE and torch is not None:
             new_action = torch.tensor([move_speed, move_angle, rotate, grab, pass_ball, shoot_ball], dtype=torch.int32)
+            
+            # Check if action changed
+            if hasattr(self.human_action, 'equal') and isinstance(self.human_action, torch.Tensor):
+                action_changed = not torch.equal(self.human_action, new_action)
+            else:
+                action_changed = True  # Force update if not tensor
         else:
             new_action = [move_speed, move_angle, rotate, grab, pass_ball, shoot_ball]
-        
-        # Only update if action changed to reduce processing
-        if TORCH_AVAILABLE and torch is not None and hasattr(self.human_action, 'equal'):
-            action_changed = not torch.equal(self.human_action, new_action)
-        else:
             action_changed = self.human_action != new_action
             
         if action_changed:
             self.human_action = new_action
             self.action_changed = True
+            # Debug: Print non-zero actions to verify input is working (reduced frequency)
+            if (any(val != 0 for val in [move_speed, move_angle, rotate, grab, pass_ball, shoot_ball]) and 
+                hasattr(self, '_last_debug_frame') and 
+                (not hasattr(self, '_last_debug_frame') or self.step_count - getattr(self, '_last_debug_frame', 0) > 30)):
+                print(f"🎮 Human input: move={move_speed}, angle={move_angle}, rot={rotate}, grab={grab}, pass={pass_ball}, shoot={shoot_ball}")
+                self._last_debug_frame = self.step_count
 
 
 

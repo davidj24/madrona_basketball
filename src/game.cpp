@@ -644,7 +644,8 @@ inline void rewardSystem(Engine &ctx,
                          Entity agent_entity,
                          Reward &reward,
                          Position &agent_pos,
-                         Team &team)
+                         Team &team,
+                        InPossession &in_possession)
 {
     // Find attacking hoop
     Position target_hoop_pos;
@@ -663,7 +664,7 @@ inline void rewardSystem(Engine &ctx,
     // Using 3 multiplications becauase std:: doesn't work with GPU and I don't think madrona::math has power
     // float proximity_reward = -((distance_from_hoop*distance_from_hoop*distance_from_hoop) / maximum_distance_from_hoop); <-- Scaled version
     float proximity_reward = exp(-.1f * distance_from_hoop);
-    reward.r += proximity_reward;
+    reward.r += proximity_reward * in_possession.hasBall; // DEBUG
 }
 
 //=================================================== Hoop Systems ===================================================
@@ -1185,7 +1186,7 @@ TaskGraphNodeID setupGameStepTasks(
         Inbounding, Team, GrabCooldown>>({hardCodeDefenseSystemNode});
 
     auto rewardSystemNode = builder.addToGraph<ParallelForNode<Engine, rewardSystem,
-        Entity, Reward, Position, Team>>({fillObservationsNode});
+        Entity, Reward, Position, Team, InPossession>>({fillObservationsNode});
 
     return rewardSystemNode;
 }

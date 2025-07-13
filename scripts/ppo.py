@@ -111,17 +111,19 @@ if __name__ == "__main__":
         print("🎮 INTERACTIVE TRAINING MODE ENABLED")
         print("="*60)
         print("Controls:")
-        print("  H                - Toggle human control for current agent")
+        print("  H                - Toggle human control for WORLD 0 ONLY")
         print("  Ctrl+P           - Pause/resume training") 
         print("  R                - Reset simulation")
         print("  Left Click       - Select agent")
         print("")
-        print("Human Control (when active):")
+        print("Human Control (when active on World 0):")
         print("  WASD             - Move agent")
         print("  J/K or ,/.       - Rotate agent")
         print("  Space            - Grab ball")
         print("  F                - Pass ball")
         print("  Enter/Right Shift - Shoot ball")
+        print("")
+        print("⚡ Performance: Human control only affects World 0 for optimal GPU performance")
         print("="*60)
         print("Training will proceed normally. Use H to take control when needed.\n")
 
@@ -159,15 +161,18 @@ if __name__ == "__main__":
                 values[step] = value.flatten()
                 
                 # Use controller manager to get final actions (RL or human override)
-                if hasattr(envs, 'viewer') and envs.viewer is not None:
-                    # Use controller manager to potentially override with human actions
-                    final_action = torch.stack([
-                        controller_manager.get_action(obs, envs.viewer) 
-                        for obs in next_obs
-                    ])
-                else:
-                    # No viewer, use pure RL actions
-                    final_action = rl_action
+                # Only apply human control to the first environment (world 0) for performance
+                final_action = rl_action.clone()  # Start with all RL actions
+                
+                if (hasattr(envs, 'viewer') and envs.viewer is not None and 
+                    controller_manager.is_human_control_active()):
+                    # Only override the first environment's action with human input
+                    try:
+                        human_action = controller_manager.get_action(next_obs[0], envs.viewer)
+                        final_action[0] = human_action  # Only affect world 0
+                    except Exception as e:
+                        print(f"Warning: Human control error: {e}")
+                        # Fall back to RL action for world 0
                 
             actions[step] = rl_action  # Always store RL actions for training
             log_probs[step] = log_prob
