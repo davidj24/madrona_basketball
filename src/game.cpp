@@ -554,7 +554,6 @@ inline void hardCodeDefenseSystem(Engine &ctx,
     Action &defender_action,
     Attributes &defender_attributes)
     {
-        return; // DEBUG
         GameState &gameState = ctx.singleton<GameState>();
         
         if (gameState.teamInPossession == defender_team.teamIndex)

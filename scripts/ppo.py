@@ -123,7 +123,6 @@ if __name__ == "__main__":
         print("  F                - Pass ball")
         print("  Enter/Right Shift - Shoot ball")
         print("")
-        print("⚡ Performance: Human control only affects World 0 for optimal GPU performance")
         print("="*60)
         print("Training will proceed normally. Use H to take control when needed.\n")
 

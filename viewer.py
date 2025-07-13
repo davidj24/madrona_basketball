@@ -947,18 +947,18 @@ class ViewerClass:
             move_angle = 6  # West
         
         # Rotation (Q/E or comma/period)
-        if keys[pygame.K_COMMA] or keys[pygame.K_j]:
+        if keys[pygame.K_COMMA] or keys[pygame.K_q]:
             rotate = 1  # Counter-clockwise
-        elif keys[pygame.K_PERIOD] or keys[pygame.K_k]:
-            rotate = 2  # Clockwise
+        elif keys[pygame.K_PERIOD] or keys[pygame.K_e]:
+            rotate = -1  # Clockwise
         else:
             rotate = 0  # No rotation
         
         # Actions
-        if keys[pygame.K_SPACE]:
-            grab = 1
-        if keys[pygame.K_f]:  # Changed from 'p' to 'f' to avoid pause conflict
+        if keys[pygame.K_b]:
             pass_ball = 1
+        if keys[pygame.K_LSHIFT]:  # Changed from 'p' to 'f' to avoid pause conflict
+            grab = 1
         if keys[pygame.K_RETURN] or keys[pygame.K_RSHIFT]:
             shoot_ball = 1
         
@@ -985,9 +985,7 @@ class ViewerClass:
                 print(f"🎮 Human input detected: move={move_speed}, angle={move_angle}, rot={rotate}, grab={grab}, pass={pass_ball}, shoot={shoot_ball}")
                 self._last_debug_frame = self.step_count
                 
-            # Also print non-zero actions for immediate feedback
-            if any(val != 0 for val in [move_speed, move_angle, rotate, grab, pass_ball, shoot_ball]):
-                print(f"🎮 Active human input: move={move_speed}, angle={move_angle}, rot={rotate}, grab={grab}, pass={pass_ball}, shoot={shoot_ball}")
+            
 
 
 
