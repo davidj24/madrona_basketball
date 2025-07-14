@@ -15,6 +15,9 @@ namespace madBasketball {
 
     // ======================================== Rendering & Scaling ========================================
     constexpr float PIXELS_PER_METER = 110.f; // Single source of truth for visualization scaling
+    const madrona::math::Vector3 TEAM0_COLOR = {0, 100, 255};
+    const madrona::math::Vector3 TEAM1_COLOR = {128, 0, 128};
+
 
 
         // ======================================== Gameplay Constants ========================================

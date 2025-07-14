@@ -13,6 +13,10 @@ TIME_PER_PERIOD = 300.0  # 5 minutes per quarter (in seconds)
 
 # ======================================== Rendering & Scaling ========================================
 PIXELS_PER_METER = 110.0  # Single source of truth for visualization scaling
+TEAM0_COLOR = (0, 100, 255)
+TEAM1_COLOR = (128, 0, 128)
+
+
 
 # ======================================== Basketball Court Dimensions (NBA Standard) ========================================
 COURT_LENGTH_M = 28.65  # Full court length

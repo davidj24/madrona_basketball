@@ -176,7 +176,6 @@ void generateWorld(Engine &ctx) {
 
     // Now create agents with proper hoop references
     uint32_t offensive_agent_id = ENTITY_ID_PLACEHOLDER;
-    Vector3 team_colors[2] = {Vector3{0, 100, 255}, Vector3{255, 0, 100}};
     for (int i = 0; i < NUM_AGENTS; i++)
     {
         Entity agent = ctx.makeEntity<Agent>();
@@ -236,10 +235,11 @@ void generateWorld(Engine &ctx) {
         ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
         ctx.get<Stats>(agent) = {0.f, 0.f};
         ctx.get<Attributes>(agent) = {1 - i*DEFENDER_SLOWDOWN, 0.f, 0.f, 4.5f, ctx.get<Position>(agent).position};
-
         // Use actual hoop entity IDs from gameState
         uint32_t defending_hoop_id = (i % 2 == 0) ? (uint32_t)gameState.team0Hoop : (uint32_t)gameState.team1Hoop;
-        ctx.get<Team>(agent) = Team{i % 2, team_colors[i % 2], defending_hoop_id};
+        // Use team color constants
+        const madrona::math::Vector3 team_color = (i % 2 == 0) ? TEAM0_COLOR : TEAM1_COLOR;
+        ctx.get<Team>(agent) = Team{i % 2, team_color, defending_hoop_id};
     };
 
     if (gameState.isOneOnOne == 1.f)

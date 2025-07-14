@@ -358,7 +358,7 @@ class ViewerClass:
         that perfectly matches the C++ game logic.
         """
         # 1. Define Colors and Dimensions (matching the C++ "Blueprint")
-        COURT_BLUE = (10, 30, 70)
+        COURT_COLOR = (0, 0, 0)
         PAINT_RED = (120, 20, 20)
         LINE_WHITE = (255, 255, 255)
         ORANGE_BORDER = (255, 255, 255)
@@ -376,7 +376,7 @@ class ViewerClass:
 
         # 3. Draw Floor and Borders
         pygame.draw.rect(self.screen, ORANGE_BORDER, court_rect.inflate(line_thickness, line_thickness))
-        pygame.draw.rect(self.screen, COURT_BLUE, court_rect)
+        pygame.draw.rect(self.screen, COURT_COLOR, court_rect)
 
         # 4. Draw Features for Both Halves
         for side in [-1, 1]:
@@ -506,19 +506,16 @@ class ViewerClass:
         shot_clock = float(game_state[9])
         inbound_clock = float(game_state[12])
 
-        # Get team colors 
-        team_colors = { 0: (0, 100, 255), 1: (255, 50, 50) }
+        # Use team color constants
+        team_colors = { 0: TEAM0_COLOR, 1: TEAM1_COLOR }
         if 'agent_teams' in data:
             agent_teams = data['agent_teams'][world_idx]
             for i, team_data in enumerate(agent_teams):
                 if len(team_data) >= 4:
                     team_index = int(team_data[0])
                     if team_index not in team_colors:
-                        import struct
-                        color_r = max(0, min(255, int(struct.unpack('f', struct.pack('I', np.uint32(team_data[1])))[0])))
-                        color_g = max(0, min(255, int(struct.unpack('f', struct.pack('I', np.uint32(team_data[2])))[0])))
-                        color_b = max(0, min(255, int(struct.unpack('f', struct.pack('I', np.uint32(team_data[3])))[0])))
-                        team_colors[team_index] = (color_r, color_g, color_b)
+                        # Fallback: use constants
+                        team_colors[team_index] = TEAM0_COLOR if team_index == 0 else TEAM1_COLOR
 
         # Score display dimensions and positioning
         display_width = 600
@@ -634,12 +631,11 @@ class ViewerClass:
             world_idx = min(self.debug_world_index, len(data['agent_pos']) - 1)
             positions, team_data, orientations = data['agent_pos'][world_idx], data['agent_teams'][world_idx], data['orientation'][world_idx]
             
-            team_colors = { 0: (0, 100, 255), 1: (255, 50, 50) } 
-            
+            # Use team color constants
             for i, pos in enumerate(positions):
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
                 team_index = int(team_data[i][0]) if i < len(team_data) else 0
-                agent_color = team_colors.get(team_index, (128, 128, 128))
+                agent_color = TEAM0_COLOR if team_index == 0 else TEAM1_COLOR
                 
                 agent_size_px = self.pixels_per_meter * AGENT_SIZE_M
                 agent_rect = pygame.Rect(screen_x - agent_size_px / 2, screen_y - agent_size_px / 2, agent_size_px, agent_size_px)
