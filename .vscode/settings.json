@@ -92,7 +92,8 @@
         "future": "cpp",
         "stream_ref": "cpp",
         "format": "cpp",
-        "functional": "cpp"
+        "functional": "cpp",
+        "random": "cpp"
     },
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
     "github.copilot.enable": {
