@@ -880,7 +880,7 @@ class ViewerClass:
                         agent_positions = data['agent_pos'][world_idx]
                         for i, pos in enumerate(agent_positions):
                             screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
-                            agent_rect = pygame.Rect(screen_x - 10, screen_y - 10, 20, 20) # A small clickable area
+                            agent_rect = pygame.Rect(screen_x - 10, screen_y - 10, 200, 200) # A small clickable area
                             if agent_rect.collidepoint(mouse_x, mouse_y):
                                 self.active_agent_idx = i
                                 print(f"Switched control to Agent {i}")

@@ -197,9 +197,16 @@ inline void grabSystem(Engine &ctx,
         Position basketball_pos = ctx.get<Position>(ball);
         float distance_between_ball_and_player = (basketball_pos.position - agent_pos.position).length();
 
-        if (distance_between_ball_and_player <= 0.3f) {
+        if (distance_between_ball_and_player <= 0.3f) 
+        {
+            if (gameState.isOneOnOne == 1.f && team.teamIndex != gameState.teamInPossession) 
+            {
+                ctx.singleton<WorldClock>().resetNow = true;
+                continue;
+            }
             // Check if we're stealing from another agent
-            for (CountT j = 0; j < NUM_AGENTS; j++) {
+            for (CountT j = 0; j < NUM_AGENTS; j++) 
+            {
                 Entity agent = ctx.data().agents[j];
                 InPossession &other_in_possession = ctx.get<InPossession>(agent);
                 GrabCooldown &robbed_agent_grab_cooldown = ctx.get<GrabCooldown>(agent);
@@ -207,10 +214,7 @@ inline void grabSystem(Engine &ctx,
                 {
                     other_in_possession.hasBall = false;
                     other_in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
-                    robbed_agent_grab_cooldown.cooldown = SIMULATION_HZ;
-                    if (gameState.isOneOnOne == 1.f) {
-                        ctx.singleton<WorldClock>().resetNow = true;
-                    }
+                    robbed_agent_grab_cooldown.cooldown = SIMULATION_HZ; // Just makes it so they can't grab for one second
                 }
             }
 
