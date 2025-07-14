@@ -511,36 +511,100 @@ inline void actionMaskSystem(Engine &ctx,
 
 inline void agentCollisionSystem(Engine &ctx,
     Entity entity_a,
-    Position &entity_a_pos,
-    InPossession &in_possession_a)
-    {
-    // Query for all agents to get their positions.
-    // We need Entity to compare IDs and Position to read/write locations.
+    Position &pos_a,
+    Orientation &orient_a)
+{
+    // Query for all agents to check for collisions.
     for (CountT i = 0; i < NUM_AGENTS; i++) {
         Entity entity_b = ctx.data().agents[i];
-        Position &entity_b_pos = ctx.get<Position>(entity_b);
         
-        // Don't check an agent against itself.
-        // Only check pairs where A's ID is less than B's to avoid checking each pair twice.
-        if (entity_a.id >= entity_b.id) { continue; }
+        // Don't check an agent against itself and avoid duplicate checks.
+        if (entity_a.id >= entity_b.id) {
+            continue;
+        }
+
+        Position& pos_b = ctx.get<Position>(entity_b);
+        Orientation& orient_b = ctx.get<Orientation>(entity_b);
+
+        // --- 1. Get the properties of Rectangle A ---
+        Vector3 center_a = pos_a.position;
+        Vector3 fwd_a = orient_a.orientation.rotateVec({0, 1, 0}); // Forward vector
+        Vector3 right_a = {fwd_a.y, -fwd_a.x, 0}; // Perpendicular vector
+
+        Vector3 half_width_a = right_a * (AGENT_SHOULDER_WIDTH / 2.0f);
+        Vector3 half_depth_a = fwd_a * (AGENT_DEPTH / 2.0f);
+
+        Vector3 vertices_a[4] = {
+            center_a - half_depth_a + half_width_a,
+            center_a - half_depth_a - half_width_a,
+            center_a + half_depth_a - half_width_a,
+            center_a + half_depth_a + half_width_a
+        };
+
+        // --- 2. Get the properties of Rectangle B ---
+        Vector3 center_b = pos_b.position;
+        Vector3 fwd_b = orient_b.orientation.rotateVec({0, 1, 0});
+        Vector3 right_b = {fwd_b.y, -fwd_b.x, 0};
+
+        Vector3 half_width_b = right_b * (AGENT_SHOULDER_WIDTH / 2.0f);
+        Vector3 half_depth_b = fwd_b * (AGENT_DEPTH / 2.0f);
+
+        Vector3 vertices_b[4] = {
+            center_b - half_depth_b + half_width_b,
+            center_b - half_depth_b - half_width_b,
+            center_b + half_depth_b - half_width_b,
+            center_b + half_depth_b + half_width_b
+        };
         
-        // Calculate the vector and distance between the two agents
-        Vector3 vec_between_agents = (entity_b_pos.position - entity_a_pos.position);
-        float dist_between_agents = vec_between_agents.length();
+        // --- 3. Define the axes to test for separation (SAT) ---
+        // For two rectangles, there are 4 potential separating axes.
+        Vector3 axes[4] = {
+            right_a.normalize(),
+            fwd_a.normalize(),
+            right_b.normalize(),
+            fwd_b.normalize()
+        };
+
+        bool is_colliding = true;
+        float min_overlap = std::numeric_limits<float>::max();
+        Vector3 mtv_axis = {0,0,0}; // Minimum Translation Vector axis
+
+        // --- 4. Test each axis for overlap ---
+        for (int j = 0; j < 4; j++) {
+            const Vector3& axis = axes[j];
+            Projection p_a = projectRectangle(vertices_a, axis);
+            Projection p_b = projectRectangle(vertices_b, axis);
+
+            if (!projectionsOverlap(p_a, p_b)) {
+                // Found a separating axis, so there is NO collision.
+                is_colliding = false;
+                break;
+            } else {
+                // Overlap found, calculate how much.
+                float overlap = fminf(p_a.max, p_b.max) - fmaxf(p_a.min, p_b.min);
+                if (overlap < min_overlap) {
+                    min_overlap = overlap;
+                    mtv_axis = axis;
+                }
+            }
+        }
         
-        if (dist_between_agents < AGENT_SIZE_M)
+        // --- 5. If all axes had overlaps, then we have a collision ---
+        if (is_colliding)
         {
-            // Calculate how much they are overlapping. If dist is 0, provide a small default push.
-            float penetration_depth = AGENT_SIZE_M - dist_between_agents;
-            Vector3 correction_vec = (dist_between_agents > 1e-5f) ? (vec_between_agents / dist_between_agents) : Vector3{1.f, 0.f, 0.f};
-            
+            // --- Collision Response ---
+            float penetration_depth = min_overlap;
+            Vector3 correction_vec = mtv_axis;
+
+            // Ensure the correction vector points from A to B
+            Vector3 center_to_center = center_b - center_a;
+            if (dot(center_to_center, correction_vec) < 0) {
+                correction_vec = -correction_vec;
+            }
+
             // Move each agent away from the other by half of the overlap.
-            // This "resolves" the collision by pushing them apart.
-            entity_a_pos.position.x -= correction_vec.x * penetration_depth * 0.5f;
-            entity_a_pos.position.y -= correction_vec.y * penetration_depth * 0.5f;
-            
-            entity_b_pos.position.x += correction_vec.x * penetration_depth * 0.5f;
-            entity_b_pos.position.y += correction_vec.y * penetration_depth * 0.5f;
+            pos_a.position -= correction_vec * penetration_depth * 0.5f;
+            pos_b.position += correction_vec * penetration_depth * 0.5f;
         }
     }
 }
@@ -1173,7 +1237,7 @@ TaskGraphNodeID setupGameStepTasks(
         Position, InPossession, Team>>({resetSystemNode});
 
     auto agentCollisionNode = builder.addToGraph<ParallelForNode<Engine, agentCollisionSystem,
-        Entity, Position, InPossession>>({updatePointsWorthNode});
+        Entity, Position, Orientation>>({updatePointsWorthNode});
 
     auto hardCodeDefenseSystemNode = builder.addToGraph<ParallelForNode<Engine, hardCodeDefenseSystem,
         Team, Position, Action, Attributes>>({agentCollisionNode});

@@ -64,6 +64,8 @@ BALL_CIRCUMFERENCE_M = 0.749  # Official basketball circumference
 
 # ======================================== Agent Properties ========================================
 AGENT_SIZE_M = 0.25  # Agent visual size for rendering
+AGENT_SHOULDER_WIDTH = 0.4290 # Average shoulder width of agent
+AGENT_DEPTH = .1
 AGENT_ORIENTATION_ARROW_LENGTH_M = 0.5  # Length of orientation arrow
 
 # ======================================== Pygame/Visualization Constants ========================================

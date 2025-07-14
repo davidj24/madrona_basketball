@@ -37,11 +37,14 @@ namespace madBasketball {
 
     // ======================================== Agent Properties ========================================
     constexpr float AGENT_SIZE_M = 0.2f; // Agent visual size for rendering
+    constexpr float AGENT_SHOULDER_WIDTH = 0.4290; // Average shoulder width of NBA player
+    constexpr float AGENT_DEPTH = .1;
+
     constexpr float AGENT_ORIENTATION_ARROW_LENGTH_M = 0.5f; // Length of orientation arrow
     constexpr uint32_t NUM_OBSERVATIONS_PER_AGENT = 10; 
     constexpr float GUARDING_DISTANCE = .2f; // How many meters to guard away from for hard-coded defense
     constexpr float START_POS_STDDEV = .5f; 
-    constexpr float DEFENDER_SLOWDOWN = .5f; // The speed of the defender is 1 - DEFENDER_SLOWDOWN
+    constexpr float DEFENDER_SLOWDOWN = .001f; // The speed of the defender is 1 - DEFENDER_SLOWDOWN
     
     // Movement
     constexpr float ANGLE_BETWEEN_DIRECTIONS = madrona::math::pi / 4.0f; // π/4 for 8-directional movement

@@ -81,4 +81,28 @@ int32_t getShotPointValue(Position shot_pos, Vector3 hoop_score_zone)
 }
 
 
+// Helper function to project the vertices of a rectangle onto an axis
+Projection projectRectangle(const Vector3* vertices, const Vector3& axis) {
+    Projection p;
+    p.min = dot(vertices[0], axis);
+    p.max = p.min;
+
+    for (int i = 1; i < 4; i++) {
+        float proj = dot(vertices[i], axis);
+        if (proj < p.min) {
+            p.min = proj;
+        }
+        if (proj > p.max) {
+            p.max = proj;
+        }
+    }
+    return p;
+}
+
+// Helper function to check if two projections overlap
+bool projectionsOverlap(const Projection& p1, const Projection& p2) {
+    return p1.max > p2.min && p2.max > p1.min;
+}
+
+
 }

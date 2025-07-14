@@ -234,7 +234,7 @@ void generateWorld(Engine &ctx) {
         ctx.get<Orientation>(agent) = Orientation {Quat::id()};
         ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
         ctx.get<Stats>(agent) = {0.f, 0.f};
-        ctx.get<Attributes>(agent) = {1 - i*DEFENDER_SLOWDOWN, 0.f, 0.f, 4.5f, ctx.get<Position>(agent).position};
+        ctx.get<Attributes>(agent) = {1 - i*DEFENDER_SLOWDOWN, 0.f, 0.f, .1f, ctx.get<Position>(agent).position};
         // Use actual hoop entity IDs from gameState
         uint32_t defending_hoop_id = (i % 2 == 0) ? (uint32_t)gameState.team0Hoop : (uint32_t)gameState.team1Hoop;
         // Use team color constants

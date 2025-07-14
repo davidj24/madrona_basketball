@@ -577,24 +577,22 @@ class ViewerClass:
 
     def draw_simulation_data(self, data):
         """Draw whatever data your simulation produces"""
-        if data is None: 
+        if data is None:
             # Draw a simple message if no data is available
             self.screen.fill(BACKGROUND_COLOR)
             error_text = self.font.render("Waiting for simulation data...", True, TEXT_COLOR)
             self.screen.blit(error_text, (10, 10))
             return
-        
 
-        
         self.screen.fill(BACKGROUND_COLOR)
-        
+
         # Draw the main gameplay elements
         self.draw_basketball_court()
         self.draw_score_display(data)
-        
+
         # Draw the new inbound clock (it will only appear when needed)
         self.draw_inbound_clock(data)
-        
+
         # Draw world index indicator
         world_indicator_text = f"World {self.debug_world_index}/{self.max_worlds_available-1} (Press 1/2/3 to switch)"
         world_indicator_surface = self.font.render(world_indicator_text, True, (255, 255, 0))
@@ -612,7 +610,7 @@ class ViewerClass:
                     info_texts.append(f"Agent {i}: Speed={int(action_components[0])} Angle={int(action_components[1])} Rotate={int(action_components[2])} Grab={int(action_components[3])} Pass={int(action_components[4])} Shoot={int(action_components[5])} Steal={int(action_components[6])} Contest={int(action_components[7])}")
                 elif len(action_components) >= 6:
                     info_texts.append(f"Agent {i}: Speed={int(action_components[0])} Angle={int(action_components[1])} Rotate={int(action_components[2])} Grab={int(action_components[3])} Pass={int(action_components[4])} Shoot={int(action_components[5])}")
-                    
+
         if 'rewards' in data and data['rewards'] is not None:
             world_idx = min(self.debug_world_index, len(data['rewards']) - 1)
             for i, reward in enumerate(data['rewards'][world_idx]): info_texts.append(f"Agent {i} Reward: {reward:.2f}")
@@ -621,51 +619,74 @@ class ViewerClass:
             for i, done in enumerate(data['done'][world_idx]): info_texts.append(f"Agent {i} Done: {done}")
 
         # --- Agent Rendering (Corrected Colors and Text) ---
-        if ('agent_pos' in data and data['agent_pos'] is not None and 
-            'agent_teams' in data and data['agent_teams'] is not None and 
+        if ('agent_pos' in data and data['agent_pos'] is not None and
+            'agent_teams' in data and data['agent_teams'] is not None and
             'orientation' in data and data['orientation'] is not None):
             # Update max worlds available for debugging
             self.max_worlds_available = len(data['agent_pos'])
-            
+
             # Use debug world index (can be changed for testing)
             world_idx = min(self.debug_world_index, len(data['agent_pos']) - 1)
             positions, team_data, orientations = data['agent_pos'][world_idx], data['agent_teams'][world_idx], data['orientation'][world_idx]
-            
-            # Use team color constants
+
+            # Use team color constants (Assuming TEAM0_COLOR and TEAM1_COLOR are defined in constants.py)
             for i, pos in enumerate(positions):
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
                 team_index = int(team_data[i][0]) if i < len(team_data) else 0
                 agent_color = TEAM0_COLOR if team_index == 0 else TEAM1_COLOR
-                
-                agent_size_px = self.pixels_per_meter * AGENT_SIZE_M
-                agent_rect = pygame.Rect(screen_x - agent_size_px / 2, screen_y - agent_size_px / 2, agent_size_px, agent_size_px)
-                pygame.draw.rect(self.screen, agent_color, agent_rect)
+
+                # Get orientation to calculate rectangle vertices
+                q = orientations[i]
+                forward_vec_3d = rotate_vec(q, np.array([0.0, 1.0, 0.0]))
+
+                # We only need the 2D projection for drawing
+                forward_vec = np.array([forward_vec_3d[0], forward_vec_3d[1]])
+                # The "right" vector is perpendicular to the forward vector
+                right_vec = np.array([forward_vec[1], -forward_vec[0]])
+
+                # Get dimensions in pixels
+                shoulder_width_px = AGENT_SHOULDER_WIDTH * self.pixels_per_meter
+                depth_px = AGENT_DEPTH * self.pixels_per_meter
+
+                # Calculate the four corner points of the rectangle
+                center_point = np.array([screen_x, screen_y])
+
+                half_width_vec = right_vec * (shoulder_width_px / 2)
+                half_depth_vec = forward_vec * (depth_px / 2)
+
+                p1 = center_point - half_depth_vec + half_width_vec # Front-right
+                p2 = center_point - half_depth_vec - half_width_vec # Front-left
+                p3 = center_point + half_depth_vec - half_width_vec # Back-left
+                p4 = center_point + half_depth_vec + half_width_vec # Back-right
+
+                agent_points = [p1, p2, p3, p4]
+
+                # Draw the agent as a polygon
+                pygame.draw.polygon(self.screen, agent_color, agent_points)
 
                 # Draw a special highlight for the active agent
                 if i == self.active_agent_idx:
-                    pygame.draw.rect(self.screen, (0, 255, 255), agent_rect, 3) # Bright yellow outline
+                    pygame.draw.polygon(self.screen, (0, 255, 255), agent_points, 3) # Bright yellow outline
                 else:
-                    pygame.draw.rect(self.screen, (255, 255, 255), agent_rect, 1) # Standard white outline
+                    pygame.draw.polygon(self.screen, (255, 255, 255), agent_points, 1) # Standard white outline
 
                 # Draw the agent's number (not team ID) inside the rectangle
-                font_small = pygame.font.Font(None, int(agent_size_px * 0.8))
+                # Using a smaller fixed font size to ensure it fits
+                font_small = pygame.font.Font(None, 20)
                 text_surface = font_small.render(str(i), True, (255, 255, 255))
-                self.screen.blit(text_surface, text_surface.get_rect(center=agent_rect.center))
-                
-                # Draw orientation line
-                q = orientations[i]
-                BASE_FORWARD_VECTOR = np.array([0.0, 1.0, 0.0])
-                direction_3d = rotate_vec(q, BASE_FORWARD_VECTOR)
-                dx, dy = direction_3d[0], direction_3d[1]
+                text_rect = text_surface.get_rect(center=(screen_x, screen_y))
+                self.screen.blit(text_surface, text_rect)
+
+                # Draw orientation line (still useful for debugging)
                 arrow_len_px = self.pixels_per_meter * AGENT_ORIENTATION_ARROW_LENGTH_M
-                arrow_end = (screen_x + arrow_len_px * dx, screen_y + arrow_len_px * dy)
+                arrow_end = (screen_x + arrow_len_px * forward_vec[0], screen_y + arrow_len_px * forward_vec[1])
                 pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 3)
 
         # --- Basketball Rendering (Scaled to Real Size) ---
         if 'basketball_pos' in data and data['basketball_pos'] is not None:
             world_idx = min(self.debug_world_index, len(data['basketball_pos']) - 1)
             basketball_positions = data['basketball_pos'][world_idx]  # Extract basketball positions from debug world
-            
+
             # Use real basketball dimensions from constants
             ball_radius_px = BALL_RADIUS_M * self.pixels_per_meter
             for i, pos in enumerate(basketball_positions):
@@ -684,7 +705,7 @@ class ViewerClass:
         if 'hoop_pos' in data:
             world_idx = min(self.debug_world_index, len(data['hoop_pos']) - 1)
             hoop_positions = data['hoop_pos'][world_idx]  # Extract hoop positions from debug world
-            
+
             for i, pos in enumerate(hoop_positions):
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
                 backboard_width_px = BACKBOARD_WIDTH_M * self.pixels_per_meter
@@ -697,7 +718,7 @@ class ViewerClass:
                 pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), rim_radius_px, rim_thickness_px)
 
         # --- Ball Physics Debug Info ---
-        if 'ball_physics' in data:
+        if 'ball_physics' in data and data['ball_physics'] is not None:
             world_idx = min(self.debug_world_index, len(data['ball_physics']) - 1)
             ball_physics = data['ball_physics'][world_idx]
             for i, ball in enumerate(ball_physics):
