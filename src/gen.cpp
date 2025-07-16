@@ -210,6 +210,7 @@ void generateWorld(Engine &ctx) {
             }
             else
             {
+                
                 // All other agents in 1v1 mode start without the ball.
                 ctx.get<InPossession>(agent) = {false, ENTITY_ID_PLACEHOLDER, 2};
             }
@@ -299,7 +300,7 @@ void resetWorld(Engine &ctx) {
         basketball_entity = ball;
     }
     uint32_t offensive_agent_id = ENTITY_ID_PLACEHOLDER;
-
+    Position agent_pos_for_ball = {grid->startX, grid->startY, 0.f};
     int agent_i = 0;
     for (CountT i = 0; i < NUM_AGENTS; i++) {
         Entity agent = ctx.data().agents[i];
@@ -322,15 +323,15 @@ void resetWorld(Engine &ctx) {
         InPossession &in_pos = ctx.get<InPossession>(agent);
         if (gameState.isOneOnOne == 1.f)
         {
-            Vector3 base_pos = { grid->startX + (agent_i * 2.f), grid->startY, 0.f };
-            float x_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
-            float y_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
-            pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
-            pos.position.x = clamp(pos.position.x, 0.f, grid->width);
-            pos.position.y = clamp(pos.position.y, 0.f, grid->height);
-
             if (agent_i == 0)
             {
+                Vector3 base_pos = { grid->startX + (agent_i * 2.f), grid->startY, 0.f };
+                float x_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
+                float y_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
+                pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
+                pos.position.x = clamp(pos.position.x, 0.f, grid->width);
+                pos.position.y = clamp(pos.position.y, 0.f, grid->height);
+                agent_pos_for_ball = pos;
                 offensive_agent_id = agent.id;
                 in_pos = {true, (uint32_t)basketball_entity.id, 2};
             }
@@ -356,7 +357,7 @@ void resetWorld(Engine &ctx) {
     // --- Part 3: Reset All Basketballs ---
     for (CountT i = 0; i < NUM_BASKETBALLS; i++) {
         Entity ball = ctx.data().balls[i];
-        ctx.get<Position>(ball) = Position { Vector3{grid->startX, grid->startY, 0.f} };
+        ctx.get<Position>(ball) = agent_pos_for_ball;
         ctx.get<Reset>(ball).resetNow = 0;
         ctx.get<Done>(ball).episodeDone = 1.f;
         ctx.get<CurStep>(ball).step = 0;

@@ -2,7 +2,7 @@
 # These should be kept in sync with the C++ constants
 
 # ======================================== Entity Counts ========================================
-NUM_AGENTS = 2
+NUM_AGENTS = 4
 NUM_BASKETBALLS = 1
 NUM_HOOPS = 2
 
