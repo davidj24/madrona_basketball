@@ -78,7 +78,7 @@ def infer(args):
                 logits = policy.actor(backbone_features)
                 action_dists = DiscreteActionDistributions(action_buckets, logits=logits)
                 # Create temporary tensor to store best actions
-                best_actions = torch.zeros(1, len(action_buckets), dtype=torch.long, device=device)
+                best_actions = torch.zeros(args.num_envs, len(action_buckets), dtype=torch.long, device=device)
                 action_dists.best(best_actions)
                 
                 # Debug: Print actions every 50 steps
@@ -118,7 +118,7 @@ if __name__ == "__main__":
     arg_parser.add_argument("--start-x", type=int, default=10.0)
     arg_parser.add_argument("--start-y", type=int, default=7.5)
     arg_parser.add_argument("--max-episode-length", type=int, default=10000)
-    arg_parser.add_argument("--num-envs", default=1)
+    arg_parser.add_argument("--num-envs", type=int, default=1)
     arg_parser.add_argument("--num-steps", default=10000)
     arg_parser.add_argument("--gpu-id", type=int, default=0)
     arg_parser.add_argument("--gpu-sim", action='store_true')
