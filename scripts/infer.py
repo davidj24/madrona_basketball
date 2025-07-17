@@ -22,19 +22,26 @@ def infer(args):
     device = torch.device('cuda' if args.gpu_sim and torch.cuda.is_available() else 'cpu')
     print(f"Using {device} for inference")
 
-
-    # We don't need to combine multiple observation tensors since our current observation tensor already covers everything, so the setup_obs function from escape_room can just be replaced by the exported observation tensor... right???
+    # Create environment
     environment = EnvWrapper(1, args.gpu_sim, args.gpu_id, args.viewer)
     input_dimensions = environment.get_input_dim()
-    action_buckets=environment.get_action_buckets()
+    action_buckets = environment.get_action_buckets()
 
+    # Load policy
     policy = Agent(input_dimensions, num_channels=64, num_layers=3, action_buckets=action_buckets).to(device)
     policy.load(args.checkpoint_path)
     policy.eval()
     print(f"Successfully loaded policies from {args.checkpoint_path}.")
 
-    observations_tensor = environment.observations.to(device)
-    actions_tensor = environment.actions
+    # Get tensor references - these are the full tensors for all agents
+    observations_tensor = environment.observations  # Shape: [num_worlds, num_agents, obs_dim]
+    actions_tensor = environment.actions  # Shape: [num_worlds, num_agents, action_dim]
+    
+    print(f"Observations tensor shape: {observations_tensor.shape}")
+    print(f"Actions tensor shape: {actions_tensor.shape}")
+    
+    # Initialize action tensor to zero actions for all agents
+    actions_tensor.fill_(0)
 
     trajectory_log = []
     static_log = {} # This is just for the hoops
@@ -42,9 +49,12 @@ def infer(args):
         Path(args.log_path).parent.mkdir(parents=True, exist_ok=True)
         print(f"logging trajectory to {args.log_path}")
 
-    
+
+    # Reset environment
     obs, reward, done = environment.reset()
     obs = obs.to(device)
+    
+    print(f"Reset obs shape: {obs.shape}")  # Should be [1, obs_dim] for single world, single agent
 
     if args.log_path:
         static_log['hoop_pos'] = environment.worlds.hoop_pos_tensor().to_torch().cpu().numpy().copy()
@@ -58,13 +68,25 @@ def infer(args):
     for step in range(args.max_episode_length):
         with torch.no_grad():
             if args.stochastic:
+                # Get action for the controlled agent - obs should be [1, obs_dim] for single world
                 actions, _, _ = policy.forward(obs)
-                actions_tensor[:, environment.agent_idx] = actions
+                                
+                obs, reward, done = environment.step(actions)
+                obs = obs.to(device)
             else:
                 backbone_features = policy.backbone(obs)
                 logits = policy.actor(backbone_features)
                 action_dists = DiscreteActionDistributions(action_buckets, logits=logits)
-                action_dists.best(actions_tensor[:, environment.agent_idx])
+                # Create temporary tensor to store best actions
+                best_actions = torch.zeros(1, len(action_buckets), dtype=torch.long, device=device)
+                action_dists.best(best_actions)
+                
+                # Debug: Print actions every 50 steps
+                if step % 50 == 0:
+                    print(f"Step {step}: Agent actions = {best_actions[0].cpu().numpy()}")
+                
+                obs, reward, done = environment.step(best_actions)
+                obs = obs.to(device)
 
         if (args.log_path):
             log_entry = {
@@ -73,11 +95,9 @@ def infer(args):
             }
             trajectory_log.append(log_entry)
         
-        obs, _, done = environment.step(actions_tensor[:, environment.agent_idx])
-        obs = obs.to(device)
-
-
-        if done[0]:
+        
+        # Check if done - done should be a tensor
+        if done.item() if hasattr(done, 'item') else done[0]:
             print(f"episode finished at step {step+1}.")
             break
 
@@ -87,7 +107,7 @@ def infer(args):
             episode_log[key] = np.array([step[key] for step in trajectory_log])
 
         np.savez_compressed(args.log_path, **static_log, **episode_log)
-        print("Finished logging. Trajectory saaved to {args.log_path}")
+        print("Finished logging. Trajectory saved to {args.log_path}")
     print("Inference Complete")
 
     
@@ -101,7 +121,7 @@ if __name__ == "__main__":
     arg_parser.add_argument("--discrete-y", type=int, default=15)
     arg_parser.add_argument("--start-x", type=int, default=10.0)
     arg_parser.add_argument("--start-y", type=int, default=7.5)
-    arg_parser.add_argument("--max_episode-length", default=10000)
+    arg_parser.add_argument("--max-episode-length", type=int, default=10000)
     arg_parser.add_argument("--num-worlds", default=1)
     arg_parser.add_argument("--num-steps", default=10000)
     arg_parser.add_argument("--gpu-id", type=int, default=0)
