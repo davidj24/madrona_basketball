@@ -24,3 +24,5 @@ thingsToAdd.txt
 # JetBrains IDEs (CLion, PyCharm, etc.)
 .idea/
 *.iml
+.npz
+logs/

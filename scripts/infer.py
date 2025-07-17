@@ -23,7 +23,7 @@ def infer(args):
     print(f"Using {device} for inference")
 
     # Create environment
-    environment = EnvWrapper(1, args.gpu_sim, args.gpu_id, args.viewer)
+    environment = EnvWrapper(args.num_envs, args.gpu_sim, args.gpu_id, args.viewer)
     input_dimensions = environment.get_input_dim()
     action_buckets = environment.get_action_buckets()
 
@@ -91,15 +91,11 @@ def infer(args):
         if (args.log_path):
             log_entry = {
                 "agent_pos" : environment.worlds.agent_pos_tensor().to_torch().cpu().numpy().copy(),
-                "ball_pos" : environment.worlds.basketball_pos_tensor().to_torch().cpu().numpy().copy()
+                "ball_pos" : environment.worlds.basketball_pos_tensor().to_torch().cpu().numpy().copy(),
+                "orientation": environment.worlds.orientation_tensor().to_torch().cpu().numpy().copy()
             }
             trajectory_log.append(log_entry)
         
-        
-        # Check if done - done should be a tensor
-        if done.item() if hasattr(done, 'item') else done[0]:
-            print(f"episode finished at step {step+1}.")
-            break
 
     if args.log_path and trajectory_log:
         episode_log = {}
@@ -122,7 +118,7 @@ if __name__ == "__main__":
     arg_parser.add_argument("--start-x", type=int, default=10.0)
     arg_parser.add_argument("--start-y", type=int, default=7.5)
     arg_parser.add_argument("--max-episode-length", type=int, default=10000)
-    arg_parser.add_argument("--num-worlds", default=1)
+    arg_parser.add_argument("--num-envs", default=1)
     arg_parser.add_argument("--num-steps", default=10000)
     arg_parser.add_argument("--gpu-id", type=int, default=0)
     arg_parser.add_argument("--gpu-sim", action='store_true')

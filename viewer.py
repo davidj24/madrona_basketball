@@ -9,6 +9,7 @@ import sys
 import numpy as np
 import os
 import math
+import argparse
 
 # Import constants
 from src.constants import *
@@ -94,16 +95,14 @@ class ViewerClass:
         self.last_score_count = current_score_count
         self.last_oob_count = current_oob_count
 
-    def __init__(self, sim_instance, training_mode=False):
-        # CRITICAL: Initialize pygame BEFORE any CUDA operations to avoid context conflicts
+    def __init__(self, sim_instance=None, training_mode=False):
         print("🔧 Initializing viewer with GPU safety measures...")
         
-        # Store simulation instance but don't access it yet - this is crucial!
+        # Store simulation instance but don't access it
         self.sim = sim_instance
         self.simulation_ready = False  # Track if simulation is ready for data access
         self.ready_check_attempts = 0  # Count attempts to check if simulation is ready
         
-        # CRITICAL FIX: We want interactive input during training, but disable the old handle_input method
         self.disable_action_input = False  # Allow interactive input for human control
         self.training_mode = training_mode
         if training_mode:
@@ -125,7 +124,6 @@ class ViewerClass:
         self.is_gpu_simulation = False
         self.gpu_device = None
         
-        # DEBUG: Add ability to override which world index to display (for debugging)
         self.debug_world_index = 0  # Default to world 0
         self.max_worlds_available = 1  # Will be updated when data is available
         
@@ -164,7 +162,6 @@ class ViewerClass:
         self.font = pygame.font.Font(None, 24)
         self.active_agent_idx = 0
 
-        # --- Load Sound Effects ---
         try:
             pygame.mixer.init()  # Initialize the audio mixer
             self.score_sound = pygame.mixer.Sound("assets/swish.wav")
@@ -175,18 +172,14 @@ class ViewerClass:
             self.score_sound = None
             self.whistle_sound = None
 
-        # --- Correctly set up the coordinate system ---
 
-        # 1. These are the TRUE world dimensions in meters, based on your constants.
         self.world_width_meters = WORLD_WIDTH_M
         self.world_height_meters = WORLD_HEIGHT_M
         self.pixels_per_meter = PIXELS_PER_METER
 
-        # 2. These are the TRUE pixel dimensions for drawing, calculated only ONCE.
         self.world_width_px = self.world_width_meters * PIXELS_PER_METER
         self.world_height_px = self.world_height_meters * PIXELS_PER_METER
 
-        # 3. This is the TRUE pixel offset for centering the world view.
         self.world_offset_x = (WINDOW_WIDTH - self.world_width_px) / 2
         self.world_offset_y = (WINDOW_HEIGHT - self.world_height_px) / 2
         
@@ -1006,8 +999,152 @@ class ViewerClass:
         """Get the index of the currently selected agent for human control"""
         return self.active_agent_idx
 
+    def draw_hoops_from_data(self, hoop_pos_array):
+        hoop_positions = hoop_pos_array[0]
+        for pos in hoop_positions:
+            screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+            backboard_width_px = BACKBOARD_WIDTH_M * self.pixels_per_meter
+            rim_radius_px = (RIM_DIAMETER_M / 2) * self.pixels_per_meter
+            rim_thickness_px = max(2, int(self.pixels_per_meter * 0.02))
+            backboard_thickness_px = max(3, int(self.pixels_per_meter * 0.05))
+            backboard_offset_px = BACKBOARD_OFFSET_FROM_HOOP_M * self.pixels_per_meter
+            backboard_x = screen_x - backboard_offset_px if pos[0] < self.world_width_meters / 2 else screen_x + backboard_offset_px
+            pygame.draw.line(self.screen, (255, 255, 255), (backboard_x, screen_y - backboard_width_px / 2), (backboard_x, screen_y + backboard_width_px / 2), backboard_thickness_px)
+            pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), rim_radius_px, rim_thickness_px)
 
+    def draw_playback_frame(self, agent_pos_frame, ball_pos_frame, orientation_frame):
+        """Draws all agents and balls for a single frame of the playback."""
+        num_worlds, num_agents, _ = agent_pos_frame.shape
+        
+        colors = [
+            (255, 0, 0), (0, 255, 0), (0, 150, 255), (255, 255, 0),
+            (0, 255, 255), (255, 0, 255), (255, 128, 0), (128, 0, 255),
+            (200, 200, 200), (100, 50, 0)
+        ]
 
+        for world_idx in range(num_worlds):
+            for agent_idx in range(num_agents):
+                pos = agent_pos_frame[world_idx, agent_idx]
+                q = orientation_frame[world_idx, agent_idx]
+                screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+                
+                # Determine agent color by team index (assuming agent 0 is team 0, agent 1 is team 1, etc.)
+                agent_color = TEAM0_COLOR if agent_idx % 2 == 0 else TEAM1_COLOR
+                
+                forward_vec_3d = rotate_vec(q, np.array([0.0, 1.0, 0.0]))
+                forward_vec = np.array([forward_vec_3d[0], forward_vec_3d[1]])
+                right_vec = np.array([forward_vec[1], -forward_vec[0]])
 
+                shoulder_width_px = AGENT_SHOULDER_WIDTH * self.pixels_per_meter
+                depth_px = AGENT_DEPTH * self.pixels_per_meter
 
+                center_point = np.array([screen_x, screen_y])
+                half_width_vec = right_vec * (shoulder_width_px / 2)
+                half_depth_vec = forward_vec * (depth_px / 2)
 
+                # THE FIX: Correctly calculate all four unique corner points
+                p1 = center_point - half_depth_vec + half_width_vec # Front-right
+                p2 = center_point - half_depth_vec - half_width_vec # Front-left
+                p3 = center_point + half_depth_vec - half_width_vec # Back-left
+                p4 = center_point + half_depth_vec + half_width_vec # Back-right
+                
+                agent_points = [p1, p2, p3, p4]
+                pygame.draw.polygon(self.screen, agent_color, agent_points)
+                pygame.draw.polygon(self.screen, (255, 255, 255), agent_points, 1)
+
+                arrow_len_px = self.pixels_per_meter * AGENT_ORIENTATION_ARROW_LENGTH_M
+                arrow_end = (screen_x + arrow_len_px * forward_vec[0], screen_y + arrow_len_px * forward_vec[1])
+                pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 2)
+
+            ball_pos = ball_pos_frame[world_idx, 0]
+            screen_x, screen_y = self.meters_to_screen(ball_pos[0], ball_pos[1])
+            ball_radius_px = BALL_RADIUS_M * self.pixels_per_meter
+            pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), int(ball_radius_px))
+
+    def run_trajectory_playback(self, log_path):
+        """
+        Loads a trajectory log file and plays back all episodes simultaneously
+        in real-time.
+        """
+        print(f"Loading trajectory data from {log_path}...")
+        try:
+            log_data = np.load(log_path)
+            agent_pos_log = log_data['agent_pos']
+            ball_pos_log = log_data['ball_pos']
+            hoop_pos = log_data['hoop_pos']
+            orientation_log = log_data.get('orientation') 
+            if orientation_log is None:
+                print("FATAL: 'orientation' data not found in log file. Cannot render agents.")
+                print("Please re-generate the log file with a version of infer.py that saves orientation.")
+                return
+        except Exception as e:
+            print(f"Error loading log file: {e}")
+            return
+
+        num_steps, num_worlds, num_agents, _ = agent_pos_log.shape
+        print(f"Playing back {num_worlds} episodes with {num_steps} steps each.")
+
+        background = pygame.Surface(self.screen.get_size())
+        background.fill(BACKGROUND_COLOR)
+        original_screen = self.screen
+        self.screen = background
+        self.draw_basketball_court()
+        hoop_positions = hoop_pos[0]
+        for pos in hoop_positions:
+            screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+            backboard_width_px = BACKBOARD_WIDTH_M * self.pixels_per_meter
+            rim_radius_px = (RIM_DIAMETER_M / 2) * self.pixels_per_meter
+            rim_thickness_px = max(2, int(self.pixels_per_meter * 0.02))
+            backboard_thickness_px = max(3, int(self.pixels_per_meter * 0.05))
+            backboard_offset_px = BACKBOARD_OFFSET_FROM_HOOP_M * self.pixels_per_meter
+            backboard_x = screen_x - backboard_offset_px if pos[0] < self.world_width_meters / 2 else screen_x + backboard_offset_px
+            pygame.draw.line(self.screen, (255, 255, 255), (backboard_x, screen_y - backboard_width_px / 2), (backboard_x, screen_y + backboard_width_px / 2), backboard_thickness_px)
+            pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), rim_radius_px, rim_thickness_px)
+        self.screen = original_screen
+
+        current_step = 0
+        paused = False
+        running = True
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                    running = False
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                    paused = not paused
+                    print("Paused" if paused else "Playing")
+
+            self.screen.blit(background, (0, 0))
+
+            agent_pos_frame = agent_pos_log[current_step]
+            ball_pos_frame = ball_pos_log[current_step]
+            orientation_frame = orientation_log[current_step]
+            
+            self.draw_playback_frame(agent_pos_frame, ball_pos_frame, orientation_frame)
+
+            step_text = f"Step: {current_step + 1} / {num_steps}"
+            text_surface = self.font.render(step_text, True, (255, 255, 0))
+            self.screen.blit(text_surface, (10, 10))
+
+            pygame.display.flip()
+
+            if not paused:
+                current_step += 1
+                if current_step >= num_steps:
+                    current_step = 0
+
+            self.clock.tick(60)
+
+        pygame.quit()
+        sys.exit()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Madrona Basketball Viewer: Live Sim or Trajectory Playback")
+    parser.add_argument('--playback-log', type=str, help="Path to an .npz trajectory log file for playback.")
+    args = parser.parse_args()
+
+    if args.playback_log:
+        viewer = ViewerClass()
+        viewer.run_trajectory_playback(args.playback_log)
+    else:
+        print("No playback log provided. To view trajectories, run with:")
+        print("python viewer.py --playback-log path/to/your/log.npz")
