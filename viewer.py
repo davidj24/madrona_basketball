@@ -999,72 +999,49 @@ class ViewerClass:
         """Get the index of the currently selected agent for human control"""
         return self.active_agent_idx
 
-    def draw_hoops_from_data(self, hoop_pos_array):
-        hoop_positions = hoop_pos_array[0]
-        for pos in hoop_positions:
-            screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
-            backboard_width_px = BACKBOARD_WIDTH_M * self.pixels_per_meter
-            rim_radius_px = (RIM_DIAMETER_M / 2) * self.pixels_per_meter
-            rim_thickness_px = max(2, int(self.pixels_per_meter * 0.02))
-            backboard_thickness_px = max(3, int(self.pixels_per_meter * 0.05))
-            backboard_offset_px = BACKBOARD_OFFSET_FROM_HOOP_M * self.pixels_per_meter
-            backboard_x = screen_x - backboard_offset_px if pos[0] < self.world_width_meters / 2 else screen_x + backboard_offset_px
-            pygame.draw.line(self.screen, (255, 255, 255), (backboard_x, screen_y - backboard_width_px / 2), (backboard_x, screen_y + backboard_width_px / 2), backboard_thickness_px)
-            pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), rim_radius_px, rim_thickness_px)
-
-    def draw_playback_frame(self, agent_pos_frame, ball_pos_frame, orientation_frame):
-        """Draws all agents and balls for a single frame of the playback."""
+    def draw_playback_frame_multi_episode(self, agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step, current_playback_episode):
+        """
+        Draws agents and balls, but only for worlds that have not yet
+        completed the current target episode number.
+        """
         num_worlds, num_agents, _ = agent_pos_frame.shape
         
-        colors = [
-            (255, 0, 0), (0, 255, 0), (0, 150, 255), (255, 255, 0),
-            (0, 255, 255), (255, 0, 255), (255, 128, 0), (128, 0, 255),
-            (200, 200, 200), (100, 50, 0)
-        ]
-
         for world_idx in range(num_worlds):
-            for agent_idx in range(num_agents):
-                pos = agent_pos_frame[world_idx, agent_idx]
-                q = orientation_frame[world_idx, agent_idx]
-                screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
-                
-                # Determine agent color by team index (assuming agent 0 is team 0, agent 1 is team 1, etc.)
-                agent_color = TEAM0_COLOR if agent_idx % 2 == 0 else TEAM1_COLOR
-                
-                forward_vec_3d = rotate_vec(q, np.array([0.0, 1.0, 0.0]))
-                forward_vec = np.array([forward_vec_3d[0], forward_vec_3d[1]])
-                right_vec = np.array([forward_vec[1], -forward_vec[0]])
-
-                shoulder_width_px = AGENT_SHOULDER_WIDTH * self.pixels_per_meter
-                depth_px = AGENT_DEPTH * self.pixels_per_meter
-
-                center_point = np.array([screen_x, screen_y])
-                half_width_vec = right_vec * (shoulder_width_px / 2)
-                half_depth_vec = forward_vec * (depth_px / 2)
-
-                # THE FIX: Correctly calculate all four unique corner points
-                p1 = center_point - half_depth_vec + half_width_vec # Front-right
-                p2 = center_point - half_depth_vec - half_width_vec # Front-left
-                p3 = center_point + half_depth_vec - half_width_vec # Back-left
-                p4 = center_point + half_depth_vec + half_width_vec # Back-right
-                
-                agent_points = [p1, p2, p3, p4]
-                pygame.draw.polygon(self.screen, agent_color, agent_points)
-                pygame.draw.polygon(self.screen, (255, 255, 255), agent_points, 1)
-
-                arrow_len_px = self.pixels_per_meter * AGENT_ORIENTATION_ARROW_LENGTH_M
-                arrow_end = (screen_x + arrow_len_px * forward_vec[0], screen_y + arrow_len_px * forward_vec[1])
-                pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 2)
-
-            ball_pos = ball_pos_frame[world_idx, 0]
-            screen_x, screen_y = self.meters_to_screen(ball_pos[0], ball_pos[1])
-            ball_radius_px = BALL_RADIUS_M * self.pixels_per_meter
-            pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), int(ball_radius_px))
+            # This is the key: only draw if the world is still on the current (or a previous) episode
+            if episodes_completed_at_this_step[world_idx] < current_playback_episode:
+                # ... All the existing drawing logic for agents and the ball ...
+                for agent_idx in range(num_agents):
+                    pos = agent_pos_frame[world_idx, agent_idx]
+                    q = orientation_frame[world_idx, agent_idx]
+                    screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+                    agent_color = TEAM0_COLOR if agent_idx % 2 == 0 else TEAM1_COLOR
+                    forward_vec_3d = rotate_vec(q, np.array([0.0, 1.0, 0.0]))
+                    forward_vec = np.array([forward_vec_3d[0], forward_vec_3d[1]])
+                    right_vec = np.array([forward_vec[1], -forward_vec[0]])
+                    shoulder_width_px = AGENT_SHOULDER_WIDTH * self.pixels_per_meter
+                    depth_px = AGENT_DEPTH * self.pixels_per_meter
+                    center_point = np.array([screen_x, screen_y])
+                    half_width_vec = right_vec * (shoulder_width_px / 2)
+                    half_depth_vec = forward_vec * (depth_px / 2)
+                    p1 = center_point - half_depth_vec + half_width_vec
+                    p2 = center_point - half_depth_vec - half_width_vec
+                    p3 = center_point + half_depth_vec - half_width_vec
+                    p4 = center_point + half_depth_vec + half_width_vec
+                    agent_points = [p1, p2, p3, p4]
+                    pygame.draw.polygon(self.screen, agent_color, agent_points)
+                    pygame.draw.polygon(self.screen, (255, 255, 255), agent_points, 1)
+                    arrow_len_px = self.pixels_per_meter * AGENT_ORIENTATION_ARROW_LENGTH_M
+                    arrow_end = (screen_x + arrow_len_px * forward_vec[0], screen_y + arrow_len_px * forward_vec[1])
+                    pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 2)
+                ball_pos = ball_pos_frame[world_idx, 0]
+                screen_x, screen_y = self.meters_to_screen(ball_pos[0], ball_pos[1])
+                ball_radius_px = BALL_RADIUS_M * self.pixels_per_meter
+                pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), int(ball_radius_px))
 
     def run_trajectory_playback(self, log_path):
         """
-        Loads a trajectory log file and plays back all episodes simultaneously
-        in real-time.
+        Loads a trajectory log file and plays back multiple episodes, pausing
+        between each one and waiting for user input to continue.
         """
         print(f"Loading trajectory data from {log_path}...")
         try:
@@ -1072,11 +1049,13 @@ class ViewerClass:
             agent_pos_log = log_data['agent_pos']
             ball_pos_log = log_data['ball_pos']
             hoop_pos = log_data['hoop_pos']
-            orientation_log = log_data.get('orientation') 
-            if orientation_log is None:
-                print("FATAL: 'orientation' data not found in log file. Cannot render agents.")
-                print("Please re-generate the log file with a version of infer.py that saves orientation.")
+            orientation_log = log_data.get('orientation')
+            done_log = log_data.get('done')
+
+            if done_log is None or orientation_log is None:
+                print("FATAL: Log file is missing 'done' or 'orientation' data.")
                 return
+
         except Exception as e:
             print(f"Error loading log file: {e}")
             return
@@ -1084,11 +1063,16 @@ class ViewerClass:
         num_steps, num_worlds, num_agents, _ = agent_pos_log.shape
         print(f"Playing back {num_worlds} episodes with {num_steps} steps each.")
 
+        episodes_completed_log = np.cumsum(done_log, axis=0)
+        total_episodes_in_log = int(episodes_completed_log[-1].max())
+        print(f"Log file contains data for up to {total_episodes_in_log} episodes.")
+
         background = pygame.Surface(self.screen.get_size())
         background.fill(BACKGROUND_COLOR)
         original_screen = self.screen
         self.screen = background
         self.draw_basketball_court()
+        # Draw the hoops onto the background
         hoop_positions = hoop_pos[0]
         for pos in hoop_positions:
             screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
@@ -1103,34 +1087,65 @@ class ViewerClass:
         self.screen = original_screen
 
         current_step = 0
+        current_playback_episode = 1
+        is_paused_for_next_episode = False
         paused = False
         running = True
+
         while running:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                     running = False
-                if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                    paused = not paused
-                    print("Paused" if paused else "Playing")
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:
+                        # Allow pausing/unpausing only when not waiting for the next episode
+                        if not is_paused_for_next_episode:
+                            paused = not paused
+                            print("Paused" if paused else "Playing")
+                    if event.key == pygame.K_n:
+                        # Advance to the next episode if paused and not at the end
+                        if is_paused_for_next_episode and current_playback_episode < total_episodes_in_log:
+                            current_playback_episode += 1
+                            is_paused_for_next_episode = False
+                            paused = False
+                            print(f"Playing Episode {current_playback_episode}")
 
+            # Blit the pre-rendered background
             self.screen.blit(background, (0, 0))
 
+            # Get data for the current frame
             agent_pos_frame = agent_pos_log[current_step]
             ball_pos_frame = ball_pos_log[current_step]
             orientation_frame = orientation_log[current_step]
-            
-            self.draw_playback_frame(agent_pos_frame, ball_pos_frame, orientation_frame)
+            episodes_completed_at_this_step = episodes_completed_log[current_step]
 
-            step_text = f"Step: {current_step + 1} / {num_steps}"
-            text_surface = self.font.render(step_text, True, (255, 255, 0))
+            # Draw the dynamic elements
+            self.draw_playback_frame_multi_episode(agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step, current_playback_episode)
+
+            # Draw status text
+            status_text = f"Step: {current_step + 1}/{num_steps} | Viewing Episode: {current_playback_episode}/{total_episodes_in_log}"
+            if is_paused_for_next_episode:
+                 status_text += " | Press 'N' for Next Episode"
+            elif paused:
+                 status_text += " | Paused"
+            text_surface = self.font.render(status_text, True, (255, 255, 0))
             self.screen.blit(text_surface, (10, 10))
 
             pygame.display.flip()
 
-            if not paused:
+            # --- Update Playback State ---
+            if not paused and not is_paused_for_next_episode:
                 current_step += 1
-                if current_step >= num_steps:
-                    current_step = 0
+
+            # Check for end of current step or end of all episodes
+            if current_step >= num_steps:
+                current_step = num_steps - 1
+                paused = True
+                print("End of trajectory log.")
+            elif np.all(episodes_completed_log[current_step] >= current_playback_episode):
+                 paused = True
+                 is_paused_for_next_episode = True
+                 print(f"Episode {current_playback_episode} complete for all environments.")
 
             self.clock.tick(60)
 
