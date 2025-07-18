@@ -781,6 +781,48 @@ class ViewerClass:
                         print(f"Switched to displaying World {self.debug_world_index}")
                     else:
                         print(f"World 2 not available (only {self.max_worlds_available} worlds)")
+                elif event.key == pygame.K_4:
+                    if self.max_worlds_available > 3:
+                        self.debug_world_index = 3
+                        print(f"Switched to displaying World {self.debug_world_index}")
+                    else:
+                        print(f"World 3 not available (only {self.max_worlds_available} worlds)")
+                elif event.key == pygame.K_5:
+                    if self.max_worlds_available > 4:
+                        self.debug_world_index = 4
+                        print(f"Switched to displaying World {self.debug_world_index}")
+                    else:
+                        print(f"World 4 not available (only {self.max_worlds_available} worlds)")
+                elif event.key == pygame.K_6:
+                    if self.max_worlds_available > 5:
+                        self.debug_world_index = 5
+                        print(f"Switched to displaying World {self.debug_world_index}")
+                    else:
+                        print(f"World 5 not available (only {self.max_worlds_available} worlds)")
+                elif event.key == pygame.K_7:
+                    if self.max_worlds_available > 6:
+                        self.debug_world_index = 6
+                        print(f"Switched to displaying World {self.debug_world_index}")
+                    else:
+                        print(f"World 6 not available (only {self.max_worlds_available} worlds)")
+                elif event.key == pygame.K_8:
+                    if self.max_worlds_available > 7:
+                        self.debug_world_index = 7
+                        print(f"Switched to displaying World {self.debug_world_index}")
+                    else:
+                        print(f"World 7 not available (only {self.max_worlds_available} worlds)")
+                elif event.key == pygame.K_9:
+                    if self.max_worlds_available > 8:
+                        self.debug_world_index = 8
+                        print(f"Switched to displaying World {self.debug_world_index}")
+                    else:
+                        print(f"World 8 not available (only {self.max_worlds_available} worlds)")
+                elif event.key == pygame.K_0:
+                    if self.max_worlds_available > 9:
+                        self.debug_world_index = 9
+                        print(f"Switched to displaying World {self.debug_world_index}")
+                    else:
+                        print(f"World 9 not available (only {self.max_worlds_available} worlds)")
                 # Interactive training controls
                 elif event.key == pygame.K_h and self.controller_manager is not None:
                     # Toggle human control for current agent
