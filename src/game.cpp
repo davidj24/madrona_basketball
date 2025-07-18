@@ -298,15 +298,11 @@ inline void shootSystem(Engine &ctx,
     // Calculate intended angle towards hoop
     float intended_direction = std::atan2(ideal_shot_vector.x, ideal_shot_vector.y);
 
-    // ======================== DEVIATION TUNERS ==============================
-    float dist_deviation_per_meter = .6f;
-    float def_deviation_per_meter = .0f;
-    float vel_deviation_factor = 0.f;
 
 
     // 1. Mess up angle based on distance
     float distance_to_hoop = ideal_shot_vector.length();
-    float dist_stddev = dist_deviation_per_meter/100 * distance_to_hoop;
+    float dist_stddev = DIST_DEVIATION_PER_METER/100 * distance_to_hoop;
     float deviation_from_distance = sampleUniform(ctx, -dist_stddev, dist_stddev);
 
 
@@ -329,7 +325,7 @@ inline void shootSystem(Engine &ctx,
     };
 
     if (distance_to_nearest_defender < 2.0f) { // Only apply pressure if defender is  close
-        float def_stddev = (def_deviation_per_meter/100) / (distance_to_nearest_defender + 0.1f);
+        float def_stddev = (DEF_DEVIATION_PER_METER/100) / (distance_to_nearest_defender + 0.1f);
         deviation_from_defender = sampleUniform(ctx, -def_stddev, def_stddev);
     }
 
@@ -337,7 +333,7 @@ inline void shootSystem(Engine &ctx,
     // 3. Mess up angle based on agent velocity
     float deviation_from_velocity = 0.0f;
     if (action.moveSpeed > 0) {
-        float vel_stddev = vel_deviation_factor/100 * action.moveSpeed;
+        float vel_stddev = VEL_DEVIATION_FACTOR/100 * action.moveSpeed;
         deviation_from_velocity = sampleUniform(ctx, -vel_stddev, vel_stddev);
     }
 
@@ -448,12 +444,12 @@ inline void moveAgentSystem(Engine &ctx,
         float vel_y = -std::cos(move_angle); // Your forward is -Y
         
         Vector3 agent_orientation_as_vec = agent_orientation.orientation.rotateVec(AGENT_BASE_FORWARD);
-        float dot_between_orientation_and_velocity = Vector3{vel_x, vel_y, 0}.dot(agent_orientation_as_vec);
+        float dot_between_orientation_and_velocity = Vector3{vel_x, vel_y, 0}.normalize().dot(agent_orientation_as_vec);
 
         if (dot_between_orientation_and_velocity <= 0)
         {
-            if (dot_between_orientation_and_velocity == 0) {agent_velocity_magnitude *= 0.8f;}
-            else {agent_velocity_magnitude *= 0.6f;}
+            if (dot_between_orientation_and_velocity < -0.1f) {agent_velocity_magnitude *= 0.5f;}
+            else {agent_velocity_magnitude *= 0.7f;}
         }
 
         // Calculate distance to move this frame

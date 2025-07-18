@@ -48,6 +48,7 @@ class Args:
     vf_coef: float = 0.5
     max_grad_norm: float = 0.5
     target_kl: float = None
+    checkpoint_path: Optional[str] = None
 
     # to be filled in runtime
     rollout_batch_size: int = 0
@@ -97,6 +98,8 @@ if __name__ == "__main__":
 
     agent = Agent(obs_size, num_channels=64, num_layers=3,
                   action_buckets=action_buckets).to(device)
+    if (args.checkpoint_path is not None):
+        agent.load(args.checkpoint_path)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
     # Initialize SimpleControllerManager for interactive training
@@ -280,7 +283,7 @@ if __name__ == "__main__":
         writer.add_scalar("losses/clipfrac", np.mean(clip_fracs), global_step)
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
-        # Print every 10 update iterations
+        # Print every 100 update iterations
         if iteration % 100 == 0:
             p_advantages = b_advantages.reshape(-1)
             p_values = b_values.reshape(-1)
@@ -294,12 +297,18 @@ if __name__ == "__main__":
             print(f"    Returns          => Avg: {stats.returns_mean}")
             stats.reset()
 
-        # Every 100 iterations, save the model
-        if iteration % 1000 == 0:
+        # Every 1000 iterations, save the model
+        if iteration % 100 == 0:
             folder = "checkpoints"
             if not os.path.exists(folder):
                 os.makedirs(folder)
-            torch.save(agent.state_dict(), os.path.join(folder, f"{iteration}.pth"))
-            print(f"Model saved at iteration {iteration}")
+
+            if (args.run_name):
+                torch.save(agent.state_dict(), os.path.join(folder, f"{args.run_name}_{iteration}.pth"))
+                print(f"Model {args.run_name} saved at iteration {iteration}")
+                
+            else:
+                torch.save(agent.state_dict(), os.path.join(folder, f"{iteration}.pth"))
+                print(f"Model saved at iteration {iteration}")
 
     writer.close()

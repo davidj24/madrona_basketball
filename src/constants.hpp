@@ -53,6 +53,12 @@ namespace madBasketball {
     constexpr float BALL_AGENT_SLOWDOWN = 0.9f; // The factor to multiply agent speed by if they have the ball
 
 
+    // Shooting
+    constexpr float DIST_DEVIATION_PER_METER = .8f;
+    constexpr float DEF_DEVIATION_PER_METER = .2f;
+    constexpr float VEL_DEVIATION_FACTOR = .1f;
+
+
 
 
     // ======================================== Basketball Court Dimensions (NBA Standard) ========================================
