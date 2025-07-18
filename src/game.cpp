@@ -446,10 +446,21 @@ inline void moveAgentSystem(Engine &ctx,
         float vel_x = std::sin(move_angle);
         if (inbounding.imInbounding == 1.f) {vel_x = 0.f;}
         float vel_y = -std::cos(move_angle); // Your forward is -Y
+        
+        Vector3 agent_orientation_as_vec = agent_orientation.orientation.rotateVec(AGENT_BASE_FORWARD);
+        float dot_between_orientation_and_velocity = Vector3{vel_x, vel_y, 0}.dot(agent_orientation_as_vec);
+
+        if (dot_between_orientation_and_velocity <= 0)
+        {
+            if (dot_between_orientation_and_velocity == 0) {agent_velocity_magnitude *= 0.8f;}
+            else {agent_velocity_magnitude *= 0.6f;}
+        }
 
         // Calculate distance to move this frame
         float dx = vel_x * agent_velocity_magnitude * TIMESTEPS_TO_SECONDS_FACTOR;
         float dy = vel_y * agent_velocity_magnitude * TIMESTEPS_TO_SECONDS_FACTOR;
+
+
 
         // Update position (now using floats)
         float new_x = agent_pos.position.x + dx;
