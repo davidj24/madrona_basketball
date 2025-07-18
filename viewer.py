@@ -754,78 +754,6 @@ class ViewerClass:
             print(f"Simulation reset at step {self.step_count}")
             self.step_count = 0
         except Exception as e: print(f"Error resetting simulation: {e}")
-    
-    def handle_input(self):
-        # CRITICAL FIX: In training mode, we use handle_interactive_input instead
-        # This method is for standalone viewer mode only
-        if self.training_mode:
-            return  # Skip this method entirely in training mode
-            
-        keys = pygame.key.get_pressed()
-        move_speed, move_angle, rotate, grab, pass_ball, shoot_ball = 0,0,0,0,0,0
-
-        # This logic now controls the selected agent
-        if keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d]:
-            move_speed = 1
-            if keys[pygame.K_w] and keys[pygame.K_d]: move_angle = 1
-            elif keys[pygame.K_d] and keys[pygame.K_s]: move_angle = 3
-            elif keys[pygame.K_s] and keys[pygame.K_a]: move_angle = 5
-            elif keys[pygame.K_a] and keys[pygame.K_w]: move_angle = 7
-            elif keys[pygame.K_w]: move_angle = 0
-            elif keys[pygame.K_d]: move_angle = 2
-            elif keys[pygame.K_s]: move_angle = 4
-            elif keys[pygame.K_a]: move_angle = 6
-        if keys[pygame.K_q]: rotate = -1
-        elif keys[pygame.K_e]: rotate = 1
-        if keys[pygame.K_LSHIFT]: grab = 1
-        if keys[pygame.K_SPACE]: pass_ball = 1
-        if keys[pygame.K_h]: shoot_ball = 1
-
-        # CRITICAL: Only call set_action if we're in CPU mode or confirmed safe mode
-        # Check if we're running on GPU and disable action input accordingly
-        if hasattr(self, 'is_gpu_simulation') and self.is_gpu_simulation:
-            if not hasattr(self, 'gpu_warning_shown'):
-                print("⚠ GPU simulation detected - disabling interactive controls to prevent crashes")
-                print("  The viewer will display the simulation but won't accept keyboard input")
-                self.gpu_warning_shown = True
-                self.disable_action_input = True
-            return
-        
-        # Only call set_action if we're in a safe environment (CPU simulation)
-        try:
-            self.sim.set_action(0, self.active_agent_idx, move_speed, move_angle, rotate, grab, pass_ball, shoot_ball)
-        except Exception as e:
-            print(f"Warning: Could not set action: {e}")
-            print("Disabling interactive controls to prevent further errors")
-            # Disable future action input attempts to prevent repeated errors
-            self.disable_action_input = True
-            return
-
-        # You can keep a second set of controls for another agent if you wish,
-        # or have all other agents be controlled by the hard-coded AI.
-        # For now, we'll leave the second player controls as they are.
-        move_speed1, move_angle1, rotate1, grab1, pass_ball1, shoot_ball1 = 0,0,0,0,0,0
-        if keys[pygame.K_UP] or keys[pygame.K_DOWN] or keys[pygame.K_LEFT] or keys[pygame.K_RIGHT]:
-            move_speed1 = 1
-            if keys[pygame.K_UP] and keys[pygame.K_RIGHT]: move_angle1 = 1
-        # move_speed1, move_angle1, rotate1, grab1, pass_ball1, shoot_ball1 = 0,0,0,0,0,0
-        # if keys[pygame.K_UP] or keys[pygame.K_DOWN] or keys[pygame.K_LEFT] or keys[pygame.K_RIGHT]:
-        #     move_speed1 = 1
-        #     if keys[pygame.K_UP] and keys[pygame.K_RIGHT]: move_angle1 = 1
-        #     elif keys[pygame.K_RIGHT] and keys[pygame.K_DOWN]: move_angle1 = 3
-        #     elif keys[pygame.K_DOWN] and keys[pygame.K_LEFT]: move_angle1 = 5
-        #     elif keys[pygame.K_LEFT] and keys[pygame.K_UP]: move_angle1 = 7
-        #     elif keys[pygame.K_UP]: move_angle1 = 0
-        #     elif keys[pygame.K_RIGHT]: move_angle1 = 2
-        #     elif keys[pygame.K_DOWN]: move_angle1 = 4
-        #     elif keys[pygame.K_LEFT]: move_angle1 = 6
-        # if keys[pygame.K_COMMA]: rotate1 = -1
-        # elif keys[pygame.K_PERIOD]: rotate1 = 1
-        # if keys[pygame.K_KP0]: grab1 = 1
-        # if keys[pygame.K_RCTRL] : pass_ball1 = 1
-        # if keys[pygame.K_RSHIFT] : shoot_ball1 = 1
-        # self.sim.set_action(0, 0, move_speed, move_angle, rotate, grab, pass_ball, shoot_ball)
-        # self.sim.set_action(0, 1, move_speed1, move_angle1, rotate1, grab1, pass_ball1, shoot_ball1)
 
     def tick(self):
         self.step_count += 1
@@ -879,7 +807,6 @@ class ViewerClass:
                                 print(f"Switched control to Agent {i}")
                                 break # Stop after finding the first clicked agent
 
-        self.handle_input()
         self.handle_interactive_input()  # Handle human control input
         
         self.handle_audio_events(data)
@@ -965,9 +892,9 @@ class ViewerClass:
             rotate = 0  # No rotation
         
         # Actions
-        if keys[pygame.K_b]:
+        if keys[pygame.K_SPACE]:
             pass_ball = 1
-        if keys[pygame.K_LSHIFT]:  # Changed from 'p' to 'f' to avoid pause conflict
+        if keys[pygame.K_LSHIFT]:  
             grab = 1
         if keys[pygame.K_RETURN] or keys[pygame.K_RSHIFT]:
             shoot_ball = 1
@@ -1055,17 +982,20 @@ class ViewerClass:
             if done_log is None or orientation_log is None:
                 print("FATAL: Log file is missing 'done' or 'orientation' data.")
                 return
+            
+            if 'num_episodes' in log_data:
+                total_episodes_in_log = int(log_data['num_episodes'])
+                print(f"Log file contains data for up to {total_episodes_in_log} episodes.")
+
 
         except Exception as e:
             print(f"Error loading log file: {e}")
             return
 
         num_steps, num_worlds, num_agents, _ = agent_pos_log.shape
-        print(f"Playing back {num_worlds} episodes with {num_steps} steps each.")
+        print(f"Playing back {num_worlds} episodes with {num_steps}.")
 
         episodes_completed_log = np.cumsum(done_log, axis=0)
-        total_episodes_in_log = int(episodes_completed_log[-1].max())
-        print(f"Log file contains data for up to {total_episodes_in_log} episodes.")
 
         background = pygame.Surface(self.screen.get_size())
         background.fill(BACKGROUND_COLOR)
@@ -1145,7 +1075,6 @@ class ViewerClass:
             elif np.all(episodes_completed_log[current_step] >= current_playback_episode):
                  paused = True
                  is_paused_for_next_episode = True
-                 print(f"Episode {current_playback_episode} complete for all environments.")
 
             self.clock.tick(60)
 

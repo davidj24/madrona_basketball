@@ -88,14 +88,6 @@ def infer(args):
                 obs, reward, done = environment.step(best_actions)
                 obs = obs.to(device)
 
-        # Update episode counts when an episode is done
-        if args.num_episodes > 0:
-            episode_counts += done.cpu().long()
-            # Check if all environments have completed the required number of episodes
-            if torch.all(episode_counts >= args.num_episodes):
-                print(f"All environments have completed {args.num_episodes} episodes.")
-                break
-
         if (args.log_path):
             log_entry = {
                 "agent_pos" : environment.worlds.agent_pos_tensor().to_torch().cpu().numpy().copy(),
@@ -104,6 +96,14 @@ def infer(args):
                 "done": done.cpu().numpy().copy()
             }
             trajectory_log.append(log_entry)
+
+        # Update episode counts when an episode is done
+        if args.num_episodes > 0:
+            episode_counts += done.cpu().long()
+            # Check if all environments have completed the required number of episodes
+            if torch.all(episode_counts >= args.num_episodes):
+                print(f"All environments have completed {args.num_episodes} episodes.")
+                break
         
         step += 1
         
@@ -112,6 +112,8 @@ def infer(args):
         episode_log = {}
         for key in trajectory_log[0].keys():
             episode_log[key] = np.array([step[key] for step in trajectory_log])
+
+        static_log['num_episodes'] = args.num_episodes
 
         np.savez_compressed(args.log_path, **static_log, **episode_log)
         print("Finished logging. Trajectory saved to {args.log_path}")
