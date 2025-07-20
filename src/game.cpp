@@ -445,12 +445,11 @@ inline void moveAgentSystem(Engine &ctx,
         
         Vector3 agent_orientation_as_vec = agent_orientation.orientation.rotateVec(AGENT_BASE_FORWARD);
         float dot_between_orientation_and_velocity = Vector3{vel_x, vel_y, 0}.normalize().dot(agent_orientation_as_vec);
+        
 
-        if (dot_between_orientation_and_velocity <= 0)
-        {
-            if (dot_between_orientation_and_velocity < -0.1f) {agent_velocity_magnitude *= 0.5f;}
-            else {agent_velocity_magnitude *= 0.7f;}
-        }
+        if (dot_between_orientation_and_velocity < -0.1f) {agent_velocity_magnitude *= 0.35f;} // moving backwards
+        else if (dot_between_orientation_and_velocity < 0.1f) {agent_velocity_magnitude *= 0.5f;} // moving sideways
+        
 
         // Calculate distance to move this frame
         float dx = vel_x * agent_velocity_magnitude * TIMESTEPS_TO_SECONDS_FACTOR;

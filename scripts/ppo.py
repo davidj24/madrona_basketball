@@ -297,7 +297,7 @@ if __name__ == "__main__":
             print(f"    Returns          => Avg: {stats.returns_mean}")
             stats.reset()
 
-        # Every 1000 iterations, save the model
+        # Every 100 iterations, save the model
         if iteration % 100 == 0:
             folder = "checkpoints"
             if not os.path.exists(folder):
