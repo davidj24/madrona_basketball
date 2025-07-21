@@ -192,6 +192,7 @@ namespace madBasketball {
         uint32_t shotByAgentID; // Entity ID of the agent who shot the ball (doesn't change after touching)
         uint32_t shotByTeamID; // Team ID of the team that shot the ball (doesn't change after touching)
         int32_t shotPointValue; // Point value of the shot when it was taken (2 or 3)
+        bool shotIsGoingIn; // Calculated at moment of release to let agent know if shot will score
     };
 
     

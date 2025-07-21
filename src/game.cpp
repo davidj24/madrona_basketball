@@ -254,7 +254,7 @@ inline void passSystem(Engine &ctx,
         Entity ball = ctx.data().balls[i];
         BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
         Grabbed &grabbed = ctx.get<Grabbed>(ball);
-        if (grabbed.holderEntityID == agent_entity.id) {
+        if (grabbed.holderEntityID == (uint32_t)agent_entity.id) {
             grabbed.isGrabbed = false;  // Ball is no longer grabbed
             grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER; // Ball is no longer held by anyone
             in_possession.hasBall = false; // Since agents can only hold 1 ball at a time, if they pass it they can't be holding one anymore
@@ -276,8 +276,7 @@ inline void shootSystem(Engine &ctx,
                         Orientation &agent_orientation,
                         Inbounding &inbounding,
                         InPossession &in_possession,
-                        Team &team,
-                        Reward &reward)
+                        Team &team)
 {
     if (action_mask.can_shoot == 0 || action.shoot == 0) {return;}
 
@@ -376,14 +375,9 @@ inline void shootSystem(Engine &ctx,
             int32_t shot_point_value = getShotPointValue(agent_pos, attacking_hoop_score_zone);
             if(shot_is_going_in == true) 
             {
-                reward.r += 10*shot_point_value;
+                ball_physics.shotIsGoingIn = true;
                 gameState.scoredBaskets++;
             }
-            else
-            {
-                reward.r -= .5f;
-            }
-
             grabbed.isGrabbed = false;
             grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER;
             in_possession.hasBall = false;
@@ -716,7 +710,7 @@ inline void rewardSystem(Engine &ctx,
                          Reward &reward,
                          Position &agent_pos,
                          Team &team,
-                        InPossession &in_possession)
+                         InPossession &in_possession)
 {
     // Find attacking hoop
     Position target_hoop_pos;
@@ -729,11 +723,18 @@ inline void rewardSystem(Engine &ctx,
         }
     }
 
-    // Technically distance can be a little longer than this if agent goes out of bounds, but it shouldn't matter
-    float maximum_distance_from_hoop = (target_hoop_pos.position - Vector3{COURT_MIN_X, COURT_MIN_Y, 0}).length();
+    // Find agent who shot the ball and reward them if the shot is going in
+    for (CountT j = 0; j < NUM_BASKETBALLS; j++)
+    {
+        Entity ball = ctx.data().balls[j];
+        BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
+        if (ball_physics.shotByAgentID == (uint32_t)agent_entity.id && ball_physics.shotIsGoingIn == true)
+        {
+            reward.r += 5*ball_physics.shotPointValue;
+        }
+    }
+
     float distance_from_hoop = (agent_pos.position - target_hoop_pos.position).length();
-    // Using 3 multiplications becauase std:: doesn't work with GPU and I don't think madrona::math has power
-    // float proximity_reward = -((distance_from_hoop*distance_from_hoop*distance_from_hoop) / maximum_distance_from_hoop); <-- Scaled version
     float proximity_reward = exp(-.1f * distance_from_hoop);
     reward.r += proximity_reward * in_possession.hasBall;
 }
@@ -803,6 +804,7 @@ inline void scoreSystem(Engine &ctx,
             ball_physics.shotByAgentID = ENTITY_ID_PLACEHOLDER;
             ball_physics.shotByTeamID = ENTITY_ID_PLACEHOLDER;
             ball_physics.shotPointValue = 2; // Reset to default
+            ball_physics.shotIsGoingIn = false;
 
             // Set up the inbound for the defending team.
             if (gameState.isOneOnOne == 0.f)
@@ -1220,7 +1222,7 @@ TaskGraphNodeID setupGameStepTasks(
         Entity, Action, ActionMask, Orientation, InPossession, Inbounding>>({grabSystemNode});
 
     auto shootSystemNode = builder.addToGraph<ParallelForNode<Engine, shootSystem,
-        Entity, Action, ActionMask, Position, Orientation, Inbounding, InPossession, Team, Reward>>({passSystemNode});
+        Entity, Action, ActionMask, Position, Orientation, Inbounding, InPossession, Team>>({passSystemNode});
 
     auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
         Position, BallPhysics, Grabbed>>({shootSystemNode});

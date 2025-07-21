@@ -130,7 +130,7 @@ if __name__ == "__main__":
     arg_parser.add_argument("--discrete-y", type=int, default=15)
     arg_parser.add_argument("--start-x", type=int, default=10.0)
     arg_parser.add_argument("--start-y", type=int, default=7.5)
-    arg_parser.add_argument("--num-envs", type=int, default=1)
+    arg_parser.add_argument("--num-envs", type=int, default=10)
     arg_parser.add_argument("--gpu-id", type=int, default=0)
     arg_parser.add_argument("--gpu-sim", action='store_true')
 

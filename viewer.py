@@ -976,9 +976,9 @@ class ViewerClass:
         num_worlds, num_agents, _ = agent_pos_frame.shape
         
         for world_idx in range(num_worlds):
-            # This is the key: only draw if the world is still on the current (or a previous) episode
-            if episodes_completed_at_this_step[world_idx] < current_playback_episode:
-                # ... All the existing drawing logic for agents and the ball ...
+            # Only draw if the world is still on the current episode
+            if episodes_completed_at_this_step[world_idx]+1 == current_playback_episode:
+                # drawing logic for agents and the ball ...
                 for agent_idx in range(num_agents):
                     pos = agent_pos_frame[world_idx, agent_idx]
                     q = orientation_frame[world_idx, agent_idx]
