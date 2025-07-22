@@ -1087,7 +1087,7 @@ class ViewerClass:
 
             while running:
                 for event in pygame.event.get():
-                    if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                         running = False
                     if event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_SPACE:
@@ -1108,6 +1108,18 @@ class ViewerClass:
                                 print(f"Playing Episode {current_playback_episode}")
                         if event.key == pygame.K_t:
                             show_trails = not show_trails
+                        if event.key == pygame.K_r:
+                            episode_step = 0
+                        if event.key == pygame.K_PERIOD:
+                            episode_step += 1
+                        if event.key == pygame.K_COMMA:
+                            episode_step -= 1
+                
+                keys = pygame.key.get_pressed()
+                if keys[pygame.K_LEFT]:
+                    episode_step = max(0, episode_step-1 if not keys[pygame.K_LSHIFT] else episode_step-5)
+                if keys[pygame.K_RIGHT]:
+                    episode_step = min(max(episode_lengths), episode_step+1 if not keys[pygame.K_LSHIFT] else episode_step+5)
 
                 # Blit the pre-rendered background
                 self.screen.blit(background, (0, 0))
@@ -1133,6 +1145,9 @@ class ViewerClass:
                 status_text += f" | Trails: {'On' if show_trails else "Off"}"
                 text_surface = self.font.render(status_text, True, (255, 255, 0))
                 self.screen.blit(text_surface, (10, 10))
+                controls_text = f"Pause: Space | FF: shft + right | Trails: t"
+                controls_surface = self.font.render(controls_text, True, (255, 255, 255))
+                self.screen.blit(controls_surface, (10, WINDOW_HEIGHT-30))
 
                 pygame.display.flip()
 
@@ -1141,7 +1156,7 @@ class ViewerClass:
                     episode_step += 1
 
                 # Check for             
-                if episode_step >= max(episode_lengths): # Check to see if episode_step is greater than the longest episode
+                if episode_step >= max(episode_lengths) and not paused: # Check to see if episode_step is greater than the longest episode
                     status_text += f" | max length: {max(episode_lengths)}"
                     paused = True
                     is_paused_for_next_episode = True
