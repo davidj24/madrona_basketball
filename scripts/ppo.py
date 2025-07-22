@@ -22,7 +22,7 @@ class Args:
     seed: int = 1
     torch_deterministic: bool = True
     use_gpu: bool = True
-    viewer: bool = False
+    viewer: bool = True
 
     # Wandb
     env_id: str = "MadronaBasketball"

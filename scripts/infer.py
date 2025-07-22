@@ -136,12 +136,12 @@ if __name__ == "__main__":
 
 
     # For inference specifically
-    arg_parser.add_argument("--viewer", action='store_true')
+    arg_parser.add_argument("--viewer", action='store_true', default=True)
     arg_parser.add_argument("--checkpoint-path", required=True)
-    arg_parser.add_argument("--log-path", type=str)
+    arg_parser.add_argument("--log-path", type=str, default="logs/trajectories.npz")
     arg_parser.add_argument("--max-steps", type=int, default=10000)
-    arg_parser.add_argument("--num-episodes", type=int, default=1)
-    arg_parser.add_argument("--stochastic", action='store_true') # Determines if the policy only uses its best action or samples from its distribution
+    arg_parser.add_argument("--num-episodes", type=int, default=5)
+    arg_parser.add_argument("--stochastic", action='store_true', default=True) # Determines if the policy only uses its best action or samples from its distribution
 
 
     args = arg_parser.parse_args()

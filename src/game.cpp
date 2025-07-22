@@ -276,7 +276,8 @@ inline void shootSystem(Engine &ctx,
                         Orientation &agent_orientation,
                         Inbounding &inbounding,
                         InPossession &in_possession,
-                        Team &team)
+                        Team &team,
+                        Reward &reward)
 {
     if (action_mask.can_shoot == 0 || action.shoot == 0) {return;}
 
@@ -378,6 +379,7 @@ inline void shootSystem(Engine &ctx,
                 ball_physics.shotIsGoingIn = true;
                 gameState.scoredBaskets++;
             }
+            else {reward.r -= 1.f;}
             grabbed.isGrabbed = false;
             grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER;
             in_possession.hasBall = false;
@@ -618,7 +620,8 @@ inline void hardCodeDefenseSystem(Engine &ctx,
     Team &defender_team,
     Position &defender_pos,
     Action &defender_action,
-    Attributes &defender_attributes)
+    Attributes &defender_attributes,
+    Orientation &defender_orientation)
     {
         GameState &gameState = ctx.singleton<GameState>();
         
@@ -699,7 +702,19 @@ inline void hardCodeDefenseSystem(Engine &ctx,
     // Set the action to the best-matching direction
     defender_action.moveSpeed = 1;
     defender_action.moveAngle = best_move_angle;
-    defender_action.rotate = 0;
+
+
+    // make defender face basketball
+    Vector3 defender_orientation_as_vec = defender_orientation.orientation.rotateVec(AGENT_BASE_FORWARD);
+    float angle_between_vectors = acos(clamp(defender_orientation_as_vec.dot(move_vector.normalize()), -1.f, 1.f)); // cos(angle_between_vecs) = vec1 \cdot vec2 / (||vec1|| ||vec2||) adn we're isolating angle_between_vec
+    if (angle_between_vectors > pi/8.f)
+    {
+        float direction_cross = defender_orientation_as_vec.x * move_vector.y - defender_orientation_as_vec.y * move_vector.x;
+        if (direction_cross < 0) {defender_action.rotate = -1.f;}
+        else if (direction_cross > 0) {defender_action.rotate = 1.f;}
+        else {defender_action.rotate = 0.f;}
+    }
+    else {defender_action.rotate = 0.f;}
 }
 
 
@@ -730,7 +745,11 @@ inline void rewardSystem(Engine &ctx,
         BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
         if (ball_physics.shotByAgentID == (uint32_t)agent_entity.id && ball_physics.shotIsGoingIn == true)
         {
-            reward.r += 5*ball_physics.shotPointValue;
+            reward.r += ball_physics.shotPointValue;
+        }
+        else if (ball_physics.shotByAgentID == (uint32_t)agent_entity.id && ball_physics.shotIsGoingIn == false && ball_physics.inFlight == true)
+        {
+            reward.r -= 1;
         }
     }
 
@@ -1222,7 +1241,7 @@ TaskGraphNodeID setupGameStepTasks(
         Entity, Action, ActionMask, Orientation, InPossession, Inbounding>>({grabSystemNode});
 
     auto shootSystemNode = builder.addToGraph<ParallelForNode<Engine, shootSystem,
-        Entity, Action, ActionMask, Position, Orientation, Inbounding, InPossession, Team>>({passSystemNode});
+        Entity, Action, ActionMask, Position, Orientation, Inbounding, InPossession, Team, Reward>>({passSystemNode});
 
     auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
         Position, BallPhysics, Grabbed>>({shootSystemNode});
@@ -1252,7 +1271,7 @@ TaskGraphNodeID setupGameStepTasks(
         Entity, Position, Orientation>>({updatePointsWorthNode});
 
     auto hardCodeDefenseSystemNode = builder.addToGraph<ParallelForNode<Engine, hardCodeDefenseSystem,
-        Team, Position, Action, Attributes>>({agentCollisionNode});
+        Team, Position, Action, Attributes, Orientation>>({agentCollisionNode});
 
     auto fillObservationsNode = builder.addToGraph<ParallelForNode<Engine, fillObservationsSystem,
         Entity, Observations, Position, Orientation, InPossession,
