@@ -927,9 +927,9 @@ class ViewerClass:
         
         # Rotation (Q/E or comma/period)
         if keys[pygame.K_COMMA] or keys[pygame.K_q]:
-            rotate = 1  # Clockwise
-        elif keys[pygame.K_PERIOD] or keys[pygame.K_e]:
             rotate = -1  # Counter Clockwise
+        elif keys[pygame.K_PERIOD] or keys[pygame.K_e]:
+            rotate = 1  # Clockwise
         else:
             rotate = 0  # No rotation
         
@@ -968,7 +968,7 @@ class ViewerClass:
         """Get the index of the currently selected agent for human control"""
         return self.active_agent_idx
 
-    def draw_playback_frame_multi_episode(self, agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step_for_world, current_playback_episode):
+    def draw_playback_frame_multi_episode(self, agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step_for_world, current_playback_episode, trail_surface):
         """
         Draws agents and balls, but only for worlds that have not yet
         completed the current target episode number.
@@ -982,6 +982,11 @@ class ViewerClass:
                 pos = agent_pos_frame[agent_idx]
                 q = orientation_frame[agent_idx]
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+
+                trail_color = TEAM0_COLOR if agent_idx % 2 == 0 else TEAM1_COLOR
+                pygame.draw.circle(trail_surface, trail_color, (screen_x, screen_y), 3)
+
+
                 agent_color = TEAM0_COLOR if agent_idx % 2 == 0 else TEAM1_COLOR
                 forward_vec_3d = rotate_vec(q, np.array([0.0, 1.0, 0.0]))
                 forward_vec = np.array([forward_vec_3d[0], forward_vec_3d[1]])
@@ -1058,11 +1063,14 @@ class ViewerClass:
                 pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), rim_radius_px, rim_thickness_px)
             self.screen = original_screen
 
+            trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+
             episode_step = 0
             current_playback_episode = 0
             is_paused_for_next_episode = False
             paused = False
             running = True
+            show_trails = False
             # Use this episode_step to track how many steps we are in in the episode. For each episode, go to the environment's episode start timestep, and render the gameState at that timestep for that environment. THen increase the episode_step
             # by one and repeat. This way every environment's episode will start at the same time and go. Repeat this until the episodes_completed_at_this_step[environment] > current_playback_episode.
             # However we also need to update episodes_completed_at_this_step for every environment given their current timestep. We could alternatively add the end timestep of the episodes into the dictionary and go while start + episode_step < end_step
@@ -1091,15 +1099,20 @@ class ViewerClass:
                             # Advance to the next episode if paused and not at the end
                             if is_paused_for_next_episode and current_playback_episode < total_episodes_in_log:
                                 current_playback_episode += 1
+                                trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
                                 episode_lengths = [world_info[current_playback_episode]['end'] - world_info[current_playback_episode]['start'] for world_info in episode_breaks]
                                 print(f"Now, current episode is: {current_playback_episode} and the max lengths are: {episode_lengths}")
                                 is_paused_for_next_episode = False
                                 paused = False
                                 episode_step = 0
                                 print(f"Playing Episode {current_playback_episode}")
+                        if event.key == pygame.K_t:
+                            show_trails = not show_trails
 
                 # Blit the pre-rendered background
                 self.screen.blit(background, (0, 0))
+                if (show_trails):
+                    self.screen.blit(trail_surface, (0, 0))
 
                 # Get data for the current frame
                 for world_num in range(num_worlds):
@@ -1109,7 +1122,7 @@ class ViewerClass:
 
                     # Draw the dynamic elements
                     episodes_completed_at_this_step = episodes_completed_log[episode_breaks[world_num][current_playback_episode]['start'] + episode_step]
-                    self.draw_playback_frame_multi_episode(agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step[world_num], current_playback_episode)
+                    self.draw_playback_frame_multi_episode(agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step[world_num], current_playback_episode, trail_surface)
 
                 # Draw status text
                 status_text = f"Viewing Episode: {current_playback_episode}/{total_episodes_in_log} | step: {episode_step}"
@@ -1117,6 +1130,7 @@ class ViewerClass:
                     status_text += f" | Press 'N' for Next Episode || max episode length is: {max(episode_lengths)}"
                 elif paused:
                     status_text += " | Paused"
+                status_text += f" | Trails: {'On' if show_trails else "Off"}"
                 text_surface = self.font.render(status_text, True, (255, 255, 0))
                 self.screen.blit(text_surface, (10, 10))
 
@@ -1145,6 +1159,7 @@ class ViewerClass:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Madrona Basketball Viewer: Live Sim or Trajectory Playback")
     parser.add_argument('--playback-log', type=str, help="Path to an .npz trajectory log file for playback.")
+    parser.add_argument('--trail', action='store_true', default=False)
     args = parser.parse_args()
 
     if args.playback_log:
