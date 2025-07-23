@@ -81,7 +81,8 @@ inline void moveBallRandomly(Engine &ctx,
 inline void moveBallSystem(Engine &ctx,
                            Position &ball_pos,
                            BallPhysics &ball_physics,
-                           Grabbed &grabbed)
+                           Grabbed &grabbed,
+                           Velocity &ball_velocity)
 {
     for (CountT i = 0; i < NUM_AGENTS; i++) {
         Entity agent = ctx.data().agents[i];
@@ -97,12 +98,12 @@ inline void moveBallSystem(Engine &ctx,
         }
     }
 
-    if (ball_physics.velocity.length() == 0 || grabbed.isGrabbed) {return;}
+    if (ball_velocity.velocity.length() == 0 || grabbed.isGrabbed) {return;}
 
     const GridState* grid = ctx.data().grid; // To clamp later
-    float new_x = ball_pos.position.x + ball_physics.velocity[0];
-    float new_y = ball_pos.position.y + ball_physics.velocity[1];
-    float new_z = ball_pos.position.z + ball_physics.velocity[2];
+    float new_x = ball_pos.position.x + ball_velocity.velocity[0];
+    float new_y = ball_pos.position.y + ball_velocity.velocity[1];
+    float new_z = ball_pos.position.z + ball_velocity.velocity[2];
 
     new_x = clamp(new_x, 0.f, grid->width);
     new_y = clamp(new_y, 0.f, grid->height);
@@ -178,6 +179,7 @@ inline void grabSystem(Engine &ctx,
         Entity ball = ctx.data().balls[i];
         BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
         Grabbed &grabbed = ctx.get<Grabbed>(ball);
+        Velocity &ball_velocity = ctx.get<Velocity>(ball);
         if (ball_physics.inFlight) { continue; }
 
         bool agent_is_holding_this_ball = (in_possession.hasBall == true &&
@@ -223,7 +225,7 @@ inline void grabSystem(Engine &ctx,
             grabbed.holderEntityID = (uint32_t)agent_entity.id;
             grabbed.isGrabbed = true;
             ball_physics.inFlight = false; // Make it so the ball isn't "in flight" anymore
-            ball_physics.velocity = Vector3::zero(); // And change its velocity to be zero
+            ball_velocity.velocity = Vector3::zero(); // And change its velocity to be zero
 
             // Clear shot information since this is a new possession
             ball_physics.shotByAgentID = ENTITY_ID_PLACEHOLDER;
@@ -254,13 +256,14 @@ inline void passSystem(Engine &ctx,
         Entity ball = ctx.data().balls[i];
         BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
         Grabbed &grabbed = ctx.get<Grabbed>(ball);
+        Velocity &ball_velocity = ctx.get<Velocity>(ball);
         if (grabbed.holderEntityID == (uint32_t)agent_entity.id) {
             grabbed.isGrabbed = false;  // Ball is no longer grabbed
             grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER; // Ball is no longer held by anyone
             in_possession.hasBall = false; // Since agents can only hold 1 ball at a time, if they pass it they can't be holding one anymore
             in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER; // Whoever passed the ball is no longer in possession of it
             inbounding.imInbounding = false;
-            ball_physics.velocity = agent_orientation.orientation.rotateVec(Vector3{0.f, 0.1f, 0.f}); // Setting the ball's velocity to have the same direction as the agent's orientation
+            ball_velocity.velocity = agent_orientation.orientation.rotateVec(Vector3{0.f, 0.1f, 0.f}); // Setting the ball's velocity to have the same direction as the agent's orientation
                                                                                                       // Note: we use 0, 0.1, 0 because that's forward in our simulation specifically
             gameState.inboundingInProgress = 0.0f;
         }
@@ -370,6 +373,7 @@ inline void shootSystem(Engine &ctx,
         Entity ball = ctx.data().balls[i];
         BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
         Grabbed &grabbed = ctx.get<Grabbed>(ball);
+        Velocity &ball_velocity = ctx.get<Velocity>(ball);
         if (grabbed.holderEntityID == agent_entity.id)
         {
             // Calculate the point value of this shot from the agent's current position
@@ -386,7 +390,7 @@ inline void shootSystem(Engine &ctx,
             in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
             inbounding.imInbounding = false;
 
-            ball_physics.velocity = final_shot_vec * .1f;
+            ball_velocity.velocity = final_shot_vec * .1f;
 
 
 
@@ -776,6 +780,7 @@ inline void scoreSystem(Engine &ctx,
         Entity ball = ctx.data().balls[i];
         Position &ball_pos = ctx.get<Position>(ball);
         BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
+        Velocity &ball_velocity = ctx.get<Velocity>(ball);
         float distance_to_hoop = std::sqrt((ball_pos.position.x - hoop_pos.position.x) * (ball_pos.position.x - hoop_pos.position.x) +
                                         (ball_pos.position.y - hoop_pos.position.y) * (ball_pos.position.y - hoop_pos.position.y));
 
@@ -823,7 +828,7 @@ inline void scoreSystem(Engine &ctx,
 
             // Set the ball's state for the inbound
             ball_physics.inFlight = false;
-            ball_physics.velocity = Vector3::zero();
+            ball_velocity.velocity = Vector3::zero();
 
             // Clear shot information since the shot scored
             ball_physics.shotByAgentID = ENTITY_ID_PLACEHOLDER;
@@ -943,7 +948,8 @@ inline void updateLastTouchSystem(Engine &ctx,
 inline void outOfBoundsSystem(Engine &ctx,
                             Entity ball_entity,
                             Position &ball_pos,
-                            BallPhysics &ball_physics)
+                            BallPhysics &ball_physics,
+                            Velocity &ball_velocity)
 {
     GameState &gameState = ctx.singleton<GameState>();
 
@@ -959,7 +965,7 @@ inline void outOfBoundsSystem(Engine &ctx,
         else
         {
             ball_physics.inFlight = false;
-            ball_physics.velocity = Vector3::zero();
+            ball_velocity.velocity = Vector3::zero();
             gameState.liveBall = 0.f;
 
             // The team that did NOT last touch the ball gets possession.
@@ -1083,12 +1089,14 @@ inline void fillObservationsSystem(Engine &ctx,
     Position ball_pos;
     BallPhysics ball_phys;
     Grabbed ball_grabbed;
+    Velocity ball_velocity;
 
     // we assume 1 ball
     Entity ball = ctx.data().balls[0];
     ball_pos = ctx.get<Position>(ball);
     ball_phys = ctx.get<BallPhysics>(ball);
     ball_grabbed = ctx.get<Grabbed>(ball);
+    ball_velocity = ctx.get<Velocity>(ball);
 
     // --- Hoop Positions ---
     Position hoop_positions[NUM_HOOPS];
@@ -1142,7 +1150,7 @@ inline void fillObservationsSystem(Engine &ctx,
 
     // Now fill the ball info using the variables we populated earlier.
     fill_vec3(ball_pos.position);
-    fill_vec3(ball_phys.velocity);
+    fill_vec3(ball_velocity.velocity);
     obs[idx++] = (float)ball_grabbed.isGrabbed;
     obs[idx++] = (float)ball_phys.inFlight;
     obs[idx++] = (float)ball_phys.shotPointValue;
@@ -1250,13 +1258,13 @@ TaskGraphNodeID setupGameStepTasks(
         Entity, Action, ActionMask, Position, Orientation, Inbounding, InPossession, Team, Reward>>({passSystemNode});
 
     auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
-        Position, BallPhysics, Grabbed>>({shootSystemNode});
+        Position, BallPhysics, Grabbed, Velocity>>({shootSystemNode});
 
     auto scoreSystemNode = builder.addToGraph<ParallelForNode<Engine, scoreSystem,
         Entity, Position, ScoringZone>>({moveBallSystemNode});
 
     auto outOfBoundsSystemNode = builder.addToGraph<ParallelForNode<Engine, outOfBoundsSystem,
-        Entity, Position, BallPhysics>>({scoreSystemNode});
+        Entity, Position, BallPhysics, Velocity>>({scoreSystemNode});
 
     auto updateLastTouchSystemNode = builder.addToGraph<ParallelForNode<Engine, updateLastTouchSystem,
         Position, BallPhysics>>({outOfBoundsSystemNode});

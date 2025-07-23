@@ -192,7 +192,6 @@ namespace madBasketball {
     struct BallPhysics
     {
         bool inFlight;
-        Vector3 velocity;
         uint32_t lastTouchedByAgentID; // Entity ID of the specific agent who last touched the ball 
         uint32_t lastTouchedByTeamID; // Team ID of the team that last touched the ball 
         uint32_t shotByAgentID; // Entity ID of the agent who shot the ball (doesn't change after touching)

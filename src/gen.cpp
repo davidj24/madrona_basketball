@@ -172,7 +172,7 @@ void generateWorld(Engine &ctx) {
     ctx.get<CurStep>(basketball).step = 0;
     // We will set the Grabbed component later, after we know the agent's ID.
     ctx.get<Grabbed>(basketball) = Grabbed {false, ENTITY_ID_PLACEHOLDER};
-    ctx.get<BallPhysics>(basketball) = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2, false};
+    ctx.get<BallPhysics>(basketball) = BallPhysics {false, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2, false};
     ctx.get<Velocity>(basketball).velocity = Vector3::zero();
 
     // Now create agents with proper hoop references
@@ -364,7 +364,7 @@ void resetWorld(Engine &ctx) {
         ctx.get<Reset>(ball).resetNow = 0;
         ctx.get<Done>(ball).episodeDone = 1.f;
         ctx.get<CurStep>(ball).step = 0;
-        ctx.get<BallPhysics>(ball) = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2, false};
+        ctx.get<BallPhysics>(ball) = BallPhysics {false, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2, false};
         ctx.get<Velocity>(ball).velocity = Vector3::zero();
         Grabbed &grabbed = ctx.get<Grabbed>(ball);
         if (gameState.isOneOnOne == 1.f)
