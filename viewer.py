@@ -968,57 +968,59 @@ class ViewerClass:
         """Get the index of the currently selected agent for human control"""
         return self.active_agent_idx
 
-    def draw_playback_frame_multi_episode(self, agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step_for_world, current_playback_episode, trail_surface, world_num):
+    def draw_playback_frame_multi_episode(self, agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step_for_world, current_playback_episode, trail_surface, world_num, current_step, max_episode_length):
         """
         Draws agents and balls, but only for worlds that have not yet
         completed the current target episode number.
         """
         num_agents, _ = agent_pos_frame.shape
         
-        # Only draw if the world is still on the current episode
         if episodes_completed_at_this_step_for_world == current_playback_episode:
-            # drawing logic for agents and the ball
             for agent_idx in range(num_agents):
                 pos = agent_pos_frame[agent_idx]
-                q = orientation_frame[agent_idx]
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
 
-                trail_color = TEAM0_COLOR if agent_idx % 2 == 0 else TEAM1_COLOR
-                pygame.draw.circle(trail_surface, trail_color, (screen_x, screen_y), 3)
+                if current_step > 0:
+                    base_trail_color = TEAM0_COLOR if agent_idx % 2 == 0 else TEAM1_COLOR
+                    x = current_step / max_episode_length if max_episode_length > 0 else 0
+                    faded_trail_color = tuple(int(x * 0.5 * c + (1 - x) * c) for c in base_trail_color)
+                    pygame.draw.circle(trail_surface, faded_trail_color, (screen_x, screen_y), 3)
+                else:
+                    q = orientation_frame[agent_idx]
+                    agent_color = TEAM0_COLOR if agent_idx % 2 == 0 else TEAM1_COLOR
+                    forward_vec_3d = rotate_vec(q, np.array([0.0, 1.0, 0.0]))
+                    forward_vec = np.array([forward_vec_3d[0], forward_vec_3d[1]])
+                    right_vec = np.array([forward_vec[1], -forward_vec[0]])
+                    shoulder_width_px = AGENT_SHOULDER_WIDTH * self.pixels_per_meter
+                    depth_px = AGENT_DEPTH * self.pixels_per_meter
+                    center_point = np.array([screen_x, screen_y])
+                    half_width_vec = right_vec * (shoulder_width_px / 2)
+                    half_depth_vec = forward_vec * (depth_px / 2)
+                    p1 = center_point - half_depth_vec + half_width_vec
+                    p2 = center_point - half_depth_vec - half_width_vec
+                    p3 = center_point + half_depth_vec - half_width_vec
+                    p4 = center_point + half_depth_vec + half_width_vec
+                    agent_points = [p1, p2, p3, p4]
+                    pygame.draw.polygon(self.screen, agent_color, agent_points)
+                    pygame.draw.polygon(self.screen, (255, 255, 255), agent_points, 1)
+                    font_world_num = pygame.font.Font(None, 22)
+                    world_num_surface = font_world_num.render(str(world_num), True, (255, 255, 255))
+                    world_num_rect = world_num_surface.get_rect(center=(screen_x, screen_y))
+                    self.screen.blit(world_num_surface, world_num_rect)
 
-
-                agent_color = TEAM0_COLOR if agent_idx % 2 == 0 else TEAM1_COLOR
-                forward_vec_3d = rotate_vec(q, np.array([0.0, 1.0, 0.0]))
-                forward_vec = np.array([forward_vec_3d[0], forward_vec_3d[1]])
-                right_vec = np.array([forward_vec[1], -forward_vec[0]])
-                shoulder_width_px = AGENT_SHOULDER_WIDTH * self.pixels_per_meter
-                depth_px = AGENT_DEPTH * self.pixels_per_meter
-                center_point = np.array([screen_x, screen_y])
-                half_width_vec = right_vec * (shoulder_width_px / 2)
-                half_depth_vec = forward_vec * (depth_px / 2)
-                p1 = center_point - half_depth_vec + half_width_vec
-                p2 = center_point - half_depth_vec - half_width_vec
-                p3 = center_point + half_depth_vec - half_width_vec
-                p4 = center_point + half_depth_vec + half_width_vec
-                agent_points = [p1, p2, p3, p4]
-                pygame.draw.polygon(self.screen, agent_color, agent_points)
-                pygame.draw.polygon(self.screen, (255, 255, 255), agent_points, 1)
+                    arrow_len_px = self.pixels_per_meter * AGENT_ORIENTATION_ARROW_LENGTH_M
+                    arrow_end = (screen_x + arrow_len_px * forward_vec[0], screen_y + arrow_len_px * forward_vec[1])
+                    pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 2)
+            
+            if current_step == 0:
+                ball_pos = ball_pos_frame[0]
+                screen_x, screen_y = self.meters_to_screen(ball_pos[0], ball_pos[1])
+                ball_radius_px = BALL_RADIUS_M * self.pixels_per_meter
+                pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), int(ball_radius_px))
                 font_world_num = pygame.font.Font(None, 22)
                 world_num_surface = font_world_num.render(str(world_num), True, (255, 255, 255))
                 world_num_rect = world_num_surface.get_rect(center=(screen_x, screen_y))
                 self.screen.blit(world_num_surface, world_num_rect)
-
-                arrow_len_px = self.pixels_per_meter * AGENT_ORIENTATION_ARROW_LENGTH_M
-                arrow_end = (screen_x + arrow_len_px * forward_vec[0], screen_y + arrow_len_px * forward_vec[1])
-                pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 2)
-            ball_pos = ball_pos_frame[0]
-            screen_x, screen_y = self.meters_to_screen(ball_pos[0], ball_pos[1])
-            ball_radius_px = BALL_RADIUS_M * self.pixels_per_meter
-            pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), int(ball_radius_px))
-            font_world_num = pygame.font.Font(None, 22)
-            world_num_surface = font_world_num.render(str(world_num), True, (255, 255, 255))
-            world_num_rect = world_num_surface.get_rect(center=(screen_x, screen_y))
-            self.screen.blit(world_num_surface, world_num_rect)
 
     def run_trajectory_playback(self, log_path):
         """
@@ -1041,13 +1043,15 @@ class ViewerClass:
             if 'num_episodes' in log_data:
                 total_episodes_in_log = int(log_data['num_episodes']) - 1
                 print(f"Log file contains data for up to {total_episodes_in_log} episodes.")
+            else:
+                total_episodes_in_log = 0
 
 
 
 
 
             num_steps, num_worlds, num_agents, _ = agent_pos_log.shape
-            print(f"Playing back {num_worlds} episodes with {num_steps}.")
+            print(f"Playing back {total_episodes_in_log} episodes.")
 
 
 
@@ -1105,10 +1109,8 @@ class ViewerClass:
                                 paused = not paused
                                 print("Paused" if paused else "Playing")
                         if event.key == pygame.K_b:
-                            # Advance to the next episode if paused and not at the end
                             if current_playback_episode > 0:
                                 current_playback_episode -= 1
-                                trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
                                 episode_lengths = [world_info[current_playback_episode]['end'] - world_info[current_playback_episode]['start'] for world_info in episode_breaks]
                                 print(f"Now, current episode is: {current_playback_episode} and the max lengths are: {episode_lengths}")
                                 is_paused_for_next_episode = False
@@ -1116,10 +1118,8 @@ class ViewerClass:
                                 episode_step = 0
                                 print(f"Playing Episode {current_playback_episode}")
                         if event.key == pygame.K_n:
-                            # Advance to the next episode if paused and not at the end
                             if current_playback_episode < total_episodes_in_log:
                                 current_playback_episode += 1
-                                trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
                                 episode_lengths = [world_info[current_playback_episode]['end'] - world_info[current_playback_episode]['start'] for world_info in episode_breaks]
                                 print(f"Now, current episode is: {current_playback_episode} and the max lengths are: {episode_lengths}")
                                 is_paused_for_next_episode = False
@@ -1141,20 +1141,34 @@ class ViewerClass:
                 if keys[pygame.K_RIGHT]:
                     episode_step = min(max(episode_lengths), episode_step+1 if not keys[pygame.K_LSHIFT] else episode_step+5)
 
-                # Blit the pre-rendered background
                 self.screen.blit(background, (0, 0))
-                if (show_trails):
+                
+                if show_trails:
+                    trail_surface.fill((0, 0, 0, 0))
+                    max_episode_length = max(episode_lengths) if episode_lengths else 1
+                    
+                    for trail_step in range(max(0, episode_step - max_episode_length + 1), episode_step + 1):
+                        if trail_step < 0:
+                            continue
+                        for world_num in range(num_worlds):
+                            if trail_step + episode_breaks[world_num][current_playback_episode]['start'] >= num_steps:
+                                continue
+                            trail_agent_pos = agent_pos_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step][world_num]
+                            trail_orientation = orientation_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step][world_num]
+                            trail_ball_pos = ball_pos_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step][world_num]
+                            trail_episodes_completed = episodes_completed_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step]
+                            
+                            self.draw_playback_frame_multi_episode(trail_agent_pos, trail_ball_pos, trail_orientation, trail_episodes_completed[world_num], current_playback_episode, trail_surface, world_num, episode_step - trail_step, max_episode_length)
+                    
                     self.screen.blit(trail_surface, (0, 0))
 
-                # Get data for the current frame
                 for world_num in range(num_worlds):
                     agent_pos_frame = agent_pos_log[episode_breaks[world_num][current_playback_episode]['start'] + episode_step][world_num]
                     ball_pos_frame = ball_pos_log[episode_breaks[world_num][current_playback_episode]['start'] + episode_step][world_num]
                     orientation_frame = orientation_log[episode_breaks[world_num][current_playback_episode]['start'] + episode_step][world_num]
 
-                    # Draw the dynamic elements
                     episodes_completed_at_this_step = episodes_completed_log[episode_breaks[world_num][current_playback_episode]['start'] + episode_step]
-                    self.draw_playback_frame_multi_episode(agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step[world_num], current_playback_episode, trail_surface, world_num)
+                    self.draw_playback_frame_multi_episode(agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step[world_num], current_playback_episode, trail_surface, world_num, 0, max(episode_lengths) if episode_lengths else 1)
 
                 # Draw status text
                 status_text = f"Viewing Episode: {current_playback_episode}/{total_episodes_in_log} | step: {episode_step}"
