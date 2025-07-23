@@ -93,7 +93,7 @@ namespace madBasketball {
     struct Action 
     {
         // General Actions
-        int32_t moveSpeed;  // 0/1 - move action
+        int32_t move;  // 0/1 - move action
         int32_t moveAngle;  // [0, 7] - which direction (8 directions)
         int32_t rotate;     // [-1, 0, 1] - turning
         int32_t grab;       // 0/1 - grab action
@@ -117,6 +117,11 @@ namespace madBasketball {
     struct Orientation
     {
         Quat orientation;
+    };
+
+    struct Velocity
+    {
+        Vector3 velocity;
     };
 
     struct Reward 
@@ -168,7 +173,8 @@ namespace madBasketball {
 
     struct Attributes // Per Agent stats like how fast a given agent can move etc
     {
-        float speed;
+        float maxSpeed;
+        float quickness; // How much they can accelerate
         float shooting;
         float freeThrowPercentage;
         float reactionSpeed;
@@ -229,7 +235,8 @@ namespace madBasketball {
         Inbounding,
         Team,
         Stats,
-        Attributes
+        Attributes,
+        Velocity
     > {};
 
     struct Basketball : public madrona::Archetype<
@@ -239,7 +246,8 @@ namespace madBasketball {
         // RandomMovement,
         Done,
         CurStep,
-        Grabbed
+        Grabbed,
+        Velocity
     > {};
 
     struct Hoop : public madrona::Archetype<

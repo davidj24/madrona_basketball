@@ -25,6 +25,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.registerComponent<Done>();
     registry.registerComponent<CurStep>();
     registry.registerComponent<RandomMovement>();
+    registry.registerComponent<Velocity>();
 
     // Agent Components
     registry.registerComponent<Action>();

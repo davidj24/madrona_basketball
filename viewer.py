@@ -968,7 +968,7 @@ class ViewerClass:
         """Get the index of the currently selected agent for human control"""
         return self.active_agent_idx
 
-    def draw_playback_frame_multi_episode(self, agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step_for_world, current_playback_episode, trail_surface):
+    def draw_playback_frame_multi_episode(self, agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step_for_world, current_playback_episode, trail_surface, world_num):
         """
         Draws agents and balls, but only for worlds that have not yet
         completed the current target episode number.
@@ -1003,6 +1003,11 @@ class ViewerClass:
                 agent_points = [p1, p2, p3, p4]
                 pygame.draw.polygon(self.screen, agent_color, agent_points)
                 pygame.draw.polygon(self.screen, (255, 255, 255), agent_points, 1)
+                font_world_num = pygame.font.Font(None, 22)
+                world_num_surface = font_world_num.render(str(world_num), True, (255, 255, 255))
+                world_num_rect = world_num_surface.get_rect(center=(screen_x, screen_y))
+                self.screen.blit(world_num_surface, world_num_rect)
+
                 arrow_len_px = self.pixels_per_meter * AGENT_ORIENTATION_ARROW_LENGTH_M
                 arrow_end = (screen_x + arrow_len_px * forward_vec[0], screen_y + arrow_len_px * forward_vec[1])
                 pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 2)
@@ -1010,6 +1015,10 @@ class ViewerClass:
             screen_x, screen_y = self.meters_to_screen(ball_pos[0], ball_pos[1])
             ball_radius_px = BALL_RADIUS_M * self.pixels_per_meter
             pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), int(ball_radius_px))
+            font_world_num = pygame.font.Font(None, 22)
+            world_num_surface = font_world_num.render(str(world_num), True, (255, 255, 255))
+            world_num_rect = world_num_surface.get_rect(center=(screen_x, screen_y))
+            self.screen.blit(world_num_surface, world_num_rect)
 
     def run_trajectory_playback(self, log_path):
         """
@@ -1134,7 +1143,7 @@ class ViewerClass:
 
                     # Draw the dynamic elements
                     episodes_completed_at_this_step = episodes_completed_log[episode_breaks[world_num][current_playback_episode]['start'] + episode_step]
-                    self.draw_playback_frame_multi_episode(agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step[world_num], current_playback_episode, trail_surface)
+                    self.draw_playback_frame_multi_episode(agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step[world_num], current_playback_episode, trail_surface, world_num)
 
                 # Draw status text
                 status_text = f"Viewing Episode: {current_playback_episode}/{total_episodes_in_log} | step: {episode_step}"
@@ -1145,7 +1154,7 @@ class ViewerClass:
                 status_text += f" | Trails: {'On' if show_trails else "Off"}"
                 text_surface = self.font.render(status_text, True, (255, 255, 0))
                 self.screen.blit(text_surface, (10, 10))
-                controls_text = f"Pause: Space | FF: shft + right | Trails: t"
+                controls_text = f"Pause: Space | FF: shft + right | Trails: t | frame by frame: , or ."
                 controls_surface = self.font.render(controls_text, True, (255, 255, 255))
                 self.screen.blit(controls_surface, (10, WINDOW_HEIGHT-30))
 

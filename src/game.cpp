@@ -332,8 +332,8 @@ inline void shootSystem(Engine &ctx,
 
     // 3. Mess up angle based on agent velocity
     float deviation_from_velocity = 0.0f;
-    if (action.moveSpeed > 0) {
-        float vel_stddev = VEL_DEVIATION_FACTOR/100 * action.moveSpeed;
+    if (action.move > 0) {
+        float vel_stddev = VEL_DEVIATION_FACTOR/100 * action.move;
         deviation_from_velocity = sampleUniform(ctx, -vel_stddev, vel_stddev);
     }
 
@@ -412,7 +412,8 @@ inline void moveAgentSystem(Engine &ctx,
                         InPossession &in_possession,
                         Inbounding &inbounding,
                         Orientation &agent_orientation,
-                        Attributes &attributes)
+                        Attributes &attributes,
+                        Velocity &agent_vel)
 {
     const GridState *grid = ctx.data().grid;
     if (action.rotate != 0)
@@ -422,58 +423,56 @@ inline void moveAgentSystem(Engine &ctx,
         agent_orientation.orientation = turn * agent_orientation.orientation;
     }
 
-    if (action_mask.can_move == 0 || action.moveSpeed == 0) {return;}
+    if (action_mask.can_move == 0) {return;}
 
-    if (action.moveSpeed > 0)
+    if (action.move > 0)
     {
-        // Treat moveSpeed as a velocity in meters/second, not a distance.
-        // Let's say a moveSpeed of 1 corresponds to 1 m/s.
-        float agent_velocity_magnitude = action.moveSpeed * attributes.speed * 4;
-        if (in_possession.hasBall == 1) {agent_velocity_magnitude *= BALL_AGENT_SLOWDOWN;}
+        if (in_possession.hasBall == 1) {agent_vel.velocity *= BALL_AGENT_SLOWDOWN;}
 
-        constexpr float angle_between_directions = ANGLE_BETWEEN_DIRECTIONS;
-        float move_angle = action.moveAngle * angle_between_directions;
+        float move_angle = action.moveAngle * ANGLE_BETWEEN_DIRECTIONS;
 
         // Calculate velocity vector components
-        float vel_x = std::sin(move_angle);
-        if (inbounding.imInbounding == 1.f) {vel_x = 0.f;}
-        float vel_y = -std::cos(move_angle); // Your forward is -Y
-        
-        Vector3 agent_orientation_as_vec = agent_orientation.orientation.rotateVec(AGENT_BASE_FORWARD);
-        float dot_between_orientation_and_velocity = Vector3{vel_x, vel_y, 0}.normalize().dot(agent_orientation_as_vec);
-        
-
-        if (dot_between_orientation_and_velocity < -0.1f) {agent_velocity_magnitude *= 0.35f;} // moving backwards
-        else if (dot_between_orientation_and_velocity < 0.1f) {agent_velocity_magnitude *= 0.5f;} // moving sideways
-        
-
-        // Calculate distance to move this frame
-        float dx = vel_x * agent_velocity_magnitude * TIMESTEPS_TO_SECONDS_FACTOR;
-        float dy = vel_y * agent_velocity_magnitude * TIMESTEPS_TO_SECONDS_FACTOR;
-
-
-
-        // Update position (now using floats)
-        float new_x = agent_pos.position.x + dx;
-        float new_y = agent_pos.position.y + dy;
-
-        // Boundary checking in continuous space
-        new_x = clamp(new_x, 0.f, grid->width);
-        new_y = clamp(new_y, 0.f, grid->height);
-
-        // Convert to discrete grid for wall collision checking
-        int32_t discrete_x = (int32_t)(new_x * grid->cellsPerMeter);
-        int32_t discrete_y = (int32_t)(new_y * grid->cellsPerMeter);
-        discrete_x = clamp(discrete_x, 0, grid->discreteWidth - 1);
-        discrete_y = clamp(discrete_y, 0, grid->discreteHeight - 1);
-
-        const Cell &new_cell = grid->cells[discrete_y * grid->discreteWidth + discrete_x];
-
-        if (!(new_cell.flags & CellFlag::Wall)) {
-            agent_pos.position.x = new_x;
-            agent_pos.position.y = new_y;
-        }
+        Vector3 delta_vel = Vector3{std::sin(move_angle), -std::cos(move_angle), 0} * attributes.quickness; // Forward is -Y
+        if (inbounding.imInbounding == 1.f) {delta_vel.x = 0.f;}
+        agent_vel.velocity += delta_vel;
+        if (agent_vel.velocity.length() > attributes.maxSpeed) {agent_vel.velocity *= attributes.maxSpeed / agent_vel.velocity.length();}
     }
+        
+    Vector3 agent_orientation_as_vec = agent_orientation.orientation.rotateVec(AGENT_BASE_FORWARD);
+    float dot_between_orientation_and_velocity = agent_vel.velocity.normalize().dot(agent_orientation_as_vec);
+    
+
+    if (dot_between_orientation_and_velocity < -0.1f) {agent_vel.velocity *= 0.35f;} // moving backwards
+    else if (dot_between_orientation_and_velocity < 0.1f) {agent_vel.velocity *= 0.5f;} // moving sideways
+    
+
+    // Calculate distance to move this frame
+    float dx = agent_vel.velocity.x * TIMESTEPS_TO_SECONDS_FACTOR;
+    float dy = agent_vel.velocity.y * TIMESTEPS_TO_SECONDS_FACTOR;
+
+
+    // Update position (now using floats)
+    float new_x = agent_pos.position.x + dx;
+    float new_y = agent_pos.position.y + dy;
+
+    // Boundary checking in continuous space
+    new_x = clamp(new_x, 0.f, grid->width);
+    new_y = clamp(new_y, 0.f, grid->height);
+
+    // Convert to discrete grid for wall collision checking
+    int32_t discrete_x = (int32_t)(new_x * grid->cellsPerMeter);
+    int32_t discrete_y = (int32_t)(new_y * grid->cellsPerMeter);
+    discrete_x = clamp(discrete_x, 0, grid->discreteWidth - 1);
+    discrete_y = clamp(discrete_y, 0, grid->discreteHeight - 1);
+
+    const Cell &new_cell = grid->cells[discrete_y * grid->discreteWidth + discrete_x];
+
+    if (!(new_cell.flags & CellFlag::Wall)) 
+    {
+        agent_pos.position.x = new_x;
+        agent_pos.position.y = new_y;
+    }
+    // agent_vel.velocity *= .95f;
 }
 
 
@@ -627,7 +626,7 @@ inline void hardCodeDefenseSystem(Engine &ctx,
         
         if (gameState.teamInPossession == defender_team.teamIndex)
         {
-            defender_action.moveSpeed = 0;
+            defender_action.move = 0;
             return;
         }
         
@@ -652,7 +651,7 @@ inline void hardCodeDefenseSystem(Engine &ctx,
     
     if (!found_offender)
     {
-        defender_action.moveSpeed = 0;
+        defender_action.move = 0;
         return;
     }
     
@@ -667,7 +666,7 @@ inline void hardCodeDefenseSystem(Engine &ctx,
     Vector3 move_vector = defender_attributes.currentTargetPosition - defender_pos.position;
     if (move_vector.length2() < 0.01f)
     {
-        defender_action.moveSpeed = 0;
+        defender_action.move = 0;
         return;
     }
     
@@ -700,7 +699,7 @@ inline void hardCodeDefenseSystem(Engine &ctx,
     }
     
     // Set the action to the best-matching direction
-    defender_action.moveSpeed = 1;
+    defender_action.move = 1;
     defender_action.moveAngle = best_move_angle;
 
 
@@ -1232,7 +1231,7 @@ TaskGraphNodeID setupGameStepTasks(
         ActionMask, GrabCooldown, InPossession, Inbounding>>({tickNode});
 
     auto moveAgentSystemNode = builder.addToGraph<ParallelForNode<Engine, moveAgentSystem,
-        Action, ActionMask, Position, InPossession, Inbounding, Orientation, Attributes>>({actionMaskingNode});
+        Action, ActionMask, Position, InPossession, Inbounding, Orientation, Attributes, Velocity>>({actionMaskingNode});
 
     auto grabSystemNode = builder.addToGraph<ParallelForNode<Engine, grabSystem,
         Entity, Action, ActionMask, Position, InPossession, Team, GrabCooldown>>({moveAgentSystemNode});

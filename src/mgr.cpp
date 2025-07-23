@@ -278,7 +278,7 @@ namespace madBasketball {
             agent_idx >= 0 && agent_idx < NUM_AGENTS) 
         {
             int32_t index = world_idx * NUM_AGENTS + agent_idx;
-            action_data[index].moveSpeed = move_speed;
+            action_data[index].move = move_speed;
             action_data[index].moveAngle = move_angle;
             action_data[index].rotate = rotate;
             action_data[index].grab = grab;
@@ -332,7 +332,7 @@ namespace madBasketball {
     Tensor Manager::actionTensor() const
     {
         return impl_->exportTensor(ExportID::Action, TensorElementType::Int32,
-            {impl_->cfg.numWorlds, NUM_AGENTS, 6}); // 8 actions: moveSpeed, moveAngle, rotate, grab, pass, shoot, steal, contest
+            {impl_->cfg.numWorlds, NUM_AGENTS, 6}); // 8 actions: move, moveAngle, rotate, grab, pass, shoot, steal, contest
     }
 
     Tensor Manager::actionMaskTensor() const

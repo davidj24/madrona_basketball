@@ -173,6 +173,7 @@ void generateWorld(Engine &ctx) {
     // We will set the Grabbed component later, after we know the agent's ID.
     ctx.get<Grabbed>(basketball) = Grabbed {false, ENTITY_ID_PLACEHOLDER};
     ctx.get<BallPhysics>(basketball) = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2, false};
+    ctx.get<Velocity>(basketball).velocity = Vector3::zero();
 
     // Now create agents with proper hoop references
     uint32_t offensive_agent_id = ENTITY_ID_PLACEHOLDER;
@@ -235,7 +236,8 @@ void generateWorld(Engine &ctx) {
         ctx.get<Orientation>(agent) = (i % 2 == 0) ? Orientation{Quat::angleAxis(-madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})} : Orientation{Quat::angleAxis(madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})};
         ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
         ctx.get<Stats>(agent) = {0.f, 0.f};
-        ctx.get<Attributes>(agent) = {1 - i*DEFENDER_SLOWDOWN, 0.f, 0.f, i*DEFENDER_REACTION, ctx.get<Position>(agent).position};
+        ctx.get<Attributes>(agent) = {DEFAULT_SPEED - i*DEFENDER_SLOWDOWN, 1.f - i, 0.f, 0.f, i*DEFENDER_REACTION, ctx.get<Position>(agent).position};
+        ctx.get<Velocity>(agent).velocity = Vector3::zero();
         // Use actual hoop entity IDs from gameState
         uint32_t defending_hoop_id = (i % 2 == 0) ? (uint32_t)gameState.team0Hoop : (uint32_t)gameState.team1Hoop;
         // Use team color constants
@@ -318,6 +320,7 @@ void resetWorld(Engine &ctx) {
         ctx.get<Orientation>(agent) = (i % 2 == 0) ? Orientation{Quat::angleAxis(-madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})} : Orientation{Quat::angleAxis(madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})};
         ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
         ctx.get<Stats>(agent) = Stats{0.f, 0.f};
+        ctx.get<Velocity>(agent).velocity = Vector3::zero();
 
         Position &pos = ctx.get<Position>(agent);
         InPossession &in_pos = ctx.get<InPossession>(agent);
@@ -346,7 +349,7 @@ void resetWorld(Engine &ctx) {
             pos = Position { Vector3{ grid->startX - 1 - (-2*(agent_i % 2)), grid->startY - 2 + agent_i/2, 0.f } };
         }
 
-        ctx.get<Attributes>(agent) = {1.f - agent_i*DEFENDER_SLOWDOWN, 0.f, 0.f, agent_i*DEFENDER_REACTION, pos.position};
+        ctx.get<Attributes>(agent) = {DEFAULT_SPEED - agent_i*DEFENDER_SLOWDOWN, 1.f-agent_i, 0.f, 0.f, agent_i*DEFENDER_REACTION, pos.position};
 
         uint32_t defending_hoop_id = (agent_i % 2 == 0) ? (uint32_t)gameState.team0Hoop : (uint32_t)gameState.team1Hoop;
         ctx.get<Team>(agent) = Team{agent_i % 2, team_colors[agent_i % 2], defending_hoop_id};
@@ -362,6 +365,7 @@ void resetWorld(Engine &ctx) {
         ctx.get<Done>(ball).episodeDone = 1.f;
         ctx.get<CurStep>(ball).step = 0;
         ctx.get<BallPhysics>(ball) = BallPhysics {false, Vector3::zero(), ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2, false};
+        ctx.get<Velocity>(ball).velocity = Vector3::zero();
         Grabbed &grabbed = ctx.get<Grabbed>(ball);
         if (gameState.isOneOnOne == 1.f)
         {
