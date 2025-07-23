@@ -81,7 +81,12 @@ namespace madBasketball {
     {
         Vector3 position;
     };
-
+    
+    struct Velocity
+    {
+        Vector3 velocity;
+    };
+    
     struct RandomMovement 
     {
         float moveTimer;
@@ -119,10 +124,6 @@ namespace madBasketball {
         Quat orientation;
     };
 
-    struct Velocity
-    {
-        Vector3 velocity;
-    };
 
     struct Reward 
     {

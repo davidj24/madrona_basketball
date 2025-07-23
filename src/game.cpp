@@ -1039,13 +1039,14 @@ inline void inboundViolationSystem(Engine &ctx, WorldClock &world_clock)
 }
 
 
-// This is a temporary helper struct used ONLY by the fillObservationsSystem
+// This is a helper struct used ONLY by the fillObservationsSystem
 // to gather all agent data before sorting it into the observation vector.
 struct AgentObservationData {
     int32_t id;
     int32_t teamID;
     Position pos;
     Orientation orient;
+    Velocity velocity;
     InPossession in_pos;
     Inbounding inb;
     GrabCooldown cooldown;
@@ -1060,7 +1061,8 @@ inline void fillObservationsSystem(Engine &ctx,
                                    InPossession &in_possession,
                                    Inbounding &inbounding,
                                    Team &agent_team,
-                                   GrabCooldown &grab_cooldown)
+                                   GrabCooldown &grab_cooldown,
+                                   Velocity &agent_vel)
 {
     auto &obs = observations.observationsArray;
     const GameState &gameState = ctx.singleton<GameState>();
@@ -1116,10 +1118,11 @@ inline void fillObservationsSystem(Engine &ctx,
         Team &t = ctx.get<Team>(agent);
         Position &p = ctx.get<Position>(agent);
         Orientation &o = ctx.get<Orientation>(agent);
+        Velocity &v = ctx.get<Velocity>(agent);
         InPossession &ip = ctx.get<InPossession>(agent);
         Inbounding &ib = ctx.get<Inbounding>(agent);
         GrabCooldown &gc = ctx.get<GrabCooldown>(agent);
-        all_agents[agent_idx++] = { agent.id, t.teamIndex, p, o, ip, ib, gc };
+        all_agents[agent_idx++] = { agent.id, t.teamIndex, p, o, v, ip, ib, gc };
         if (ib.imInbounding) {
             inbounder_id = agent.id;
         }
@@ -1165,10 +1168,12 @@ inline void fillObservationsSystem(Engine &ctx,
     // Self Data
     fill_vec3(agent_pos.position);
     fill_quat(agent_orientation.orientation);
+    fill_vec3(agent_vel.velocity);
     obs[idx++] = (float)in_possession.hasBall;
     obs[idx++] = (float)in_possession.pointsWorth;
     obs[idx++] = (float)inbounding.imInbounding;
     obs[idx++] = grab_cooldown.cooldown;
+    obs[idx++] = (attacking_hoop_pos.position - agent_pos.position).length(); // Distance to hoop only for self
 
     // Teammate & Opponent Data
     int teammate_count = 0;
@@ -1185,6 +1190,7 @@ inline void fillObservationsSystem(Engine &ctx,
             {
                 fill_vec3(all_agents[i].pos.position);
                 fill_quat(all_agents[i].orient.orientation);
+                fill_vec3(all_agents[i].velocity.velocity);
                 obs[idx++] = (float)all_agents[i].in_pos.hasBall;
                 teammate_count++;
             }
@@ -1195,6 +1201,7 @@ inline void fillObservationsSystem(Engine &ctx,
             {
                 fill_vec3(all_agents[i].pos.position);
                 fill_quat(all_agents[i].orient.orientation);
+                fill_vec3(all_agents[i].velocity.velocity);
                 obs[idx++] = (float)all_agents[i].in_pos.hasBall;
                 opponent_count++;
             }
@@ -1202,7 +1209,7 @@ inline void fillObservationsSystem(Engine &ctx,
     }
 
     // Padding for agent data
-    int agent_feature_size = 3 + 4 + 1; // Pos, Orient, HasBall
+    constexpr int agent_feature_size = 3 + 4 + 3 + 1; // Pos, Orient, Velocity, HasBall, 
     for (int i = teammate_count; i < max_teammates; i++)
     {
         for (int j = 0; j < agent_feature_size; j++) obs[idx++] = 0.f;
@@ -1289,7 +1296,7 @@ TaskGraphNodeID setupGameStepTasks(
 
     auto fillObservationsNode = builder.addToGraph<ParallelForNode<Engine, fillObservationsSystem,
         Entity, Observations, Position, Orientation, InPossession,
-        Inbounding, Team, GrabCooldown>>({hardCodeDefenseSystemNode});
+        Inbounding, Team, GrabCooldown, Velocity>>({hardCodeDefenseSystemNode});
 
     auto rewardSystemNode = builder.addToGraph<ParallelForNode<Engine, rewardSystem,
         Entity, Reward, Position, Team, InPossession>>({fillObservationsNode});
