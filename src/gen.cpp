@@ -236,7 +236,7 @@ void generateWorld(Engine &ctx) {
         ctx.get<Orientation>(agent) = (i % 2 == 0) ? Orientation{Quat::angleAxis(-madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})} : Orientation{Quat::angleAxis(madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})};
         ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
         ctx.get<Stats>(agent) = {0.f, 0.f};
-        ctx.get<Attributes>(agent) = {DEFAULT_SPEED - i*DEFENDER_SLOWDOWN, 1.f - i, 0.f, 0.f, i*DEFENDER_REACTION, ctx.get<Position>(agent).position};
+        ctx.get<Attributes>(agent) = {DEFAULT_SPEED - i*DEFENDER_SLOWDOWN, 1.f - i/2, 0.f, 0.f, i*DEFENDER_REACTION, ctx.get<Position>(agent).position};
         ctx.get<Velocity>(agent).velocity = Vector3::zero();
         // Use actual hoop entity IDs from gameState
         uint32_t defending_hoop_id = (i % 2 == 0) ? (uint32_t)gameState.team0Hoop : (uint32_t)gameState.team1Hoop;
@@ -349,7 +349,7 @@ void resetWorld(Engine &ctx) {
             pos = Position { Vector3{ grid->startX - 1 - (-2*(agent_i % 2)), grid->startY - 2 + agent_i/2, 0.f } };
         }
 
-        ctx.get<Attributes>(agent) = {DEFAULT_SPEED - agent_i*DEFENDER_SLOWDOWN, 1.f-agent_i, 0.f, 0.f, agent_i*DEFENDER_REACTION, pos.position};
+        ctx.get<Attributes>(agent) = {DEFAULT_SPEED - agent_i*DEFENDER_SLOWDOWN, 1.f - agent_i/2, 0.f, 0.f, agent_i*DEFENDER_REACTION, pos.position};
 
         uint32_t defending_hoop_id = (agent_i % 2 == 0) ? (uint32_t)gameState.team0Hoop : (uint32_t)gameState.team1Hoop;
         ctx.get<Team>(agent) = Team{agent_i % 2, team_colors[agent_i % 2], defending_hoop_id};

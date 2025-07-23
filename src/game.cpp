@@ -425,25 +425,32 @@ inline void moveAgentSystem(Engine &ctx,
 
     if (action_mask.can_move == 0) {return;}
 
-    if (action.move > 0)
-    {
-        if (in_possession.hasBall == 1) {agent_vel.velocity *= BALL_AGENT_SLOWDOWN;}
 
-        float move_angle = action.moveAngle * ANGLE_BETWEEN_DIRECTIONS;
-
-        // Calculate velocity vector components
-        Vector3 delta_vel = Vector3{std::sin(move_angle), -std::cos(move_angle), 0} * attributes.quickness; // Forward is -Y
-        if (inbounding.imInbounding == 1.f) {delta_vel.x = 0.f;}
-        agent_vel.velocity += delta_vel;
-        if (agent_vel.velocity.length() > attributes.maxSpeed) {agent_vel.velocity *= attributes.maxSpeed / agent_vel.velocity.length();}
-    }
-        
+    
+    float move_angle = action.moveAngle * ANGLE_BETWEEN_DIRECTIONS;
+    
+    // Calculate velocity vector components
+    Vector3 delta_vel = Vector3{std::sin(move_angle), -std::cos(move_angle), 0} * attributes.quickness * action.move; // Forward is -Y
+    
+    
+    float maximum_speed = attributes.maxSpeed;
     Vector3 agent_orientation_as_vec = agent_orientation.orientation.rotateVec(AGENT_BASE_FORWARD);
     float dot_between_orientation_and_velocity = agent_vel.velocity.normalize().dot(agent_orientation_as_vec);
-    
 
-    if (dot_between_orientation_and_velocity < -0.1f) {agent_vel.velocity *= 0.35f;} // moving backwards
-    else if (dot_between_orientation_and_velocity < 0.1f) {agent_vel.velocity *= 0.5f;} // moving sideways
+    if (dot_between_orientation_and_velocity < -0.1f) // moving backwards
+    {
+        maximum_speed *= .4f;
+        delta_vel *= .1f;
+    } 
+    else if (dot_between_orientation_and_velocity <= 0.8f) // moving sideways
+    {
+        maximum_speed *= .7f;
+        delta_vel *= .1f;
+    } 
+    agent_vel.velocity += delta_vel;
+    if (agent_vel.velocity.length() > maximum_speed) {agent_vel.velocity *= maximum_speed / agent_vel.velocity.length();}
+    if (inbounding.imInbounding == 1.f) {delta_vel.x = 0.f;}
+    if (in_possession.hasBall == 1) {maximum_speed *= BALL_AGENT_SLOWDOWN;}
     
 
     // Calculate distance to move this frame
@@ -472,7 +479,7 @@ inline void moveAgentSystem(Engine &ctx,
         agent_pos.position.x = new_x;
         agent_pos.position.y = new_y;
     }
-    // agent_vel.velocity *= .95f;
+    agent_vel.velocity *= .95f;
 }
 
 
@@ -706,7 +713,7 @@ inline void hardCodeDefenseSystem(Engine &ctx,
     // make defender face basketball
     Vector3 defender_orientation_as_vec = defender_orientation.orientation.rotateVec(AGENT_BASE_FORWARD);
     float angle_between_vectors = acos(clamp(defender_orientation_as_vec.dot(move_vector.normalize()), -1.f, 1.f)); // cos(angle_between_vecs) = vec1 \cdot vec2 / (||vec1|| ||vec2||) adn we're isolating angle_between_vec
-    if (angle_between_vectors > pi/8.f)
+    if (angle_between_vectors > pi/4.f)
     {
         float direction_cross = defender_orientation_as_vec.x * move_vector.y - defender_orientation_as_vec.y * move_vector.x;
         if (direction_cross < 0) {defender_action.rotate = -1.f;}

@@ -10,7 +10,7 @@ namespace madBasketball {
     // ======================================== Simulation Parameters ========================================
     constexpr float SIMULATION_HZ = 62.0f; // How many timesteps are in one second
     constexpr float TIMESTEPS_TO_SECONDS_FACTOR = 1.0f / SIMULATION_HZ;
-    constexpr float TIME_PER_PERIOD = 10.f; // (in seconds)
+    constexpr float TIME_PER_PERIOD = 1000.f; // (in seconds)
 
 
     // ======================================== Rendering & Scaling ========================================
