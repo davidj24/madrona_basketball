@@ -968,7 +968,7 @@ class ViewerClass:
         """Get the index of the currently selected agent for human control"""
         return self.active_agent_idx
 
-    def draw_playback_frame_multi_episode(self, agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step_for_world, current_playback_episode, trail_surface, world_num, current_step, max_episode_length):
+    def draw_playback_frame_multi_episode(self, agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step_for_world, current_playback_episode, trail_surface, world_num, fading_trails=False, current_step=0, max_episode_length=1):
         """
         Draws agents and balls, but only for worlds that have not yet
         completed the current target episode number.
@@ -978,15 +978,19 @@ class ViewerClass:
         if episodes_completed_at_this_step_for_world == current_playback_episode:
             for agent_idx in range(num_agents):
                 pos = agent_pos_frame[agent_idx]
+                q = orientation_frame[agent_idx]
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
 
-                if current_step > 0:
+                if fading_trails and current_step > 0:
                     base_trail_color = TEAM0_COLOR if agent_idx % 2 == 0 else TEAM1_COLOR
                     x = current_step / max_episode_length if max_episode_length > 0 else 0
                     faded_trail_color = tuple(int(x * 0.5 * c + (1 - x) * c) for c in base_trail_color)
                     pygame.draw.circle(trail_surface, faded_trail_color, (screen_x, screen_y), 3)
-                else:
-                    q = orientation_frame[agent_idx]
+                elif not fading_trails:
+                    trail_color = TEAM0_COLOR if agent_idx % 2 == 0 else TEAM1_COLOR
+                    pygame.draw.circle(trail_surface, trail_color, (screen_x, screen_y), 3)
+
+                if not fading_trails or current_step == 0:
                     agent_color = TEAM0_COLOR if agent_idx % 2 == 0 else TEAM1_COLOR
                     forward_vec_3d = rotate_vec(q, np.array([0.0, 1.0, 0.0]))
                     forward_vec = np.array([forward_vec_3d[0], forward_vec_3d[1]])
@@ -1012,7 +1016,7 @@ class ViewerClass:
                     arrow_end = (screen_x + arrow_len_px * forward_vec[0], screen_y + arrow_len_px * forward_vec[1])
                     pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 2)
             
-            if current_step == 0:
+            if not fading_trails or current_step == 0:
                 ball_pos = ball_pos_frame[0]
                 screen_x, screen_y = self.meters_to_screen(ball_pos[0], ball_pos[1])
                 ball_radius_px = BALL_RADIUS_M * self.pixels_per_meter
@@ -1022,7 +1026,7 @@ class ViewerClass:
                 world_num_rect = world_num_surface.get_rect(center=(screen_x, screen_y))
                 self.screen.blit(world_num_surface, world_num_rect)
 
-    def run_trajectory_playback(self, log_path):
+    def run_trajectory_playback(self, log_path, fading_trails=False):
         """
         Loads a trajectory log file and plays back multiple episodes, pausing
         between each one and waiting for user input to continue.
@@ -1084,10 +1088,6 @@ class ViewerClass:
             paused = False
             running = True
             show_trails = False
-            # Use this episode_step to track how many steps we are in in the episode. For each episode, go to the environment's episode start timestep, and render the gameState at that timestep for that environment. THen increase the episode_step
-            # by one and repeat. This way every environment's episode will start at the same time and go. Repeat this until the episodes_completed_at_this_step[environment] > current_playback_episode.
-            # However we also need to update episodes_completed_at_this_step for every environment given their current timestep. We could alternatively add the end timestep of the episodes into the dictionary and go while start + episode_step < end_step
-            # Create a dictionary that will have every episode's earliest start timestep
             episode_breaks = [[] for _ in range(num_worlds)]
             for world_num in range(num_worlds):
                 last_done_step = -1
@@ -1104,13 +1104,13 @@ class ViewerClass:
                         running = False
                     if event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_SPACE:
-                            # Allow pausing/unpausing only when not waiting for the next episode
-                            if not is_paused_for_next_episode:
-                                paused = not paused
-                                print("Paused" if paused else "Playing")
+                            paused = not paused
+                            print("Paused" if paused else "Playing")
                         if event.key == pygame.K_b:
                             if current_playback_episode > 0:
                                 current_playback_episode -= 1
+                                if not fading_trails:
+                                    trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
                                 episode_lengths = [world_info[current_playback_episode]['end'] - world_info[current_playback_episode]['start'] for world_info in episode_breaks]
                                 print(f"Now, current episode is: {current_playback_episode} and the max lengths are: {episode_lengths}")
                                 is_paused_for_next_episode = False
@@ -1120,6 +1120,8 @@ class ViewerClass:
                         if event.key == pygame.K_n:
                             if current_playback_episode < total_episodes_in_log:
                                 current_playback_episode += 1
+                                if not fading_trails:
+                                    trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
                                 episode_lengths = [world_info[current_playback_episode]['end'] - world_info[current_playback_episode]['start'] for world_info in episode_breaks]
                                 print(f"Now, current episode is: {current_playback_episode} and the max lengths are: {episode_lengths}")
                                 is_paused_for_next_episode = False
@@ -1137,6 +1139,7 @@ class ViewerClass:
                 
                 keys = pygame.key.get_pressed()
                 if keys[pygame.K_LEFT]:
+                    is_paused_for_next_episode = False
                     episode_step = max(0, episode_step-1 if not keys[pygame.K_LSHIFT] else episode_step-5)
                 if keys[pygame.K_RIGHT]:
                     episode_step = min(max(episode_lengths), episode_step+1 if not keys[pygame.K_LSHIFT] else episode_step+5)
@@ -1144,23 +1147,35 @@ class ViewerClass:
                 self.screen.blit(background, (0, 0))
                 
                 if show_trails:
-                    trail_surface.fill((0, 0, 0, 0))
-                    max_episode_length = max(episode_lengths) if episode_lengths else 1
-                    
-                    for trail_step in range(max(0, episode_step - max_episode_length + 1), episode_step + 1):
-                        if trail_step < 0:
-                            continue
-                        for world_num in range(num_worlds):
-                            if trail_step + episode_breaks[world_num][current_playback_episode]['start'] >= num_steps:
+                    if fading_trails:
+                        max_episode_length = max(episode_lengths) if episode_lengths else 1
+                        
+                        # Draw fading trails directly to the screen for each historical step
+                        for trail_step in range(max(0, episode_step - max_episode_length + 1), episode_step + 1):
+                            if trail_step < 0:
                                 continue
-                            trail_agent_pos = agent_pos_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step][world_num]
-                            trail_orientation = orientation_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step][world_num]
-                            trail_ball_pos = ball_pos_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step][world_num]
-                            trail_episodes_completed = episodes_completed_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step]
-                            
-                            self.draw_playback_frame_multi_episode(trail_agent_pos, trail_ball_pos, trail_orientation, trail_episodes_completed[world_num], current_playback_episode, trail_surface, world_num, episode_step - trail_step, max_episode_length)
-                    
-                    self.screen.blit(trail_surface, (0, 0))
+                            for world_num in range(num_worlds):
+                                if trail_step + episode_breaks[world_num][current_playback_episode]['start'] >= num_steps:
+                                    continue
+                                trail_agent_pos = agent_pos_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step][world_num]
+                                trail_orientation = orientation_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step][world_num]
+                                trail_ball_pos = ball_pos_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step][world_num]
+                                trail_episodes_completed = episodes_completed_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step]
+                                
+                                # Draw fading trail points directly for this step
+                                if trail_episodes_completed[world_num] == current_playback_episode:
+                                    num_agents, _ = trail_agent_pos.shape
+                                    for agent_idx in range(num_agents):
+                                        pos = trail_agent_pos[agent_idx]
+                                        screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+                                        
+                                        # Calculate fading color
+                                        base_trail_color = TEAM0_COLOR if agent_idx % 2 == 0 else TEAM1_COLOR
+                                        x = (episode_step - trail_step) / max_episode_length if max_episode_length > 0 else 0
+                                        faded_trail_color = tuple(int(x * 0.5 * c + (1 - x) * c) for c in base_trail_color)
+                                        pygame.draw.circle(self.screen, faded_trail_color, (screen_x, screen_y), 3)
+                    else:
+                        self.screen.blit(trail_surface, (0, 0))
 
                 for world_num in range(num_worlds):
                     agent_pos_frame = agent_pos_log[episode_breaks[world_num][current_playback_episode]['start'] + episode_step][world_num]
@@ -1168,7 +1183,7 @@ class ViewerClass:
                     orientation_frame = orientation_log[episode_breaks[world_num][current_playback_episode]['start'] + episode_step][world_num]
 
                     episodes_completed_at_this_step = episodes_completed_log[episode_breaks[world_num][current_playback_episode]['start'] + episode_step]
-                    self.draw_playback_frame_multi_episode(agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step[world_num], current_playback_episode, trail_surface, world_num, 0, max(episode_lengths) if episode_lengths else 1)
+                    self.draw_playback_frame_multi_episode(agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step[world_num], current_playback_episode, trail_surface, world_num, fading_trails, 0, max(episode_lengths) if episode_lengths else 1)
 
                 # Draw status text
                 status_text = f"Viewing Episode: {current_playback_episode}/{total_episodes_in_log} | step: {episode_step}"
@@ -1209,11 +1224,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Madrona Basketball Viewer: Live Sim or Trajectory Playback")
     parser.add_argument('--playback-log', type=str, help="Path to an .npz trajectory log file for playback.")
     parser.add_argument('--trail', action='store_true', default=False)
+    parser.add_argument('--fading-trails', action='store_true', default=False)
     args = parser.parse_args()
 
     if args.playback_log:
         viewer = ViewerClass()
-        viewer.run_trajectory_playback(args.playback_log)
+        viewer.run_trajectory_playback(args.playback_log, args.fading_trails)
     else:
         print("No playback log provided. To view trajectories, run with:")
         print("python viewer.py --playback-log path/to/your/log.npz")
