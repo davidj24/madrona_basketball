@@ -13,7 +13,7 @@ from action import DiscreteActionDistributions
 import warnings
 warnings.filterwarnings("error")
 
-torch.manual_seed(0)
+# torch.manual_seed(0)
 
 
 
@@ -116,7 +116,7 @@ def infer(args):
         static_log['num_episodes'] = args.num_episodes
 
         np.savez_compressed(args.log_path, **static_log, **episode_log)
-        print("Finished logging. Trajectory saved to {args.log_path}")
+        print(f"Finished logging. Trajectory saved to {args.log_path}")
     print("Inference Complete")
 
     

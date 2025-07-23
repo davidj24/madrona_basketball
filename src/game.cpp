@@ -717,7 +717,7 @@ inline void hardCodeDefenseSystem(Engine &ctx,
     // make defender face basketball
     Vector3 defender_orientation_as_vec = defender_orientation.orientation.rotateVec(AGENT_BASE_FORWARD);
     float angle_between_vectors = acos(clamp(defender_orientation_as_vec.dot(move_vector.normalize()), -1.f, 1.f)); // cos(angle_between_vecs) = vec1 \cdot vec2 / (||vec1|| ||vec2||) adn we're isolating angle_between_vec
-    if (angle_between_vectors > pi/4.f)
+    if (angle_between_vectors > pi/8.f)
     {
         float direction_cross = defender_orientation_as_vec.x * move_vector.y - defender_orientation_as_vec.y * move_vector.x;
         if (direction_cross < 0) {defender_action.rotate = -1.f;}

@@ -1039,7 +1039,7 @@ class ViewerClass:
                 return
             
             if 'num_episodes' in log_data:
-                total_episodes_in_log = int(log_data['num_episodes'])
+                total_episodes_in_log = int(log_data['num_episodes']) - 1
                 print(f"Log file contains data for up to {total_episodes_in_log} episodes.")
 
 
@@ -1104,9 +1104,20 @@ class ViewerClass:
                             if not is_paused_for_next_episode:
                                 paused = not paused
                                 print("Paused" if paused else "Playing")
+                        if event.key == pygame.K_b:
+                            # Advance to the next episode if paused and not at the end
+                            if current_playback_episode > 0:
+                                current_playback_episode -= 1
+                                trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+                                episode_lengths = [world_info[current_playback_episode]['end'] - world_info[current_playback_episode]['start'] for world_info in episode_breaks]
+                                print(f"Now, current episode is: {current_playback_episode} and the max lengths are: {episode_lengths}")
+                                is_paused_for_next_episode = False
+                                paused = False
+                                episode_step = 0
+                                print(f"Playing Episode {current_playback_episode}")
                         if event.key == pygame.K_n:
                             # Advance to the next episode if paused and not at the end
-                            if is_paused_for_next_episode and current_playback_episode < total_episodes_in_log:
+                            if current_playback_episode < total_episodes_in_log:
                                 current_playback_episode += 1
                                 trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
                                 episode_lengths = [world_info[current_playback_episode]['end'] - world_info[current_playback_episode]['start'] for world_info in episode_breaks]

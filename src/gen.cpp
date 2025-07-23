@@ -175,6 +175,9 @@ void generateWorld(Engine &ctx) {
     ctx.get<BallPhysics>(basketball) = BallPhysics {false, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2, false};
     ctx.get<Velocity>(basketball).velocity = Vector3::zero();
 
+
+
+
     // Now create agents with proper hoop references
     uint32_t offensive_agent_id = ENTITY_ID_PLACEHOLDER;
     for (int i = 0; i < NUM_AGENTS; i++)
@@ -236,7 +239,7 @@ void generateWorld(Engine &ctx) {
         ctx.get<Orientation>(agent) = (i % 2 == 0) ? Orientation{Quat::angleAxis(-madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})} : Orientation{Quat::angleAxis(madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})};
         ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
         ctx.get<Stats>(agent) = {0.f, 0.f};
-        ctx.get<Attributes>(agent) = {DEFAULT_SPEED - i*DEFENDER_SLOWDOWN, 1.f - i/2, 0.f, 0.f, i*DEFENDER_REACTION, ctx.get<Position>(agent).position};
+        ctx.get<Attributes>(agent) = {DEFAULT_SPEED - i*DEFENDER_SLOWDOWN, 1.f - i/1.2f, 0.f, 0.f, i*DEFENDER_REACTION, ctx.get<Position>(agent).position};
         ctx.get<Velocity>(agent).velocity = Vector3::zero();
         // Use actual hoop entity IDs from gameState
         uint32_t defending_hoop_id = (i % 2 == 0) ? (uint32_t)gameState.team0Hoop : (uint32_t)gameState.team1Hoop;
@@ -340,7 +343,21 @@ void resetWorld(Engine &ctx) {
             }
             else
             {
-                pos = Position { Vector3{ grid->startX - (-2*(agent_i % 2)), grid->startY, 0.f } };
+                float random_angle = sampleUniform(ctx, 0.f, 2.f * madrona::math::pi);
+
+                float spawn_radius = 2.0f;
+
+                Vector3 offset = {
+                    spawn_radius * cosf(random_angle),
+                    spawn_radius * sinf(random_angle),
+                    0.f
+                };
+
+                pos.position = agent_pos_for_ball.position + offset;
+
+                pos.position.x = clamp(pos.position.x, 0.f, grid->width);
+                pos.position.y = clamp(pos.position.y, 0.f, grid->height);
+                
                 in_pos = {false, ENTITY_ID_PLACEHOLDER, 2};
             }
         }
@@ -349,7 +366,7 @@ void resetWorld(Engine &ctx) {
             pos = Position { Vector3{ grid->startX - 1 - (-2*(agent_i % 2)), grid->startY - 2 + agent_i/2, 0.f } };
         }
 
-        ctx.get<Attributes>(agent) = {DEFAULT_SPEED - agent_i*DEFENDER_SLOWDOWN, 1.f - agent_i/2, 0.f, 0.f, agent_i*DEFENDER_REACTION, pos.position};
+        ctx.get<Attributes>(agent) = {DEFAULT_SPEED - agent_i*DEFENDER_SLOWDOWN, 1.f - agent_i/1.2f, 0.f, 0.f, agent_i*DEFENDER_REACTION, pos.position};
 
         uint32_t defending_hoop_id = (agent_i % 2 == 0) ? (uint32_t)gameState.team0Hoop : (uint32_t)gameState.team1Hoop;
         ctx.get<Team>(agent) = Team{agent_i % 2, team_colors[agent_i % 2], defending_hoop_id};
