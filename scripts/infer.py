@@ -10,6 +10,7 @@ from pathlib import Path
 from env import EnvWrapper
 from agent import Agent
 from action import DiscreteActionDistributions
+from controllers import SimpleControllerManager
 import warnings
 warnings.filterwarnings("error")
 
@@ -32,6 +33,16 @@ def infer(args):
     policy.load(args.checkpoint_path)
     policy.eval()
     print(f"Successfully loaded policies from {args.checkpoint_path}.")
+
+    # Initialize SimpleControllerManager for interactive inference
+    controller_manager = SimpleControllerManager(policy, device)
+    
+    # Connect controller manager to environment for interactive inference
+    environment.set_controller_manager(controller_manager)
+    
+    # Print interactive inference instructions if viewer is enabled
+    if args.viewer:
+        print("🎮 Interactive mode: Press 'H' to toggle human control for selected agent in World 0")
 
     # Get tensor references - these are the full tensors for all agents
     observations_tensor = environment.observations  # Shape: [num_worlds, num_agents, obs_dim]
@@ -73,26 +84,50 @@ def infer(args):
         with torch.no_grad():
             if args.stochastic:
                 actions, _, _ = policy.forward(obs)
-                obs, reward, done = environment.step(actions)
-                obs = obs.to(device)
             else:
                 backbone_features = policy.backbone(obs)
                 logits = policy.actor(backbone_features)
                 action_dists = DiscreteActionDistributions(action_buckets, logits=logits)
                 best_actions = torch.zeros(args.num_envs, len(action_buckets), dtype=torch.long, device=device)
                 action_dists.best(best_actions)
+                actions = best_actions
                 
                 if step % 50 == 0:
-                    print(f"Step {step}: Agent actions = {best_actions[0].cpu().numpy()}")
+                    print(f"Step {step}: Agent actions = {actions[0].cpu().numpy()}")
+            
+            # Check if viewer exists and human control is active
+            if (environment.viewer is not None and 
+                controller_manager.is_human_control_active()):
                 
-                obs, reward, done = environment.step(best_actions)
-                obs = obs.to(device)
+                # Get human input for world 0
+                human_action = environment.viewer.get_human_action()
+                human_agent_idx = environment.viewer.get_selected_agent_index()
+                
+                # Convert to correct device/format
+                if isinstance(human_action, list):
+                    human_action = torch.tensor(human_action, dtype=torch.long, device=device)
+                else:
+                    human_action = human_action.to(device)
+                
+                # Use step_with_world_actions to override world 0
+                obs, reward, done = environment.step_with_world_actions(
+                    actions, 
+                    human_action_world_0=human_action, 
+                    human_agent_idx=human_agent_idx
+                )
+            else:
+                # Use regular step when no human control
+                obs, reward, done = environment.step(actions)
+            
+            obs = obs.to(device)
 
         if (args.log_path):
             log_entry = {
                 "agent_pos" : environment.worlds.agent_pos_tensor().to_torch().cpu().numpy().copy(),
                 "ball_pos" : environment.worlds.basketball_pos_tensor().to_torch().cpu().numpy().copy(),
-                "orientation": environment.worlds.orientation_tensor().to_torch().cpu().numpy().copy(),
+                "orientation" : environment.worlds.orientation_tensor().to_torch().cpu().numpy().copy(),
+                "actions" : actions.cpu().numpy().copy(),
+                "ball_physics" : environment.worlds.ball_physics_tensor().to_torch().cpu().numpy().copy(),
                 "done": done.cpu().numpy().copy()
             }
             trajectory_log.append(log_entry)
@@ -124,7 +159,6 @@ def infer(args):
 
 if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser()
-
     # For simulator constructor:
     arg_parser.add_argument("--discrete-x", type=int, default=20)
     arg_parser.add_argument("--discrete-y", type=int, default=15)

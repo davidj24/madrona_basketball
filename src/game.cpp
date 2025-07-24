@@ -1173,6 +1173,7 @@ inline void fillObservationsSystem(Engine &ctx,
     obs[idx++] = (float)in_possession.pointsWorth;
     obs[idx++] = (float)inbounding.imInbounding;
     obs[idx++] = grab_cooldown.cooldown;
+    fill_vec3((attacking_hoop_pos.position - agent_pos.position).normalize());
     obs[idx++] = (attacking_hoop_pos.position - agent_pos.position).length(); // Distance to hoop only for self
 
     // Teammate & Opponent Data

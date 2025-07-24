@@ -11,10 +11,64 @@ SIMULATION_HZ = 62.0  # How many timesteps are in one second
 TIMESTEPS_TO_SECONDS_FACTOR = 1.0 / SIMULATION_HZ
 TIME_PER_PERIOD = 300.0  # 5 minutes per quarter (in seconds)
 
-# ======================================== Rendering & Scaling ========================================
-PIXELS_PER_METER = 110.0  # Single source of truth for visualization scaling
-TEAM0_COLOR = (0, 100, 255)
-TEAM1_COLOR = (128, 0, 128)
+
+
+# ======================================== Gameplay Constants ========================================
+HOOP_SCORE_ZONE_SIZE = 0.1  # Radius for scoring detection
+IN_COURT_OFFSET = 0.1  # Buffer to ensure players are placed inside court lines
+SHOT_CLOCK_DURATION = 24.0  # Shot clock in seconds
+
+
+# ======================================== Agent Properties ========================================
+AGENT_SIZE_M = 0.25  # Agent visual size for rendering
+AGENT_SHOULDER_WIDTH = 0.4290 # Average shoulder width of agent
+AGENT_DEPTH = .1
+AGENT_ORIENTATION_ARROW_LENGTH_M = 0.5  # Length of orientation arrow
+EVENT_DEFINITIONS = {
+    "shoot" : {
+        "action_idx" : 5,
+        "outcome_func" : lambda ball_phys_tensor: ball_phys_tensor[6] > 0.5,
+        "visuals" : {
+            True : {"shape" : "circle", "color" : (0, 255, 0), "size" : 7},
+            False : {"shape" : "x", "color" : (255, 0, 0), "size" : 5},
+        }
+    },
+
+    "pass" : {
+        "action_idx" : 4,
+        "outcome_func" : True, # Later this should calculate if a pass is a turnover or something, so we can see different outcomes of passes
+        "visuals" : {
+            True : {"shape" : "circle", "color" : (0, 0, 255), "size" : 7},
+        }
+    },
+
+    "grab" : {
+        "action_idx" : 3,
+        "outcome_func" : True, # Later this should calculate if a pass is a turnover or something, so we can see different outcomes of passes
+        "visuals" : {
+            True : {"shape" : "circle", "color" : (0, 0, 255), "size" : 7},
+        }
+    }
+}
+
+
+
+
+
+
+# ======================================== Basketball Physical Properties ========================================
+BALL_DIAMETER_M = 0.242  # Official basketball diameter
+BALL_RADIUS_M = BALL_DIAMETER_M / 2.0
+BALL_CIRCUMFERENCE_M = 0.749  # Official basketball circumference
+
+
+
+
+# ======================================== Pygame/Visualization Constants ========================================
+WINDOW_WIDTH = 3500
+WINDOW_HEIGHT = 2000
+BACKGROUND_COLOR = (50, 50, 50)  # Dark gray
+TEXT_COLOR = (255, 255, 255)     # White
 
 
 
@@ -52,24 +106,9 @@ BACKBOARD_WIDTH_M = 1.829
 RIM_DIAMETER_M = 0.4572
 BACKBOARD_OFFSET_FROM_HOOP_M = (HOOP_FROM_BASELINE_M - 1.22)  # Distance from hoop center to backboard
 
-# ======================================== Gameplay Constants ========================================
-HOOP_SCORE_ZONE_SIZE = 0.1  # Radius for scoring detection
-IN_COURT_OFFSET = 0.1  # Buffer to ensure players are placed inside court lines
-SHOT_CLOCK_DURATION = 24.0  # Shot clock in seconds
 
-# ======================================== Basketball Physical Properties ========================================
-BALL_DIAMETER_M = 0.242  # Official basketball diameter
-BALL_RADIUS_M = BALL_DIAMETER_M / 2.0
-BALL_CIRCUMFERENCE_M = 0.749  # Official basketball circumference
 
-# ======================================== Agent Properties ========================================
-AGENT_SIZE_M = 0.25  # Agent visual size for rendering
-AGENT_SHOULDER_WIDTH = 0.4290 # Average shoulder width of agent
-AGENT_DEPTH = .1
-AGENT_ORIENTATION_ARROW_LENGTH_M = 0.5  # Length of orientation arrow
-
-# ======================================== Pygame/Visualization Constants ========================================
-WINDOW_WIDTH = 3500
-WINDOW_HEIGHT = 2000
-BACKGROUND_COLOR = (50, 50, 50)  # Dark gray
-TEXT_COLOR = (255, 255, 255)     # White
+# ======================================== Rendering & Scaling ========================================
+PIXELS_PER_METER = 110.0  # Single source of truth for visualization scaling
+TEAM0_COLOR = (0, 100, 255)
+TEAM1_COLOR = (128, 0, 128)
