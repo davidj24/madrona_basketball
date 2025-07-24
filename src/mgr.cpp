@@ -413,7 +413,7 @@ namespace madBasketball {
     Tensor Manager::ballPhysicsTensor() const
     {
         return impl_->exportTensor(ExportID::BallPhysicsData, TensorElementType::Int32,
-            {impl_->cfg.numWorlds, NUM_BASKETBALLS, 5}); // inFlight bool, vector3 elements, and last touched by id
+            {impl_->cfg.numWorlds, NUM_BASKETBALLS, 7});
     }
 
 

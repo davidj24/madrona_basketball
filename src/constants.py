@@ -36,7 +36,7 @@ EVENT_DEFINITIONS = {
 
     "pass" : {
         "action_idx" : 4,
-        "outcome_func" : True, # Later this should calculate if a pass is a turnover or something, so we can see different outcomes of passes
+        "outcome_func" : lambda its_true: True, # Later this should calculate if a pass is a turnover or something, so we can see different outcomes of passes
         "visuals" : {
             True : {"shape" : "circle", "color" : (0, 0, 255), "size" : 7},
         }
@@ -44,7 +44,7 @@ EVENT_DEFINITIONS = {
 
     "grab" : {
         "action_idx" : 3,
-        "outcome_func" : True, # Later this should calculate if a pass is a turnover or something, so we can see different outcomes of passes
+        "outcome_func" : lambda itstrue: True, # Later this should calculate if a pass is a turnover or something, so we can see different outcomes of passes
         "visuals" : {
             True : {"shape" : "circle", "color" : (0, 0, 255), "size" : 7},
         }
