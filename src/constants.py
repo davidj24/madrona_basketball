@@ -27,7 +27,8 @@ AGENT_ORIENTATION_ARROW_LENGTH_M = 0.5  # Length of orientation arrow
 EVENT_DEFINITIONS = {
     "shoot" : {
         "action_idx" : 5,
-        "outcome_func" : lambda ball_phys_tensor: ball_phys_tensor[6] > 0.5,
+        "conditions" : lambda log_data_tensor, step_num, world_num: log_data_tensor.get('ball_physics')[step_num, world_num, 0][0] == True and log_data_tensor.get('ball_physics')[step_num-1, world_num, 0][0] == False, # If action is taken on last timestep, you're cooked
+        "outcome_func" : lambda log_data, step_num, world_num: log_data.get('ball_physics')[step_num, world_num, 0][6] > 0.5,
         "visuals" : {
             True : {"shape" : "circle", "color" : (0, 255, 0), "size" : 7},
             False : {"shape" : "x", "color" : (255, 0, 0), "size" : 5},
@@ -36,7 +37,8 @@ EVENT_DEFINITIONS = {
 
     "pass" : {
         "action_idx" : 4,
-        "outcome_func" : lambda its_true: True, # Later this should calculate if a pass is a turnover or something, so we can see different outcomes of passes
+        "conditions" : lambda log_data_tensor, step_num, world_num: log_data_tensor.get('agent_possession')[step_num, world_num, 0][0] != log_data_tensor.get('agent_possession')[step_num-1, world_num, 0][0], # If action is taken on last timestep, you're cooked
+        "outcome_func" : lambda log_data, step_num, world_num: True, # Later this should calculate if a pass is a turnover or something, so we can see different outcomes of passes
         "visuals" : {
             True : {"shape" : "circle", "color" : (0, 0, 255), "size" : 7},
         }
@@ -44,7 +46,8 @@ EVENT_DEFINITIONS = {
 
     "grab" : {
         "action_idx" : 3,
-        "outcome_func" : lambda itstrue: True, # Later this should calculate if a pass is a turnover or something, so we can see different outcomes of passes
+        "conditions" : lambda log_data_tensor, step_num, world_num: log_data_tensor.get('agent_possession')[step_num, world_num, 0][0] != log_data_tensor.get('agent_possession')[step_num-1, world_num, 0][0], # If action is taken on last timestep, you're cooked
+        "outcome_func" : lambda log_data, step_num, world_num: True,
         "visuals" : {
             True : {"shape" : "circle", "color" : (0, 0, 255), "size" : 7},
         }

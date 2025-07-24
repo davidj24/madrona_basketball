@@ -1093,8 +1093,8 @@ class ViewerClass:
             ball_pos_log = log_data.get('ball_pos')
             hoop_pos = log_data.get('hoop_pos')
             orientation_log = log_data.get('orientation')
-            actions_log = log_data.get('actions')
             ball_physics_log = log_data.get('ball_physics')
+            actions_log = log_data.get('actions')
             done_log = log_data.get('done')
 
             if any(data is None for data in [agent_pos_log, ball_pos_log, hoop_pos, orientation_log, done_log]):
@@ -1125,31 +1125,24 @@ class ViewerClass:
                     if event_def and actions_log is not None and ball_physics_log is not None:
                         action_idx = event_def["action_idx"]
                         
-                        if len(actions_log.shape) == 4:  # [steps, worlds, agents, actions]
+                        if len(actions_log.shape) == 4:  # [steps, worlds, agents, actions] - multi-agent
                             for agent_num in range(num_agents):
-                                if (step_num < len(actions_log) and 
-                                    actions_log[step_num, world_num, agent_num, action_idx] == 1 and 
-                                    step_num > 0 and
-                                    actions_log[step_num - 1, world_num, agent_num, action_idx] == 0):
-                                    ball_physics_at_event = ball_physics_log[step_num, world_num, 0]
-                                    outcome = event_def["outcome_func"](ball_physics_at_event)
+                                if (step_num < len(actions_log) and actions_log[step_num, world_num, agent_num, action_idx] == 1): # Checks if action happened this timestep
+                                    if event_def["conditions"](log_data, step_num, world_num):
+                                        outcome = event_def["outcome_func"](log_data, step_num, world_num)
+                                        parsed_events.append({
+                                            'pos': agent_pos_log[step_num, world_num, agent_num],
+                                            'outcome': outcome
+                                        })
+                        elif len(actions_log.shape) == 3:  # [steps, worlds, actions] - single agent per world
+                            if (step_num < len(actions_log) and actions_log[step_num, world_num, action_idx] == 1):
+                                # Use agent 0 since we only have one agent per world in inference
+                                if event_def["conditions"](log_data, step_num, world_num):
+                                    outcome = event_def["outcome_func"](log_data, step_num, world_num)
                                     parsed_events.append({
-                                        'pos': agent_pos_log[step_num, world_num, agent_num],
+                                        'pos': agent_pos_log[step_num, world_num, 0],  
                                         'outcome': outcome
                                     })
-                        elif len(actions_log.shape) == 3:  # [steps, worlds, actions] - single agent per world
-                            if (step_num < len(actions_log) and 
-                                action_idx < actions_log.shape[2] and
-                                actions_log[step_num, world_num, action_idx] == 1 and 
-                                step_num > 0 and
-                                actions_log[step_num - 1, world_num, action_idx] == 0):
-                                ball_physics_at_event = ball_physics_log[step_num, world_num, 0]
-                                outcome = event_def["outcome_func"](ball_physics_at_event)
-                                # Use agent 0 since we only have one agent per world in inference
-                                parsed_events.append({
-                                    'pos': agent_pos_log[step_num, world_num, 0],  
-                                    'outcome': outcome
-                                })
                         else:
                             print(f"WARNING: Unexpected actions_log shape: {actions_log.shape}")
 
