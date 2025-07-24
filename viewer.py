@@ -968,43 +968,15 @@ class ViewerClass:
         """Get the index of the currently selected agent for human control"""
         return self.active_agent_idx
 
-    def draw_scene_static(self, hoop_pos, parsed_events, event_def):
-        """
-        Creates and returns static surfaces for background and events.
-        This should only be called once or when static elements change.
-        """
-        # Create background surface with court and hoops
-        background = pygame.Surface(self.screen.get_size())
-        background.fill(BACKGROUND_COLOR)
-        
-        # Temporarily switch screen to draw on background
-        original_screen = self.screen
-        self.screen = background
-        self.draw_basketball_court()
-        
-        # Draw the hoops onto the background
-        if hoop_pos is not None:
-            hoop_positions = hoop_pos[0]
-            for pos in hoop_positions:
-                screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
-                backboard_width_px = BACKBOARD_WIDTH_M * self.pixels_per_meter
-                rim_radius_px = (RIM_DIAMETER_M / 2) * self.pixels_per_meter
-                rim_thickness_px = max(2, int(self.pixels_per_meter * 0.02))
-                backboard_thickness_px = max(3, int(self.pixels_per_meter * 0.05))
-                backboard_offset_px = BACKBOARD_OFFSET_FROM_HOOP_M * self.pixels_per_meter
-                backboard_x = screen_x - backboard_offset_px if pos[0] < self.world_width_meters / 2 else screen_x + backboard_offset_px
-                pygame.draw.line(self.screen, (255, 255, 255), (backboard_x, screen_y - backboard_width_px / 2), (backboard_x, screen_y + backboard_width_px / 2), backboard_thickness_px)
-                pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), rim_radius_px, rim_thickness_px)
-        
-        self.screen = original_screen
-        
-        # Create event surface and draw events directly here
-        event_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+    def draw_events(self, parsed_events, event_def, current_episode, display_mode):
+        if display_mode == "Off" or not event_def:
+            return
+
         if event_def and parsed_events:
-            print(f"Drawing {len(parsed_events)} events on static surface...")
-            self.screen = event_surface
-            # Draw events directly (integrated from draw_events function)
             for event in parsed_events:
+                if display_mode == "Current Episode" and event['episode_idx'] != current_episode:
+                    continue
+
                 screen_x, screen_y = self.meters_to_screen(event['pos'][0], event['pos'][1])
                 visual_info = event_def["visuals"].get(event['outcome'])
 
@@ -1019,9 +991,35 @@ class ViewerClass:
                     elif visual_info["shape"] == "square":
                         size = visual_info["size"]
                         pygame.draw.rect(self.screen, visual_info["color"], (screen_x - size, screen_y - size, size * 2, size * 2))
-            self.screen = original_screen
+
+    def draw_scene_static(self, hoop_pos):
+        """
+        Creates and returns static surfaces for background and events.
+        This should only be called once or when static elements change.
+        """
+        # Create background surface with court and hoops
+        background = pygame.Surface(self.screen.get_size())
+        background.fill(BACKGROUND_COLOR)
         
-        return background, event_surface
+        original_screen = self.screen
+        self.screen = background
+        self.draw_basketball_court()
+        
+        if hoop_pos is not None:
+            hoop_positions = hoop_pos[0]
+            for pos in hoop_positions:
+                screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+                backboard_width_px = BACKBOARD_WIDTH_M * self.pixels_per_meter
+                rim_radius_px = (RIM_DIAMETER_M / 2) * self.pixels_per_meter
+                rim_thickness_px = max(2, int(self.pixels_per_meter * 0.02))
+                backboard_thickness_px = max(3, int(self.pixels_per_meter * 0.05))
+                backboard_offset_px = BACKBOARD_OFFSET_FROM_HOOP_M * self.pixels_per_meter
+                backboard_x = screen_x - backboard_offset_px if pos[0] < self.world_width_meters / 2 else screen_x + backboard_offset_px
+                pygame.draw.line(self.screen, (255, 255, 255), (backboard_x, screen_y - backboard_width_px / 2), (backboard_x, screen_y + backboard_width_px / 2), backboard_thickness_px)
+                pygame.draw.circle(self.screen, (255, 100, 0), (screen_x, screen_y), rim_radius_px, rim_thickness_px)
+        
+        self.screen = original_screen
+        return background
 
     def draw_scene_dynamic(self, agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step_for_world, current_playback_episode, trail_surface, world_num, fading_trails=False, current_step=0, max_episode_length=1):
         """
@@ -1113,6 +1111,7 @@ class ViewerClass:
             episode_breaks = [[] for _ in range(num_worlds)]
             parsed_events = []
             event_def = EVENT_DEFINITIONS.get(event_to_track)
+            episodes_completed_log = np.cumsum(done_log, axis=0)
 
             print("Parsing episodes and events from log...")
             for world_num in range(num_worlds):
@@ -1130,24 +1129,27 @@ class ViewerClass:
                                 if (step_num < len(actions_log) and actions_log[step_num, world_num, agent_num, action_idx] == 1): # Checks if action happened this timestep
                                     if event_def["conditions"](log_data, step_num, world_num):
                                         outcome = event_def["outcome_func"](log_data, step_num, world_num)
+                                        current_episode = episodes_completed_log[step_num, world_num]
                                         parsed_events.append({
                                             'pos': agent_pos_log[step_num, world_num, agent_num],
-                                            'outcome': outcome
+                                            'outcome': outcome,
+                                            'episode_idx' : current_episode
                                         })
                         elif len(actions_log.shape) == 3:  # [steps, worlds, actions] - single agent per world
                             if (step_num < len(actions_log) and actions_log[step_num, world_num, action_idx] == 1):
                                 # Use agent 0 since we only have one agent per world in inference
                                 if event_def["conditions"](log_data, step_num, world_num):
                                     outcome = event_def["outcome_func"](log_data, step_num, world_num)
+                                    current_episode = episodes_completed_log[step_num, world_num]
                                     parsed_events.append({
                                         'pos': agent_pos_log[step_num, world_num, 0],  
-                                        'outcome': outcome
+                                        'outcome': outcome,
+                                        'episode_idx' : current_episode
                                     })
                         else:
                             print(f"WARNING: Unexpected actions_log shape: {actions_log.shape}")
 
-            episodes_completed_log = np.cumsum(done_log, axis=0)
-            background, event_surface = self.draw_scene_static(hoop_pos, parsed_events, event_def)
+            background = self.draw_scene_static(hoop_pos)
 
             trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
 
@@ -1157,7 +1159,8 @@ class ViewerClass:
             paused = False
             running = True
             show_trails = False
-            show_events = False  # Start with events hidden, toggle with 'C'
+            event_display_modes = ['Off', 'Current Episode', 'All Episodes']
+            event_display_mode_idx = 0
             
             episode_lengths = [
                 world_info[current_playback_episode]['end'] - world_info[current_playback_episode]['start'] 
@@ -1206,8 +1209,12 @@ class ViewerClass:
                         if event.key == pygame.K_t:
                             show_trails = not show_trails
                         if event.key == pygame.K_c:  # Toggle event chart with 'C' key
-                            show_events = not show_events
-                            print(f"Event chart {'enabled' if show_events else 'disabled'}")
+                            keys = pygame.key.get_pressed()
+                            if keys[pygame.K_LSHIFT or pygame.K_RSHIFT]:
+                                event_display_mode_idx = 2 if event_display_mode_idx != 2 else 0
+                            else:
+                                event_display_mode_idx = 1 if event_display_mode_idx != 1 else 0
+                            print(f"Event chart mode: {event_display_modes[event_display_mode_idx]}")
                         if event.key == pygame.K_r:
                             episode_step = 0
                         if event.key == pygame.K_PERIOD:
@@ -1224,9 +1231,8 @@ class ViewerClass:
 
                 self.screen.blit(background, (0, 0))
                 
-                # Show events if enabled
-                if show_events:
-                    self.screen.blit(event_surface, (0, 0))
+                current_display_mode = event_display_modes[event_display_mode_idx]
+                self.draw_events(parsed_events, event_def, current_playback_episode, current_display_mode)
                 
                 if show_trails:
                     if fading_trails:
@@ -1240,8 +1246,6 @@ class ViewerClass:
                                 if trail_step + episode_breaks[world_num][current_playback_episode]['start'] >= num_steps:
                                     continue
                                 trail_agent_pos = agent_pos_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step][world_num]
-                                trail_orientation = orientation_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step][world_num]
-                                trail_ball_pos = ball_pos_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step][world_num]
                                 trail_episodes_completed = episodes_completed_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step]
                                 
                                 # Draw fading trail points directly for this step
@@ -1282,10 +1286,10 @@ class ViewerClass:
                 elif paused:
                     status_text += " | Paused"
                 status_text += f" | Trails: {'On' if show_trails else 'Off'}"
-                status_text += f" | Events: {'On' if show_events else 'Off'} (C)"
+                status_text += f" | Events: {current_display_mode}"
                 text_surface = self.font.render(status_text, True, (255, 255, 0))
                 self.screen.blit(text_surface, (10, 10))
-                controls_text = f"Pause: Space | FF: shift + right | Trails: T | Events: C | frame by frame: , or ."
+                controls_text = f"Pause: Space | FF: shift + right | Trails: T | Events: C/ShiftC | frame by frame: , or ."
                 controls_surface = self.font.render(controls_text, True, (255, 255, 255))
                 self.screen.blit(controls_surface, (10, WINDOW_HEIGHT-30))
 
