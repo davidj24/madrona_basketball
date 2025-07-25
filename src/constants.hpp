@@ -5,7 +5,7 @@ namespace madBasketball {
     constexpr int32_t NUM_AGENTS = 2;
     constexpr int32_t NUM_BASKETBALLS = 1;
     constexpr int32_t NUM_HOOPS = 2;
-    constexpr uint32_t ENTITY_ID_PLACEHOLDER = UINT32_MAX;  // Use max value as invalid/null entity ID
+    constexpr int32_t ENTITY_ID_PLACEHOLDER = INT32_MAX;  // Use max value as invalid/null entity ID
 
     // ======================================== Simulation Parameters ========================================
     constexpr float SIMULATION_HZ = 62.0f; // How many timesteps are in one second

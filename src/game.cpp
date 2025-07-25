@@ -10,7 +10,7 @@ using namespace madrona::math;
 
 
 namespace madBasketball {
-inline void assignInbounder(Engine &ctx, Entity ball_entity, Position ball_pos, uint32_t new_team_idx, Quat new_orientation, bool is_oob)
+inline void assignInbounder(Engine &ctx, Entity ball_entity, Position ball_pos, int32_t new_team_idx, Quat new_orientation, bool is_oob)
 {
     GameState &gameState = ctx.singleton<GameState>();
     float inbounder_assigned = 0.0f;
@@ -23,13 +23,13 @@ inline void assignInbounder(Engine &ctx, Entity ball_entity, Position ball_pos, 
         Position &agent_pos = ctx.get<Position>(agent);
         InPossession &in_possession = ctx.get<InPossession>(agent);
         Orientation &agent_orient = ctx.get<Orientation>(agent);
-        if ((uint32_t)agent_team.teamIndex == new_team_idx && inbounder_assigned == 0) {
+        if (agent_team.teamIndex == new_team_idx && inbounder_assigned == 0) {
             inbounder_assigned = 1;
             inbounding.imInbounding = 1;
             agent_pos = ball_pos; // Move player to the ball
 
             // Give them possession of the ball
-            ctx.get<Grabbed>(ball_entity) = {1, (uint32_t) agent.id};
+            ctx.get<Grabbed>(ball_entity) = {1, agent.id};
             in_possession.hasBall = 1;
             in_possession.ballEntityID = ball_entity.id;
 
@@ -80,7 +80,6 @@ inline void moveBallRandomly(Engine &ctx,
 
 inline void moveBallSystem(Engine &ctx,
                            Position &ball_pos,
-                           BallPhysics &ball_physics,
                            Grabbed &grabbed,
                            Velocity &ball_velocity)
 {
@@ -91,7 +90,7 @@ inline void moveBallSystem(Engine &ctx,
         // Make the ball move with the agent if it's held
         int32_t agent_is_holding_this_ball = (in_possession.hasBall == 1 &&
                                            grabbed.isGrabbed == 1 &&
-                                           grabbed.holderEntityID == (uint32_t)agent.id) ? 1 : 0;
+                                           grabbed.holderEntityID == agent.id) ? 1 : 0;
         if (agent_is_holding_this_ball == 1) 
         {
             ball_pos = agent_pos;  // Move basketball to agent's new position
@@ -133,7 +132,7 @@ inline void updatePointsWorthSystem(Engine &ctx,
 {
     // Get all hoop positions
     Vector3 hoop_score_zones[NUM_HOOPS];
-    uint32_t hoop_ids[NUM_HOOPS];
+    int32_t hoop_ids[NUM_HOOPS];
     for (CountT i = 0; i < NUM_HOOPS; i++) {
         Entity hoop = ctx.data().hoops[i];
         hoop_score_zones[i] = ctx.get<ScoringZone>(hoop).center;
@@ -184,7 +183,7 @@ inline void grabSystem(Engine &ctx,
 
         int32_t agent_is_holding_this_ball = (in_possession.hasBall == 1 &&
                                            grabbed.isGrabbed == 1 &&
-                                           grabbed.holderEntityID == (uint32_t)agent_entity.id) ? 1 : 0;
+                                           grabbed.holderEntityID == agent_entity.id) ? 1 : 0;
 
         // If agent already has a ball, drop it
         if (agent_is_holding_this_ball == 1) {
@@ -212,7 +211,7 @@ inline void grabSystem(Engine &ctx,
                 Entity agent = ctx.data().agents[j];
                 InPossession &other_in_possession = ctx.get<InPossession>(agent);
                 GrabCooldown &robbed_agent_grab_cooldown = ctx.get<GrabCooldown>(agent);
-                if (other_in_possession.ballEntityID == (uint32_t)ball.id)
+                if (other_in_possession.ballEntityID == ball.id)
                 {
                     other_in_possession.hasBall = 0;
                     other_in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
@@ -222,7 +221,7 @@ inline void grabSystem(Engine &ctx,
 
             in_possession.hasBall = 1;
             in_possession.ballEntityID = ball.id;
-            grabbed.holderEntityID = (uint32_t)agent_entity.id;
+            grabbed.holderEntityID = agent_entity.id;
             grabbed.isGrabbed = 1;
             ball_physics.inFlight = 0; // Make it so the ball isn't "in flight" anymore
             ball_velocity.velocity = Vector3::zero(); // And change its velocity to be zero
@@ -254,10 +253,9 @@ inline void passSystem(Engine &ctx,
 
     for (CountT i = 0; i < NUM_BASKETBALLS; i++) {
         Entity ball = ctx.data().balls[i];
-        BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
         Grabbed &grabbed = ctx.get<Grabbed>(ball);
         Velocity &ball_velocity = ctx.get<Velocity>(ball);
-        if (grabbed.holderEntityID == (uint32_t)agent_entity.id) {
+        if (grabbed.holderEntityID == agent_entity.id) {
             grabbed.isGrabbed = 0;  // Ball is no longer grabbed
             grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER; // Ball is no longer held by anyone
             in_possession.hasBall = 0; // Since agents can only hold 1 ball at a time, if they pass it they can't be holding one anymore
@@ -289,7 +287,7 @@ inline void shootSystem(Engine &ctx,
     float scoring_radius = 0.f;
     for (CountT i = 0; i < NUM_HOOPS; i++) {
         Entity hoop = ctx.data().hoops[i];
-        if ((uint32_t)hoop.id != team.defendingHoopID) {
+        if (hoop.id != team.defendingHoopID) {
             attacking_hoop_score_zone = ctx.get<ScoringZone>(hoop).center;
             scoring_radius = ctx.get<ScoringZone>(hoop).radius;
         }
@@ -397,13 +395,13 @@ inline void shootSystem(Engine &ctx,
             ball_physics.inFlight = 1;
 
             // Set who shot the ball for scoring system (these don't change after touching)
-            ball_physics.shotByAgentID = (uint32_t)agent_entity.id;
-            ball_physics.shotByTeamID = (uint32_t)team.teamIndex;
+            ball_physics.shotByAgentID = agent_entity.id;
+            ball_physics.shotByTeamID = team.teamIndex;
             ball_physics.shotPointValue = shot_point_value;
 
             // Also set last touched (these can change if ball is touched after shooting)
-            ball_physics.lastTouchedByAgentID = (uint32_t)agent_entity.id;
-            ball_physics.lastTouchedByTeamID = (uint32_t)team.teamIndex;
+            ball_physics.lastTouchedByAgentID = agent_entity.id;
+            ball_physics.lastTouchedByTeamID = team.teamIndex;
         }
     }
 }
@@ -742,7 +740,7 @@ inline void rewardSystem(Engine &ctx,
     for (CountT i = 0; i < NUM_HOOPS; i++)
     {
         Entity hoop = ctx.data().hoops[i];
-        if ((uint32_t)hoop.id != team.defendingHoopID)
+        if (hoop.id != team.defendingHoopID)
         {
             target_hoop_pos = ctx.get<Position>(hoop);
         }
@@ -753,11 +751,11 @@ inline void rewardSystem(Engine &ctx,
     {
         Entity ball = ctx.data().balls[j];
         BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
-        if (ball_physics.shotByAgentID == (uint32_t)agent_entity.id && ball_physics.shotIsGoingIn == 1)
+        if (ball_physics.shotByAgentID == agent_entity.id && ball_physics.shotIsGoingIn == 1)
         {
             reward.r += ball_physics.shotPointValue;
         }
-        else if (ball_physics.shotByAgentID == (uint32_t)agent_entity.id && ball_physics.shotIsGoingIn == 0 && ball_physics.inFlight == 1)
+        else if (ball_physics.shotByAgentID == agent_entity.id && ball_physics.shotIsGoingIn == 0 && ball_physics.inFlight == 1)
         {
             reward.r -= 1;
         }
@@ -789,26 +787,26 @@ inline void scoreSystem(Engine &ctx,
             int32_t points_scored = ball_physics.shotPointValue;
 
             // Find which team is defending this hoop (has defendingHoopID == hoop_entity.id)
-            uint32_t inbounding_team_idx = 0; // Default fallback
+            int32_t inbounding_team_idx = 0; // Default fallback
             for (CountT j = 0; j < NUM_AGENTS; j++) {
                 Entity agent = ctx.data().agents[j];
                 Team &team = ctx.get<Team>(agent);
                 Stats &agent_stats = ctx.get<Stats>(agent);
-                if (team.defendingHoopID == (uint32_t)hoop_entity.id)
+                if (team.defendingHoopID == hoop_entity.id)
                 {
-                    inbounding_team_idx = (uint32_t)team.teamIndex;
+                    inbounding_team_idx = team.teamIndex;
                 }
 
                 if (agent.id == ball_physics.shotByAgentID)
                 {
-                    agent_stats.points += (team.defendingHoopID == (uint32_t)hoop_entity.id) ? -ball_physics.shotPointValue : ball_physics.shotPointValue;
+                    agent_stats.points += (team.defendingHoopID == hoop_entity.id) ? -ball_physics.shotPointValue : ball_physics.shotPointValue;
                 }
             }
 
             Position inbound_spot;
             Quat inbound_orientation;
 
-            if ((uint32_t)hoop_entity.id == (uint32_t)gameState.team0Hoop)
+            if (hoop_entity.id == gameState.team0Hoop)
             {
                 // Someone scored on Team 0's hoop, so Team 1 gets the points
                 gameState.team1Score += points_scored;
@@ -914,12 +912,6 @@ inline void clockSystem(Engine &ctx, WorldClock &world_clock)
     {
         gameState.shotClock = 0.f;
     }
-    Position hoop0_pos = ctx.get<Position>(ctx.data().hoops[0]);
-    Position hoop1_pos = ctx.get<Position>(ctx.data().hoops[1]);
-    // printf("WorldID: %d: End of clockSystem. Hoop0 position is: (%f, %f, %f) and hoop1 position is: (%f, %f, %f)\n", ctx.worldID().idx, hoop0_pos.position.x, hoop0_pos.position.y, hoop0_pos.position.z, hoop1_pos.position.x, hoop1_pos.position.y, hoop1_pos.position.z);
-    float agent0_team = ctx.get<Team>(ctx.data().agents[0]).teamIndex;
-    float agent1_team = ctx.get<Team>(ctx.data().agents[1]).teamIndex;
-    // printf("WorldID: %d: End of clockSystem. Agent0 team is: (%f) and Agent1 position is: (%f)\n", ctx.worldID().idx, agent0_team, agent1_team);
 }
 
 
@@ -937,8 +929,8 @@ inline void updateLastTouchSystem(Engine &ctx,
 
         if (distance <= AGENT_SIZE_M)
         {
-            ball_physics.lastTouchedByAgentID = (uint32_t)agent.id;
-            ball_physics.lastTouchedByTeamID = (uint32_t)team.teamIndex;
+            ball_physics.lastTouchedByAgentID = agent.id;
+            ball_physics.lastTouchedByTeamID = team.teamIndex;
         }
     }
 }
@@ -969,7 +961,7 @@ inline void outOfBoundsSystem(Engine &ctx,
             gameState.liveBall = 0;
 
             // The team that did NOT last touch the ball gets possession.
-            uint32_t new_team_idx = 1 - ball_physics.lastTouchedByTeamID;
+            int32_t new_team_idx = 1 - ball_physics.lastTouchedByTeamID;
 
             // Find the player who had the ball and reset their position
             for (CountT i = 0; i < NUM_AGENTS; i++) {
@@ -1002,9 +994,9 @@ inline void inboundViolationSystem(Engine &ctx, WorldClock &world_clock)
     // This is the conditional check. If this isn't true, the system does nothing.
     if (!(gameState.inboundingInProgress > 0.5f && gameState.inboundClock <= 0.f)) {return;}
 
-    uint32_t current_team_idx = (uint32_t)gameState.teamInPossession;
-    uint32_t new_team_idx = 1 - current_team_idx;
-    uint32_t ball_to_turnover_id = ENTITY_ID_PLACEHOLDER;
+    int32_t current_team_idx = gameState.teamInPossession;
+    int32_t new_team_idx = 1 - current_team_idx;
+    int32_t ball_to_turnover_id = ENTITY_ID_PLACEHOLDER;
 
     gameState.liveBall = 0;
 
@@ -1102,7 +1094,7 @@ inline void fillObservationsSystem(Engine &ctx,
 
     // --- Hoop Positions ---
     Position hoop_positions[NUM_HOOPS];
-    uint32_t hoop_ids[NUM_HOOPS];
+    int32_t hoop_ids[NUM_HOOPS];
     for (CountT i = 0; i < NUM_HOOPS; i++) {
         Entity hoop = ctx.data().hoops[i];
         hoop_positions[i] = ctx.get<Position>(hoop);
@@ -1266,7 +1258,7 @@ TaskGraphNodeID setupGameStepTasks(
         Entity, Action, ActionMask, Position, Orientation, Inbounding, InPossession, Team, Reward>>({passSystemNode});
 
     auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
-        Position, BallPhysics, Grabbed, Velocity>>({shootSystemNode});
+        Position, Grabbed, Velocity>>({shootSystemNode});
 
     auto scoreSystemNode = builder.addToGraph<ParallelForNode<Engine, scoreSystem,
         Entity, Position, ScoringZone>>({moveBallSystemNode});

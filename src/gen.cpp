@@ -179,7 +179,7 @@ void generateWorld(Engine &ctx) {
 
 
     // Now create agents with proper hoop references
-    uint32_t offensive_agent_id = ENTITY_ID_PLACEHOLDER;
+    int32_t offensive_agent_id = ENTITY_ID_PLACEHOLDER;
     for (int i = 0; i < NUM_AGENTS; i++)
     {
         Entity agent = ctx.makeEntity<Agent>();
@@ -210,7 +210,7 @@ void generateWorld(Engine &ctx) {
             {
                 offensive_agent_id = agent.id;
                 // Give them possession of the ball we just created.
-                ctx.get<InPossession>(agent) = {1, static_cast<uint32_t>(basketball.id), 2};
+                ctx.get<InPossession>(agent) = {1, basketball.id, 2};
             }
             else
             {
@@ -242,7 +242,7 @@ void generateWorld(Engine &ctx) {
         ctx.get<Attributes>(agent) = {DEFAULT_SPEED - i*DEFENDER_SLOWDOWN, 1.f - i/1.2f, 0.f, 0.f, i*DEFENDER_REACTION, ctx.get<Position>(agent).position};
         ctx.get<Velocity>(agent).velocity = Vector3::zero();
         // Use actual hoop entity IDs from gameState
-        uint32_t defending_hoop_id = (i % 2 == 0) ? (uint32_t)gameState.team0Hoop : (uint32_t)gameState.team1Hoop;
+        int32_t defending_hoop_id = (i % 2 == 0) ? gameState.team0Hoop : gameState.team1Hoop;
         // Use team color constants
         const madrona::math::Vector3 team_color = (i % 2 == 0) ? TEAM0_COLOR : TEAM1_COLOR;
         ctx.get<Team>(agent) = Team{i % 2, team_color, defending_hoop_id};
@@ -304,7 +304,7 @@ void resetWorld(Engine &ctx) {
         Entity ball = ctx.data().balls[i];
         basketball_entity = ball;
     }
-    uint32_t offensive_agent_id = ENTITY_ID_PLACEHOLDER;
+    int32_t offensive_agent_id = ENTITY_ID_PLACEHOLDER;
     Position agent_pos_for_ball = {grid->startX, grid->startY, 0.f};
     int agent_i = 0;
     for (CountT i = 0; i < NUM_AGENTS; i++) {
@@ -339,7 +339,7 @@ void resetWorld(Engine &ctx) {
                 pos.position.y = clamp(pos.position.y, 0.f, grid->height);
                 agent_pos_for_ball = pos;
                 offensive_agent_id = agent.id;
-                in_pos = {1, (uint32_t)basketball_entity.id, 2};
+                in_pos = {1, basketball_entity.id, 2};
             }
             else
             {
@@ -368,7 +368,7 @@ void resetWorld(Engine &ctx) {
 
         ctx.get<Attributes>(agent) = {DEFAULT_SPEED - agent_i*DEFENDER_SLOWDOWN, 1.f - agent_i/1.2f, 0.f, 0.f, agent_i*DEFENDER_REACTION, pos.position};
 
-        uint32_t defending_hoop_id = (agent_i % 2 == 0) ? (uint32_t)gameState.team0Hoop : (uint32_t)gameState.team1Hoop;
+        int32_t defending_hoop_id = (agent_i % 2 == 0) ? gameState.team0Hoop : gameState.team1Hoop;
         ctx.get<Team>(agent) = Team{agent_i % 2, team_colors[agent_i % 2], defending_hoop_id};
 
         agent_i++;

@@ -49,9 +49,9 @@ namespace madBasketball {
 
         float period;
         float teamInPossession; // The index of the team that is currently in possession of the ball
-        float team0Hoop; // Entity id of team 0's hoop (will switch at half time) - changed from uint32_t to float for tensor export
+        int32_t team0Hoop; // Entity id of team 0's hoop (will switch at half time) - converted to int32_t to match entity IDs
         float team0Score;
-        float team1Hoop; // Entity id of team 1's hoop - changed from uint32_t to float for tensor export
+        int32_t team1Hoop; // Entity id of team 1's hoop - converted to int32_t to match entity IDs
         float team1Score;
 
         float gameClock; // Time left, figure out if this is in seconds or timesteps, and how it should work with tickSystem
@@ -138,7 +138,7 @@ namespace madBasketball {
     struct InPossession 
     {
         int32_t hasBall;
-        uint32_t ballEntityID;
+        int32_t ballEntityID;
         int32_t pointsWorth; // Points this agent would get if they scored from their current position
     };
 
@@ -152,7 +152,7 @@ namespace madBasketball {
     {
         int32_t teamIndex;
         Vector3 teamColor;
-        uint32_t defendingHoopID; // The ID of the hoop that the agent is defending
+        int32_t defendingHoopID; // The ID of the hoop that the agent is defending
     };
 
     struct GrabCooldown
@@ -187,16 +187,16 @@ namespace madBasketball {
     struct Grabbed 
     {
         int32_t isGrabbed;
-        uint32_t holderEntityID;
+        int32_t holderEntityID;
     };
 
     struct BallPhysics
     {
         int32_t inFlight;
-        uint32_t lastTouchedByAgentID; // Entity ID of the specific agent who last touched the ball 
-        uint32_t lastTouchedByTeamID; // Team ID of the team that last touched the ball 
-        uint32_t shotByAgentID; // Entity ID of the agent who shot the ball (doesn't change after touching)
-        uint32_t shotByTeamID; // Team ID of the team that shot the ball (doesn't change after touching)
+        int32_t lastTouchedByAgentID; // Entity ID of the specific agent who last touched the ball 
+        int32_t lastTouchedByTeamID; // Team ID of the team that last touched the ball 
+        int32_t shotByAgentID; // Entity ID of the agent who shot the ball (doesn't change after touching)
+        int32_t shotByTeamID; // Team ID of the team that shot the ball (doesn't change after touching)
         int32_t shotPointValue; // Point value of the shot when it was taken (2 or 3)
         int32_t shotIsGoingIn; // Calculated at moment of release to let agent know if shot will score
     };
