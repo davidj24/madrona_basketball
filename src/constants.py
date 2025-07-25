@@ -37,7 +37,7 @@ EVENT_DEFINITIONS = {
 
     "pass" : {
         "action_idx" : 4,
-        "conditions" : lambda log_data_tensor, step_num, world_num, agent_num=0: int(log_data_tensor.get('agent_possession')[step_num-1, world_num, agent_num, 0]) == 1,
+        "conditions" : lambda log_data_tensor, step_num, world_num, agent_num=0: int(log_data_tensor.get('agent_possession')[step_num-1, world_num, agent_num, 0]) > 0.5,
         "outcome_func" : lambda log_data, step_num, world_num: True, # Later this should calculate if a pass is a turnover or something, so we can see different outcomes of passes
         "visuals" : {
             True : {"shape" : "circle", "color" : (0, 255, 0), "size" : 7},

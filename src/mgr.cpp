@@ -378,7 +378,7 @@ namespace madBasketball {
     Tensor Manager::agentPossessionTensor() const
     {
         return impl_->exportTensor(ExportID::AgentPossession, TensorElementType::Int32,
-            {impl_->cfg.numWorlds, NUM_AGENTS, 2});  // hasBall, ballEntityID
+            {impl_->cfg.numWorlds, NUM_AGENTS, 3});  // hasBall, ballEntityID, pointsWorth
     }
 
 

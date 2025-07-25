@@ -970,7 +970,7 @@ class ViewerClass:
             for event in parsed_events:
                 if display_mode == "Current Episode" and event['episode_idx'] != current_episode:
                     continue
-
+                
                 screen_x, screen_y = self.meters_to_screen(event['pos'][0], event['pos'][1])
                 visual_info = event_def["visuals"].get(event['outcome'])
 
@@ -1108,41 +1108,163 @@ class ViewerClass:
             episodes_completed_log = np.cumsum(done_log, axis=0)
 
             print("Parsing episodes and events from log...")
+            
+            # Debug: Print agent_possession array info
+            if 'agent_possession' in log_data:
+                possession_shape = log_data['agent_possession'].shape
+                print(f"DEBUG: agent_possession shape: {possession_shape}")
+                print(f"DEBUG: Sample possession values at step 10:")
+                if len(possession_shape) >= 3:
+                    for w in range(min(3, possession_shape[1])):  # Show first 3 worlds
+                        for a in range(min(2, possession_shape[2])):  # Show first 2 agents
+                            if len(possession_shape) == 4:
+                                # Show all components to understand the structure
+                                for c in range(possession_shape[3]):
+                                    val = log_data['agent_possession'][10, w, a, c] if possession_shape[0] > 10 else "N/A"
+                                    print(f"  World {w}, Agent {a}, Component {c}: {val}")
+                            else:
+                                val = log_data['agent_possession'][10, w, a] if possession_shape[0] > 10 else "N/A"
+                                print(f"  World {w}, Agent {a}: {val}")
+                print("") # Empty line for readability
+            
             for world_num in range(num_worlds):
                 last_done_step = -1
                 for step_num in range(1, num_steps):
                     if (done_log[step_num][world_num] > 0):
                         episode_breaks[world_num].append({'start': last_done_step + 1, 'end': step_num})
+                        print(f"World {world_num}: Episode {len(episode_breaks[world_num])-1} from step {last_done_step + 1} to {step_num}")
                         last_done_step = step_num
-                    
+                
+                print(f"World {world_num} final episode breaks: {episode_breaks[world_num]}")
+                
+                # Now check for events in this world
+                for step_num in range(1, num_steps):
                     if event_def and actions_log is not None and ball_physics_log is not None:
                         action_idx = event_def["action_idx"]
+                        
+                        # Check if this step is within any episode for this world
+                        step_in_valid_episode = False
+                        for ep_info in episode_breaks[world_num]:
+                            if ep_info['start'] <= step_num <= ep_info['end']:
+                                step_in_valid_episode = True
+                                break
+                        
+                        if not step_in_valid_episode:
+                            continue  # Skip steps that aren't in any episode for this world
                         
                         if len(actions_log.shape) == 4:  # [steps, worlds, agents, actions] - multi-agent
                             for agent_num in range(num_agents):
                                 if (step_num < len(actions_log) and actions_log[step_num, world_num, agent_num, action_idx] == 1): # Checks if action happened this timestep
                                     if event_def["conditions"](log_data, step_num, world_num, agent_num):
                                         outcome = event_def["outcome_func"](log_data, step_num, world_num)
-                                        current_episode = episodes_completed_log[step_num, world_num]
-                                        parsed_events.append({
+                                        
+                                        # Debug: Print possession values for pass events
+                                        # if event_to_track == "pass":
+                                        #     if 'agent_possession' in log_data:
+                                        #         possession_prev = log_data['agent_possession'][step_num-1, world_num, agent_num] if step_num > 0 else "N/A"
+                                        #         possession_curr = log_data['agent_possession'][step_num, world_num, agent_num] if step_num < len(log_data['agent_possession']) else "N/A"
+                                        #         print(f"PASS DEBUG: Step {step_num}, World {world_num}, Agent {agent_num}")
+                                        #         print(f"  Possession[{step_num-1}]: {possession_prev}")
+                                        #         print(f"  Possession[{step_num}]: {possession_curr}")
+                                        #         print(f"  Action value: {actions_log[step_num, world_num, agent_num, action_idx]}")
+                                        
+                                        # Find which episode this step belongs to by checking episode_breaks
+                                        current_episode = 0
+                                        found_episode = False
+                                        for ep_idx, ep_info in enumerate(episode_breaks[world_num]):
+                                            if ep_info['start'] <= step_num <= ep_info['end']:
+                                                current_episode = ep_idx
+                                                found_episode = True
+                                                break
+                                        
+                                        if not found_episode:
+                                            print(f"WARNING: Step {step_num} in World {world_num} not found in any episode!")
+                                            print(f"Available episodes for World {world_num}: {episode_breaks[world_num]}")
+                                            continue  # Skip this event as it's not in any valid episode
+                                        
+                                        # Calculate episode step
+                                        episode_step_in_episode = step_num - episode_breaks[world_num][current_episode]['start'] if len(episode_breaks[world_num]) > current_episode else step_num
+                                        
+                                        event_data = {
                                             'pos': agent_pos_log[step_num, world_num, agent_num],
                                             'outcome': outcome,
-                                            'episode_idx' : current_episode
-                                        })
+                                            'episode_idx' : current_episode,
+                                            'world_num': world_num,
+                                            'step_num': step_num,
+                                            'episode_step': episode_step_in_episode,
+                                            'agent_num': agent_num
+                                        }
+                                        parsed_events.append(event_data)
+                                        
+                                        # print(f"DEBUG EVENT: World {world_num}, Agent {agent_num}, Step {step_num}, Episode {current_episode}, Episode Step {episode_step_in_episode}, Outcome: {outcome}, Pos: ({event_data['pos'][0]:.2f}, {event_data['pos'][1]:.2f})")
                         elif len(actions_log.shape) == 3:  # [steps, worlds, actions] - single agent per world
                             if (step_num < len(actions_log) and actions_log[step_num, world_num, action_idx] == 1):
                                 # Use agent 0 since we only have one agent per world in inference
                                 agent_num = 0
                                 if event_def["conditions"](log_data, step_num, world_num, agent_num):
                                     outcome = event_def["outcome_func"](log_data, step_num, world_num)
-                                    current_episode = episodes_completed_log[step_num, world_num]
-                                    parsed_events.append({
+                                    
+                                    # # Debug: Print possession values for pass events
+                                    # if event_to_track == "pass":
+                                    #     if 'agent_possession' in log_data:
+                                    #         possession_prev = log_data['agent_possession'][step_num-1, world_num, agent_num] if step_num > 0 else "N/A"
+                                    #         possession_curr = log_data['agent_possession'][step_num, world_num, agent_num] if step_num < len(log_data['agent_possession']) else "N/A"
+                                    #         print(f"PASS DEBUG: Step {step_num}, World {world_num}, Agent {agent_num}")
+                                    #         print(f"  Possession[{step_num-1}]: {possession_prev}")
+                                    #         print(f"  Possession[{step_num}]: {possession_curr}")
+                                    #         print(f"  Action value: {actions_log[step_num, world_num, action_idx]}")
+                                    
+                                    # Find which episode this step belongs to by checking episode_breaks
+                                    current_episode = 0
+                                    found_episode = False
+                                    for ep_idx, ep_info in enumerate(episode_breaks[world_num]):
+                                        if ep_info['start'] <= step_num <= ep_info['end']:
+                                            current_episode = ep_idx
+                                            found_episode = True
+                                            break
+                                    
+                                    if not found_episode:
+                                        print(f"WARNING: Step {step_num} in World {world_num} not found in any episode!")
+                                        print(f"Available episodes for World {world_num}: {episode_breaks[world_num]}")
+                                        continue  # Skip this event as it's not in any valid episode
+                                    
+                                    # Calculate episode step
+                                    episode_step_in_episode = step_num - episode_breaks[world_num][current_episode]['start'] if len(episode_breaks[world_num]) > current_episode else step_num
+                                    
+                                    event_data = {
                                         'pos': agent_pos_log[step_num, world_num, 0],  
                                         'outcome': outcome,
-                                        'episode_idx' : current_episode
-                                    })
+                                        'episode_idx' : current_episode,
+                                        'world_num': world_num,
+                                        'step_num': step_num,
+                                        'episode_step': episode_step_in_episode,
+                                        'agent_num': agent_num
+                                    }
+                                    parsed_events.append(event_data)
+                                    
+                                    # print(f"DEBUG EVENT: World {world_num}, Agent {agent_num}, Step {step_num}, Episode {current_episode}, Episode Step {episode_step_in_episode}, Outcome: {outcome}, Pos: ({event_data['pos'][0]:.2f}, {event_data['pos'][1]:.2f})")
                         else:
                             print(f"WARNING: Unexpected actions_log shape: {actions_log.shape}")
+
+            # # Print summary of all detected events
+            # print(f"\n=== EVENT SUMMARY ===")
+            # print(f"Total {event_to_track} events detected: {len(parsed_events)}")
+            
+            # # Group events by episode
+            # events_by_episode = {}
+            # for event in parsed_events:
+            #     ep = event['episode_idx']
+            #     if ep not in events_by_episode:
+            #         events_by_episode[ep] = []
+            #     events_by_episode[ep].append(event)
+            
+            # for episode_idx in sorted(events_by_episode.keys()):
+            #     events_in_episode = events_by_episode[episode_idx]
+            #     print(f"Episode {episode_idx}: {len(events_in_episode)} events")
+            #     for event in events_in_episode:
+            #         print(f"  World {event['world_num']}, Step {event['step_num']}, Episode Step {event['episode_step']}, Outcome: {event['outcome']}")
+            
+            # print("=== END EVENT SUMMARY ===\n")
 
             background = self.draw_scene_static(hoop_pos)
 
@@ -1227,6 +1349,7 @@ class ViewerClass:
                 self.screen.blit(background, (0, 0))
                 
                 current_display_mode = event_display_modes[event_display_mode_idx]
+                
                 self.draw_events(parsed_events, event_def, current_playback_episode, current_display_mode)
                 
                 if show_trails:
