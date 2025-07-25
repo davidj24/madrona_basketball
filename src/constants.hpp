@@ -24,7 +24,7 @@ namespace madBasketball {
     constexpr float HOOP_SCORE_ZONE_SIZE = 0.1f; // Radius for scoring detection
     constexpr float IN_COURT_OFFSET = 0.1f; // Buffer to ensure players are placed inside court lines
     constexpr float SHOT_CLOCK_DURATION = 24.0f; // Shot clock in seconds
-    constexpr float ONE_ON_ONE = 1.f;
+    constexpr int32_t ONE_ON_ONE = 1;
     
 
 

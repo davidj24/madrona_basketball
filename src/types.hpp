@@ -44,8 +44,8 @@ namespace madBasketball {
 // ================================================ Singletons ================================================
     struct GameState
     {
-        float inboundingInProgress; // 0.0f if false, 1.0f if true
-        float liveBall; // 0.0f if dead ball, 1.0f if live ball
+        int32_t inboundingInProgress; // 0 if false, 1 if true
+        int32_t liveBall; // 0 if dead ball, 1 if live ball
 
         float period;
         float teamInPossession; // The index of the team that is currently in possession of the ball
@@ -61,12 +61,12 @@ namespace madBasketball {
         float outOfBoundsCount;
 
         float inboundClock;
-        float isOneOnOne; // A bool that just changes the logic for after a scored basket
+        int32_t isOneOnOne; // 0 if false, 1 if true
 
     };
 
     struct WorldClock {
-        bool resetNow;
+        int32_t resetNow;
     };
 
 
@@ -137,15 +137,15 @@ namespace madBasketball {
 
     struct InPossession 
     {
-        bool hasBall;
+        int32_t hasBall;
         uint32_t ballEntityID;
         int32_t pointsWorth; // Points this agent would get if they scored from their current position
     };
 
     struct Inbounding
     {
-        bool imInbounding;
-        bool allowedToMove;
+        int32_t imInbounding;
+        int32_t allowedToMove;
     };
 
     struct Team
@@ -186,19 +186,19 @@ namespace madBasketball {
 
     struct Grabbed 
     {
-        bool isGrabbed;
+        int32_t isGrabbed;
         uint32_t holderEntityID;
     };
 
     struct BallPhysics
     {
-        bool inFlight;
+        int32_t inFlight;
         uint32_t lastTouchedByAgentID; // Entity ID of the specific agent who last touched the ball 
         uint32_t lastTouchedByTeamID; // Team ID of the team that last touched the ball 
         uint32_t shotByAgentID; // Entity ID of the agent who shot the ball (doesn't change after touching)
         uint32_t shotByTeamID; // Team ID of the team that shot the ball (doesn't change after touching)
         int32_t shotPointValue; // Point value of the shot when it was taken (2 or 3)
-        bool shotIsGoingIn; // Calculated at moment of release to let agent know if shot will score
+        int32_t shotIsGoingIn; // Calculated at moment of release to let agent know if shot will score
     };
 
     

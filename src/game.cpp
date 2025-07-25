@@ -13,7 +13,7 @@ namespace madBasketball {
 inline void assignInbounder(Engine &ctx, Entity ball_entity, Position ball_pos, uint32_t new_team_idx, Quat new_orientation, bool is_oob)
 {
     GameState &gameState = ctx.singleton<GameState>();
-    bool inbounder_assigned = false;
+    float inbounder_assigned = 0.0f;
 
     // Find the first available player on the new team.
     for (CountT i = 0; i < NUM_AGENTS; i++) {
@@ -23,14 +23,14 @@ inline void assignInbounder(Engine &ctx, Entity ball_entity, Position ball_pos, 
         Position &agent_pos = ctx.get<Position>(agent);
         InPossession &in_possession = ctx.get<InPossession>(agent);
         Orientation &agent_orient = ctx.get<Orientation>(agent);
-        if ((uint32_t)agent_team.teamIndex == new_team_idx && !inbounder_assigned) {
-            inbounder_assigned = true;
-            inbounding.imInbounding = true;
+        if ((uint32_t)agent_team.teamIndex == new_team_idx && inbounder_assigned == 0) {
+            inbounder_assigned = 1;
+            inbounding.imInbounding = 1;
             agent_pos = ball_pos; // Move player to the ball
 
             // Give them possession of the ball
-            ctx.get<Grabbed>(ball_entity) = {true, (uint32_t) agent.id};
-            in_possession.hasBall = true;
+            ctx.get<Grabbed>(ball_entity) = {1, (uint32_t) agent.id};
+            in_possession.hasBall = 1;
             in_possession.ballEntityID = ball_entity.id;
 
             // Set the agent's orientation to face the court
@@ -39,9 +39,9 @@ inline void assignInbounder(Engine &ctx, Entity ball_entity, Position ball_pos, 
     };
 
     // If we successfully found a player, update the game state.
-    if(inbounder_assigned) {
+    if(inbounder_assigned > 0) {
         gameState.teamInPossession = (float)new_team_idx;
-        gameState.inboundingInProgress = 1.0f;
+        gameState.inboundingInProgress = 1;
         gameState.inboundClock = 5.f; // Reset the 5-second clock
 
         // Only increment the out-of-bounds count if it wasn't a 5-second turnover
@@ -89,16 +89,16 @@ inline void moveBallSystem(Engine &ctx,
         Position &agent_pos = ctx.get<Position>(agent);
         InPossession &in_possession = ctx.get<InPossession>(agent);
         // Make the ball move with the agent if it's held
-        bool agent_is_holding_this_ball = (in_possession.hasBall == true &&
-                                           grabbed.isGrabbed &&
-                                           grabbed.holderEntityID == (uint32_t)agent.id);
-        if (agent_is_holding_this_ball) 
+        int32_t agent_is_holding_this_ball = (in_possession.hasBall == 1 &&
+                                           grabbed.isGrabbed == 1 &&
+                                           grabbed.holderEntityID == (uint32_t)agent.id) ? 1 : 0;
+        if (agent_is_holding_this_ball == 1) 
         {
             ball_pos = agent_pos;  // Move basketball to agent's new position
         }
     }
 
-    if (ball_velocity.velocity.length() == 0 || grabbed.isGrabbed) {return;}
+    if (ball_velocity.velocity.length() == 0 || grabbed.isGrabbed == 1) {return;}
 
     const GridState* grid = ctx.data().grid; // To clamp later
     float new_x = ball_pos.position.x + ball_velocity.velocity[0];
@@ -142,17 +142,17 @@ inline void updatePointsWorthSystem(Engine &ctx,
 
     // Find the hoop this agent should be shooting at (opposing team's hoop)
     Vector3 target_hoop_score_zone{};
-    bool found_target_hoop = false;
+    float found_target_hoop = 0.0f;
     for (int i = 0; i < NUM_HOOPS; i++) {
         if (hoop_ids[i] != team.defendingHoopID) {
             target_hoop_score_zone = hoop_score_zones[i];
-            found_target_hoop = true;
+            found_target_hoop = 1.0f;
             break;
         }
     }
 
     // Calculate points worth for this agent's current position
-    if (found_target_hoop) {
+    if (found_target_hoop == 1) {
         in_possession.pointsWorth = getShotPointValue(agent_pos, target_hoop_score_zone);
     }
     else {
@@ -180,18 +180,18 @@ inline void grabSystem(Engine &ctx,
         BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
         Grabbed &grabbed = ctx.get<Grabbed>(ball);
         Velocity &ball_velocity = ctx.get<Velocity>(ball);
-        if (ball_physics.inFlight) { continue; }
+        if (ball_physics.inFlight == 1) { continue; }
 
-        bool agent_is_holding_this_ball = (in_possession.hasBall == true &&
-                                           grabbed.isGrabbed &&
-                                           grabbed.holderEntityID == (uint32_t)agent_entity.id);
+        int32_t agent_is_holding_this_ball = (in_possession.hasBall == 1 &&
+                                           grabbed.isGrabbed == 1 &&
+                                           grabbed.holderEntityID == (uint32_t)agent_entity.id) ? 1 : 0;
 
         // If agent already has a ball, drop it
-        if (agent_is_holding_this_ball) {
+        if (agent_is_holding_this_ball == 1) {
             in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
-            in_possession.hasBall = false;
+            in_possession.hasBall = 0;
             grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER;
-            grabbed.isGrabbed = false;
+            grabbed.isGrabbed = 0;
             continue;
         }
 
@@ -203,7 +203,7 @@ inline void grabSystem(Engine &ctx,
         {
             if (gameState.isOneOnOne == 1.f && team.teamIndex != gameState.teamInPossession) 
             {
-                ctx.singleton<WorldClock>().resetNow = true;
+                ctx.singleton<WorldClock>().resetNow = 1.0f;
                 continue;
             }
             // Check if we're stealing from another agent
@@ -214,17 +214,17 @@ inline void grabSystem(Engine &ctx,
                 GrabCooldown &robbed_agent_grab_cooldown = ctx.get<GrabCooldown>(agent);
                 if (other_in_possession.ballEntityID == (uint32_t)ball.id)
                 {
-                    other_in_possession.hasBall = false;
+                    other_in_possession.hasBall = 0;
                     other_in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
                     robbed_agent_grab_cooldown.cooldown = SIMULATION_HZ; // Just makes it so they can't grab for one second
                 }
             }
 
-            in_possession.hasBall = true;
+            in_possession.hasBall = 1;
             in_possession.ballEntityID = ball.id;
             grabbed.holderEntityID = (uint32_t)agent_entity.id;
-            grabbed.isGrabbed = true;
-            ball_physics.inFlight = false; // Make it so the ball isn't "in flight" anymore
+            grabbed.isGrabbed = 1;
+            ball_physics.inFlight = 0; // Make it so the ball isn't "in flight" anymore
             ball_velocity.velocity = Vector3::zero(); // And change its velocity to be zero
 
             // Clear shot information since this is a new possession
@@ -233,7 +233,7 @@ inline void grabSystem(Engine &ctx,
             ball_physics.shotPointValue = 2; // Default to 2 points
 
             gameState.teamInPossession = (float)team.teamIndex; // Update the team in possession
-            gameState.liveBall = 1.f;
+            gameState.liveBall = 1;
         }
     }
 }
@@ -258,14 +258,14 @@ inline void passSystem(Engine &ctx,
         Grabbed &grabbed = ctx.get<Grabbed>(ball);
         Velocity &ball_velocity = ctx.get<Velocity>(ball);
         if (grabbed.holderEntityID == (uint32_t)agent_entity.id) {
-            grabbed.isGrabbed = false;  // Ball is no longer grabbed
+            grabbed.isGrabbed = 0;  // Ball is no longer grabbed
             grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER; // Ball is no longer held by anyone
-            in_possession.hasBall = false; // Since agents can only hold 1 ball at a time, if they pass it they can't be holding one anymore
+            in_possession.hasBall = 0; // Since agents can only hold 1 ball at a time, if they pass it they can't be holding one anymore
             in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER; // Whoever passed the ball is no longer in possession of it
-            inbounding.imInbounding = false;
+            inbounding.imInbounding = 0;
             ball_velocity.velocity = agent_orientation.orientation.rotateVec(Vector3{0.f, 0.1f, 0.f}); // Setting the ball's velocity to have the same direction as the agent's orientation
                                                                                                       // Note: we use 0, 0.1, 0 because that's forward in our simulation specifically
-            gameState.inboundingInProgress = 0.0f;
+            gameState.inboundingInProgress = 0;
         }
     }
 }
@@ -347,13 +347,13 @@ inline void shootSystem(Engine &ctx,
     // This is the final, correct trajectory vector for the ball
     Vector3 final_shot_vec = {sinf(shot_direction), cosf(shot_direction), 0.f};
     // final_shot_vec = (distance_to_hoop <= 5.f) ? ideal_shot_vector : Vector3{0, 1, 0}; // DEBUG
-    bool shot_is_going_in = false;
+    float shot_is_going_in = 0.0f;
     float how_far_to_go_along_shot_to_be_closest_to_hoop = ideal_shot_vector.dot(final_shot_vec);
-    if (how_far_to_go_along_shot_to_be_closest_to_hoop < 0) {shot_is_going_in = false;}
+    if (how_far_to_go_along_shot_to_be_closest_to_hoop < 0) {shot_is_going_in = 0.0f;}
     else
     {
         float closest_distance_to_hoop_sq = ideal_shot_vector.length2() - how_far_to_go_along_shot_to_be_closest_to_hoop * how_far_to_go_along_shot_to_be_closest_to_hoop;
-        shot_is_going_in = closest_distance_to_hoop_sq <= scoring_radius * scoring_radius;
+        shot_is_going_in = (closest_distance_to_hoop_sq <= scoring_radius * scoring_radius) ? 1.0f : 0.0f;
     }
 
     
@@ -378,23 +378,23 @@ inline void shootSystem(Engine &ctx,
         {
             // Calculate the point value of this shot from the agent's current position
             int32_t shot_point_value = getShotPointValue(agent_pos, attacking_hoop_score_zone);
-            if(shot_is_going_in == true) 
+            if(shot_is_going_in == 1) 
             {
-                ball_physics.shotIsGoingIn = true;
+                ball_physics.shotIsGoingIn = 1;
                 gameState.scoredBaskets++;
             }
             else {reward.r -= 1.f;}
-            grabbed.isGrabbed = false;
+            grabbed.isGrabbed = 0;
             grabbed.holderEntityID = ENTITY_ID_PLACEHOLDER;
-            in_possession.hasBall = false;
+            in_possession.hasBall = 0;
             in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
-            inbounding.imInbounding = false;
+            inbounding.imInbounding = 0.0f;
 
             ball_velocity.velocity = final_shot_vec * .1f;
 
 
 
-            ball_physics.inFlight = true;
+            ball_physics.inFlight = 1;
 
             // Set who shot the ball for scoring system (these don't change after touching)
             ball_physics.shotByAgentID = (uint32_t)agent_entity.id;
@@ -453,7 +453,7 @@ inline void moveAgentSystem(Engine &ctx,
     } 
     agent_vel.velocity += delta_vel;
     if (agent_vel.velocity.length() > maximum_speed) {agent_vel.velocity *= maximum_speed / agent_vel.velocity.length();}
-    if (inbounding.imInbounding == 1.f) {delta_vel.x = 0.f;}
+    if (inbounding.imInbounding == 1) {delta_vel.x = 0.f;}
     if (in_possession.hasBall == 1) {maximum_speed *= BALL_AGENT_SLOWDOWN;}
     
 
@@ -501,17 +501,17 @@ inline void actionMaskSystem(Engine &ctx,
     action_mask.can_shoot = 0;
 
     // Offensive actions
-    if (in_possession.hasBall)
+    if (in_possession.hasBall == 1)
     {
         action_mask.can_pass = 1;
         action_mask.can_shoot = 1;
     }
     
-    if (gameState.inboundingInProgress == 1.f)
+    if (gameState.inboundingInProgress == 1)
     {
         action_mask.can_shoot = 0;
         action_mask.can_grab = 0;
-        if (inbounding.imInbounding && gameState.liveBall == 0.f)
+        if (inbounding.imInbounding == 1 && gameState.liveBall == 0)
         {
             action_mask.can_move = 0;
         }
@@ -643,24 +643,24 @@ inline void hardCodeDefenseSystem(Engine &ctx,
         
         defender_action.grab = 1.f;
         Vector3 guarding_pos; // The place we want our defensive agent to go to defend
-        bool found_offender = false;
+        int32_t found_offender = 0;
         for (CountT i = 0; i < NUM_AGENTS; i++) {
             Entity agent = ctx.data().agents[i];
             InPossession &offender_in_possession = ctx.get<InPossession>(agent);
             Position &offender_pos = ctx.get<Position>(agent);
-            if (offender_in_possession.hasBall && !found_offender) {
+            if (offender_in_possession.hasBall == 1 && found_offender == 0) {
                 for (CountT j = 0; j < NUM_HOOPS; j++) {
                     Entity hoop = ctx.data().hoops[j];
                     if (defender_team.defendingHoopID == hoop.id) {
                         Position &hoop_pos = ctx.get<Position>(hoop);
                     guarding_pos = offender_pos.position + GUARDING_DISTANCE * (hoop_pos.position - offender_pos.position).normalize();
-                    found_offender = true;
+                    found_offender = 1;
                 }
             }
         }
     }
     
-    if (!found_offender)
+    if (found_offender == 0)
     {
         defender_action.move = 0;
         return;
@@ -753,11 +753,11 @@ inline void rewardSystem(Engine &ctx,
     {
         Entity ball = ctx.data().balls[j];
         BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
-        if (ball_physics.shotByAgentID == (uint32_t)agent_entity.id && ball_physics.shotIsGoingIn == true)
+        if (ball_physics.shotByAgentID == (uint32_t)agent_entity.id && ball_physics.shotIsGoingIn == 1)
         {
             reward.r += ball_physics.shotPointValue;
         }
-        else if (ball_physics.shotByAgentID == (uint32_t)agent_entity.id && ball_physics.shotIsGoingIn == false && ball_physics.inFlight == true)
+        else if (ball_physics.shotByAgentID == (uint32_t)agent_entity.id && ball_physics.shotIsGoingIn == 0 && ball_physics.inFlight == 1)
         {
             reward.r -= 1;
         }
@@ -784,7 +784,7 @@ inline void scoreSystem(Engine &ctx,
         float distance_to_hoop = std::sqrt((ball_pos.position.x - hoop_pos.position.x) * (ball_pos.position.x - hoop_pos.position.x) +
                                         (ball_pos.position.y - hoop_pos.position.y) * (ball_pos.position.y - hoop_pos.position.y));
 
-        if (distance_to_hoop <= scoring_zone.radius && ball_physics.inFlight) {
+        if (distance_to_hoop <= scoring_zone.radius && ball_physics.inFlight == 1.f) {
             // Use the point value that was calculated when the shot was taken
             int32_t points_scored = ball_physics.shotPointValue;
 
@@ -827,14 +827,14 @@ inline void scoreSystem(Engine &ctx,
             gameState.scoredBaskets++;
 
             // Set the ball's state for the inbound
-            ball_physics.inFlight = false;
+            ball_physics.inFlight = 0.0f;
             ball_velocity.velocity = Vector3::zero();
 
             // Clear shot information since the shot scored
             ball_physics.shotByAgentID = ENTITY_ID_PLACEHOLDER;
             ball_physics.shotByTeamID = ENTITY_ID_PLACEHOLDER;
             ball_physics.shotPointValue = 2; // Reset to default
-            ball_physics.shotIsGoingIn = false;
+            ball_physics.shotIsGoingIn = 0.0f;
 
             // Set up the inbound for the defending team.
             if (gameState.isOneOnOne == 0.f)
@@ -845,7 +845,7 @@ inline void scoreSystem(Engine &ctx,
             }
             else 
             {
-                ctx.singleton<WorldClock>().resetNow = true;
+                ctx.singleton<WorldClock>().resetNow = 1.0f;
             }
         }
     }
@@ -862,7 +862,7 @@ inline void resetSystem(Engine &ctx, WorldClock &world_clock) {
     resetWorld(ctx);
 
     // Finally, clear the world's master reset flag.
-    ctx.singleton<WorldClock>().resetNow = false;
+    ctx.singleton<WorldClock>().resetNow = 0.0f;
 }
 
 inline void tick(Engine &ctx,
@@ -907,7 +907,7 @@ inline void clockSystem(Engine &ctx, WorldClock &world_clock)
 
     if (gameState.gameClock <= 0.f && gameState.liveBall > 0.5f)
     {
-        world_clock.resetNow = 1;
+        world_clock.resetNow = 1.0f;
     }
 
     if (gameState.shotClock < 0.f)
@@ -960,13 +960,13 @@ inline void outOfBoundsSystem(Engine &ctx,
         gameState.inboundingInProgress == 0.f)
     {
         if (gameState.isOneOnOne == 1.f) {
-            ctx.singleton<WorldClock>().resetNow = true;
+            ctx.singleton<WorldClock>().resetNow = 1.0f;
         }
         else
         {
-            ball_physics.inFlight = false;
+            ball_physics.inFlight = 0.0f;
             ball_velocity.velocity = Vector3::zero();
-            gameState.liveBall = 0.f;
+            gameState.liveBall = 0;
 
             // The team that did NOT last touch the ball gets possession.
             uint32_t new_team_idx = 1 - ball_physics.lastTouchedByTeamID;
@@ -977,12 +977,12 @@ inline void outOfBoundsSystem(Engine &ctx,
                 InPossession &in_possession = ctx.get<InPossession>(agent);
                 Position &agent_pos = ctx.get<Position>(agent);
                 // If this agent was the one who went out of bounds with the ball...
-                if (in_possession.hasBall && in_possession.ballEntityID == ball_entity.id)
+                if (in_possession.hasBall == 1 && in_possession.ballEntityID == ball_entity.id)
                 {
                     agent_pos.position += findVectorToCenter(ctx, agent_pos);
 
                     // Take the ball away
-                    in_possession.hasBall = false;
+                    in_possession.hasBall = 0;
                     in_possession.ballEntityID = ENTITY_ID_PLACEHOLDER;
                 }
             }
@@ -1006,18 +1006,18 @@ inline void inboundViolationSystem(Engine &ctx, WorldClock &world_clock)
     uint32_t new_team_idx = 1 - current_team_idx;
     uint32_t ball_to_turnover_id = ENTITY_ID_PLACEHOLDER;
 
-    gameState.liveBall = 0.f;
+    gameState.liveBall = 0;
 
     for (CountT i = 0; i < NUM_AGENTS; i++) {
         Entity agent = ctx.data().agents[i];
         Inbounding &inb = ctx.get<Inbounding>(agent);
         Position &agent_pos = ctx.get<Position>(agent);
         InPossession &poss = ctx.get<InPossession>(agent);
-        if (inb.imInbounding) {
+        if (inb.imInbounding > 0.5f) {
             ball_to_turnover_id = poss.ballEntityID;
 
-            inb.imInbounding = false;
-            poss.hasBall = false;
+            inb.imInbounding = 0.0f;
+            poss.hasBall = 0.0f;
             poss.ballEntityID = ENTITY_ID_PLACEHOLDER;
 
             agent_pos.position += findVectorToCenter(ctx, agent_pos);
@@ -1030,7 +1030,7 @@ inline void inboundViolationSystem(Engine &ctx, WorldClock &world_clock)
             Position &ball_pos = ctx.get<Position>(ball);
             Grabbed &grabbed = ctx.get<Grabbed>(ball);
             if (ball.id == (int32_t)ball_to_turnover_id) {
-                grabbed = {false, ENTITY_ID_PLACEHOLDER};
+                grabbed = {0, ENTITY_ID_PLACEHOLDER};
                 Quat inbound_orientation = findRotationBetweenVectors(AGENT_BASE_FORWARD, findVectorToCenter(ctx, ball_pos));
                 assignInbounder(ctx, ball, ball_pos, new_team_idx, inbound_orientation, true);
             }
@@ -1123,7 +1123,7 @@ inline void fillObservationsSystem(Engine &ctx,
         Inbounding &ib = ctx.get<Inbounding>(agent);
         GrabCooldown &gc = ctx.get<GrabCooldown>(agent);
         all_agents[agent_idx++] = { agent.id, t.teamIndex, p, o, v, ip, ib, gc };
-        if (ib.imInbounding) {
+        if (ib.imInbounding > 0.5f) {
             inbounder_id = agent.id;
         }
     };
@@ -1154,8 +1154,8 @@ inline void fillObservationsSystem(Engine &ctx,
     // Now fill the ball info using the variables we populated earlier.
     fill_vec3(ball_pos.position);
     fill_vec3(ball_velocity.velocity);
-    obs[idx++] = (float)ball_grabbed.isGrabbed;
-    obs[idx++] = (float)ball_phys.inFlight;
+    obs[idx++] = ball_grabbed.isGrabbed;
+    obs[idx++] = ball_phys.inFlight;
     obs[idx++] = (float)ball_phys.shotPointValue;
     obs[idx++] = (float)ball_phys.lastTouchedByTeamID;
 
@@ -1169,9 +1169,9 @@ inline void fillObservationsSystem(Engine &ctx,
     fill_vec3(agent_pos.position);
     fill_quat(agent_orientation.orientation);
     fill_vec3(agent_vel.velocity);
-    obs[idx++] = (float)in_possession.hasBall;
+    obs[idx++] = in_possession.hasBall;
     obs[idx++] = (float)in_possession.pointsWorth;
-    obs[idx++] = (float)inbounding.imInbounding;
+    obs[idx++] = inbounding.imInbounding;
     obs[idx++] = grab_cooldown.cooldown;
     fill_vec3((attacking_hoop_pos.position - agent_pos.position).normalize());
     obs[idx++] = (attacking_hoop_pos.position - agent_pos.position).length(); // Distance to hoop only for self
@@ -1192,7 +1192,7 @@ inline void fillObservationsSystem(Engine &ctx,
                 fill_vec3(all_agents[i].pos.position);
                 fill_quat(all_agents[i].orient.orientation);
                 fill_vec3(all_agents[i].velocity.velocity);
-                obs[idx++] = (float)all_agents[i].in_pos.hasBall;
+                obs[idx++] = all_agents[i].in_pos.hasBall;
                 teammate_count++;
             }
         }
@@ -1203,7 +1203,7 @@ inline void fillObservationsSystem(Engine &ctx,
                 fill_vec3(all_agents[i].pos.position);
                 fill_quat(all_agents[i].orient.orientation);
                 fill_vec3(all_agents[i].velocity.velocity);
-                obs[idx++] = (float)all_agents[i].in_pos.hasBall;
+                obs[idx++] = all_agents[i].in_pos.hasBall;
                 opponent_count++;
             }
         }

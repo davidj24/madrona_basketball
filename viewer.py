@@ -735,13 +735,7 @@ class ViewerClass:
     def step_simulation(self):
         self.sim.step(); self.step_count += 1
         
-        # Debug: Print GameState tensor information
-        if self.step_count % 60 == 0:  # Print every 60 steps to avoid spam
-            game_state_tensor = self.sim.game_state_tensor()
-            print(f"\n=== DEBUG: GameState tensor at step {self.step_count} ===")
-            print(f"Shape: {game_state_tensor.shape}")
-            print(f"Data: {game_state_tensor}")
-            print("=== END DEBUG ===\n")
+
 
     def reset_simulation(self):
         # Don't reset when in training mode - let the training handle resets
@@ -1127,7 +1121,7 @@ class ViewerClass:
                         if len(actions_log.shape) == 4:  # [steps, worlds, agents, actions] - multi-agent
                             for agent_num in range(num_agents):
                                 if (step_num < len(actions_log) and actions_log[step_num, world_num, agent_num, action_idx] == 1): # Checks if action happened this timestep
-                                    if event_def["conditions"](log_data, step_num, world_num):
+                                    if event_def["conditions"](log_data, step_num, world_num, agent_num):
                                         outcome = event_def["outcome_func"](log_data, step_num, world_num)
                                         current_episode = episodes_completed_log[step_num, world_num]
                                         parsed_events.append({
@@ -1138,7 +1132,8 @@ class ViewerClass:
                         elif len(actions_log.shape) == 3:  # [steps, worlds, actions] - single agent per world
                             if (step_num < len(actions_log) and actions_log[step_num, world_num, action_idx] == 1):
                                 # Use agent 0 since we only have one agent per world in inference
-                                if event_def["conditions"](log_data, step_num, world_num):
+                                agent_num = 0
+                                if event_def["conditions"](log_data, step_num, world_num, agent_num):
                                     outcome = event_def["outcome_func"](log_data, step_num, world_num)
                                     current_episode = episodes_completed_log[step_num, world_num]
                                     parsed_events.append({

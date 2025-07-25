@@ -13,8 +13,8 @@ namespace madBasketball {
 void generateWorld(Engine &ctx) {
     ctx.singleton<GameState>() = GameState
     {
-        .inboundingInProgress = 0.0f,
-        .liveBall = 1.0f,
+        .inboundingInProgress = 0,
+        .liveBall = 1,
         .period = 1.0f,
         .teamInPossession = 0.0f,
         .team0Hoop = 0,
@@ -31,7 +31,7 @@ void generateWorld(Engine &ctx) {
 
     // Make sure to add the Reset component to the WorldClock entity
     WorldClock worldClock = ctx.singleton<WorldClock>();
-    worldClock.resetNow = false;
+    worldClock.resetNow = 0;
 
     // Initialize GameState
     const GridState* grid = ctx.data().grid;
@@ -171,8 +171,8 @@ void generateWorld(Engine &ctx) {
     ctx.get<Done>(basketball).episodeDone = 0.f;
     ctx.get<CurStep>(basketball).step = 0;
     // We will set the Grabbed component later, after we know the agent's ID.
-    ctx.get<Grabbed>(basketball) = Grabbed {false, ENTITY_ID_PLACEHOLDER};
-    ctx.get<BallPhysics>(basketball) = BallPhysics {false, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2, false};
+    ctx.get<Grabbed>(basketball) = Grabbed {0, ENTITY_ID_PLACEHOLDER};
+    ctx.get<BallPhysics>(basketball) = BallPhysics {0, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2, 0};
     ctx.get<Velocity>(basketball).velocity = Vector3::zero();
 
 
@@ -210,13 +210,13 @@ void generateWorld(Engine &ctx) {
             {
                 offensive_agent_id = agent.id;
                 // Give them possession of the ball we just created.
-                ctx.get<InPossession>(agent) = {true, static_cast<uint32_t>(basketball.id), 2};
+                ctx.get<InPossession>(agent) = {1, static_cast<uint32_t>(basketball.id), 2};
             }
             else
             {
                 
                 // All other agents in 1v1 mode start without the ball.
-                ctx.get<InPossession>(agent) = {false, ENTITY_ID_PLACEHOLDER, 2};
+                ctx.get<InPossession>(agent) = {0, ENTITY_ID_PLACEHOLDER, 2};
             }
         }
         else
@@ -232,7 +232,7 @@ void generateWorld(Engine &ctx) {
         }
 
         ctx.get<Reset>(agent) = Reset{0};
-        ctx.get<Inbounding>(agent) = Inbounding{false, true};
+        ctx.get<Inbounding>(agent) = Inbounding{0, 1};
         ctx.get<Reward>(agent).r = 0.f;
         ctx.get<Done>(agent).episodeDone = 0.f;
         ctx.get<CurStep>(agent).step = 0;
@@ -250,7 +250,7 @@ void generateWorld(Engine &ctx) {
 
     if (gameState.isOneOnOne == 1.f)
     {
-        ctx.get<Grabbed>(basketball) = {true, offensive_agent_id};
+        ctx.get<Grabbed>(basketball) = {1, offensive_agent_id};
     }
 }
 
@@ -281,8 +281,8 @@ void resetWorld(Engine &ctx) {
     {
         // This was a manual reset or a reset after a score in 1v1 mode.
         gameState = GameState {
-            .inboundingInProgress = 0.0f,
-            .liveBall = 1.0f,
+            .inboundingInProgress = 0,
+            .liveBall = 1,
             .period = 1.0f,
             .teamInPossession = 0.0f,
             .team0Hoop = gameState.team0Hoop, // Preserve existing hoop IDs
@@ -314,12 +314,12 @@ void resetWorld(Engine &ctx) {
         ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0};
         ctx.get<ActionMask>(agent) = ActionMask{0, 0, 0, 0};
         ctx.get<Reset>(agent) = Reset{0};
-        ctx.get<Inbounding>(agent) = Inbounding{false, true};
+        ctx.get<Inbounding>(agent) = Inbounding{0, 1};
 
         // reward.r = 0.f;
         ctx.get<Done>(agent).episodeDone = 1.f;
         ctx.get<CurStep>(agent).step = 0;
-        ctx.get<InPossession>(agent) = InPossession{false, ENTITY_ID_PLACEHOLDER, 2};
+        ctx.get<InPossession>(agent) = InPossession{0, ENTITY_ID_PLACEHOLDER, 2};
         ctx.get<Orientation>(agent) = (i % 2 == 0) ? Orientation{Quat::angleAxis(-madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})} : Orientation{Quat::angleAxis(madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})};
         ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
         ctx.get<Stats>(agent) = Stats{0.f, 0.f};
@@ -339,7 +339,7 @@ void resetWorld(Engine &ctx) {
                 pos.position.y = clamp(pos.position.y, 0.f, grid->height);
                 agent_pos_for_ball = pos;
                 offensive_agent_id = agent.id;
-                in_pos = {true, (uint32_t)basketball_entity.id, 2};
+                in_pos = {1, (uint32_t)basketball_entity.id, 2};
             }
             else
             {
@@ -358,7 +358,7 @@ void resetWorld(Engine &ctx) {
                 pos.position.x = clamp(pos.position.x, 0.f, grid->width);
                 pos.position.y = clamp(pos.position.y, 0.f, grid->height);
                 
-                in_pos = {false, ENTITY_ID_PLACEHOLDER, 2};
+                in_pos = {0, ENTITY_ID_PLACEHOLDER, 2};
             }
         }
         else
@@ -381,16 +381,16 @@ void resetWorld(Engine &ctx) {
         ctx.get<Reset>(ball).resetNow = 0;
         ctx.get<Done>(ball).episodeDone = 1.f;
         ctx.get<CurStep>(ball).step = 0;
-        ctx.get<BallPhysics>(ball) = BallPhysics {false, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2, false};
+        ctx.get<BallPhysics>(ball) = BallPhysics {0, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, ENTITY_ID_PLACEHOLDER, 2, 0};
         ctx.get<Velocity>(ball).velocity = Vector3::zero();
         Grabbed &grabbed = ctx.get<Grabbed>(ball);
         if (gameState.isOneOnOne == 1.f)
         {
-            grabbed = Grabbed{true, offensive_agent_id};
+            grabbed = Grabbed{1, offensive_agent_id};
         }
         else
         {
-            grabbed = Grabbed{false, ENTITY_ID_PLACEHOLDER};
+            grabbed = Grabbed{0, ENTITY_ID_PLACEHOLDER};
         }
     }
 
