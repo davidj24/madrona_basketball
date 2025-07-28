@@ -1159,14 +1159,27 @@ class ViewerClass:
                                         outcome = event_def["outcome_func"](log_data, step_num, world_num)
                                         
                                         # Debug: Print possession values for pass events
-                                        # if event_to_track == "pass":
-                                        #     if 'agent_possession' in log_data:
-                                        #         possession_prev = log_data['agent_possession'][step_num-1, world_num, agent_num] if step_num > 0 else "N/A"
-                                        #         possession_curr = log_data['agent_possession'][step_num, world_num, agent_num] if step_num < len(log_data['agent_possession']) else "N/A"
-                                        #         print(f"PASS DEBUG: Step {step_num}, World {world_num}, Agent {agent_num}")
-                                        #         print(f"  Possession[{step_num-1}]: {possession_prev}")
-                                        #         print(f"  Possession[{step_num}]: {possession_curr}")
-                                        #         print(f"  Action value: {actions_log[step_num, world_num, agent_num, action_idx]}")
+                                        if event_to_track == "pass":
+                                            if 'agent_possession' in log_data:
+                                                # Get possession values for steps before, during, and after the event
+                                                possession_before = log_data['agent_possession'][step_num-1, world_num, agent_num] if step_num > 0 else "N/A"
+                                                possession_during = log_data['agent_possession'][step_num, world_num, agent_num] if step_num < len(log_data['agent_possession']) else "N/A"
+                                                possession_after = log_data['agent_possession'][step_num+1, world_num, agent_num] if step_num+1 < len(log_data['agent_possession']) else "N/A"
+                                                
+                                                print(f"PASS DEBUG: Step {step_num}, World {world_num}, Agent {agent_num}")
+                                                print(f"  Possession[{step_num-1}] (before): {possession_before}")
+                                                print(f"  Possession[{step_num}] (during): {possession_during}")
+                                                print(f"  Possession[{step_num+1}] (after): {possession_after}")
+                                                print(f"  Action value: {actions_log[step_num, world_num, agent_num, action_idx]}")
+                                                
+                                                # Check if this is the problematic first step of an episode
+                                                is_episode_start = False
+                                                for ep_info in episode_breaks[world_num]:
+                                                    if step_num == ep_info['start']:
+                                                        is_episode_start = True
+                                                        break
+                                                if is_episode_start:
+                                                    print(f"  ⚠️  WARNING: This is the FIRST STEP of an episode!")
                                         
                                         # Find which episode this step belongs to by checking episode_breaks
                                         current_episode = 0
@@ -1196,7 +1209,7 @@ class ViewerClass:
                                         }
                                         parsed_events.append(event_data)
                                         
-                                        # print(f"DEBUG EVENT: World {world_num}, Agent {agent_num}, Step {step_num}, Episode {current_episode}, Episode Step {episode_step_in_episode}, Outcome: {outcome}, Pos: ({event_data['pos'][0]:.2f}, {event_data['pos'][1]:.2f})")
+                                        print(f"DEBUG EVENT: World {world_num}, Agent {agent_num}, Step {step_num}, Episode {current_episode}, Episode Step {episode_step_in_episode}, Outcome: {outcome}, Pos: ({event_data['pos'][0]:.2f}, {event_data['pos'][1]:.2f})")
                         elif len(actions_log.shape) == 3:  # [steps, worlds, actions] - single agent per world
                             if (step_num < len(actions_log) and actions_log[step_num, world_num, action_idx] == 1):
                                 # Use agent 0 since we only have one agent per world in inference
@@ -1204,15 +1217,28 @@ class ViewerClass:
                                 if event_def["conditions"](log_data, step_num, world_num, agent_num):
                                     outcome = event_def["outcome_func"](log_data, step_num, world_num)
                                     
-                                    # # Debug: Print possession values for pass events
-                                    # if event_to_track == "pass":
-                                    #     if 'agent_possession' in log_data:
-                                    #         possession_prev = log_data['agent_possession'][step_num-1, world_num, agent_num] if step_num > 0 else "N/A"
-                                    #         possession_curr = log_data['agent_possession'][step_num, world_num, agent_num] if step_num < len(log_data['agent_possession']) else "N/A"
-                                    #         print(f"PASS DEBUG: Step {step_num}, World {world_num}, Agent {agent_num}")
-                                    #         print(f"  Possession[{step_num-1}]: {possession_prev}")
-                                    #         print(f"  Possession[{step_num}]: {possession_curr}")
-                                    #         print(f"  Action value: {actions_log[step_num, world_num, action_idx]}")
+                                    # Debug: Print possession values for pass events
+                                    if event_to_track == "pass":
+                                        if 'agent_possession' in log_data:
+                                            # Get possession values for steps before, during, and after the event
+                                            possession_before = log_data['agent_possession'][step_num-1, world_num, agent_num] if step_num > 0 else "N/A"
+                                            possession_during = log_data['agent_possession'][step_num, world_num, agent_num] if step_num < len(log_data['agent_possession']) else "N/A"
+                                            possession_after = log_data['agent_possession'][step_num+1, world_num, agent_num] if step_num+1 < len(log_data['agent_possession']) else "N/A"
+                                            
+                                            print(f"PASS DEBUG: Step {step_num}, World {world_num}, Agent {agent_num}")
+                                            print(f"  Possession[{step_num-1}] (before): {possession_before}")
+                                            print(f"  Possession[{step_num}] (during): {possession_during}")
+                                            print(f"  Possession[{step_num+1}] (after): {possession_after}")
+                                            print(f"  Action value: {actions_log[step_num, world_num, action_idx]}")
+                                            
+                                            # Check if this is the problematic first step of an episode
+                                            is_episode_start = False
+                                            for ep_info in episode_breaks[world_num]:
+                                                if step_num == ep_info['start']:
+                                                    is_episode_start = True
+                                                    break
+                                            if is_episode_start:
+                                                print(f"  ⚠️  WARNING: This is the FIRST STEP of an episode!")
                                     
                                     # Find which episode this step belongs to by checking episode_breaks
                                     current_episode = 0
@@ -1246,25 +1272,25 @@ class ViewerClass:
                         else:
                             print(f"WARNING: Unexpected actions_log shape: {actions_log.shape}")
 
-            # # Print summary of all detected events
-            # print(f"\n=== EVENT SUMMARY ===")
-            # print(f"Total {event_to_track} events detected: {len(parsed_events)}")
+            # Print summary of all detected events
+            print(f"\n=== EVENT SUMMARY ===")
+            print(f"Total {event_to_track} events detected: {len(parsed_events)}")
             
-            # # Group events by episode
-            # events_by_episode = {}
-            # for event in parsed_events:
-            #     ep = event['episode_idx']
-            #     if ep not in events_by_episode:
-            #         events_by_episode[ep] = []
-            #     events_by_episode[ep].append(event)
+            # Group events by episode
+            events_by_episode = {}
+            for event in parsed_events:
+                ep = event['episode_idx']
+                if ep not in events_by_episode:
+                    events_by_episode[ep] = []
+                events_by_episode[ep].append(event)
             
-            # for episode_idx in sorted(events_by_episode.keys()):
-            #     events_in_episode = events_by_episode[episode_idx]
-            #     print(f"Episode {episode_idx}: {len(events_in_episode)} events")
-            #     for event in events_in_episode:
-            #         print(f"  World {event['world_num']}, Step {event['step_num']}, Episode Step {event['episode_step']}, Outcome: {event['outcome']}")
+            for episode_idx in sorted(events_by_episode.keys()):
+                events_in_episode = events_by_episode[episode_idx]
+                print(f"Episode {episode_idx}: {len(events_in_episode)} events")
+                for event in events_in_episode:
+                    print(f"  World {event['world_num']}, Step {event['step_num']}, Episode Step {event['episode_step']}, Outcome: {event['outcome']}")
             
-            # print("=== END EVENT SUMMARY ===\n")
+            print("=== END EVENT SUMMARY ===\n")
 
             background = self.draw_scene_static(hoop_pos)
 
@@ -1335,9 +1361,9 @@ class ViewerClass:
                         if event.key == pygame.K_r:
                             episode_step = 0
                         if event.key == pygame.K_PERIOD:
-                            episode_step += 1
+                            episode_step += 1 if episode_step < max(episode_lengths) else 0
                         if event.key == pygame.K_COMMA:
-                            episode_step -= 1
+                            episode_step -= 1 if episode_step > 0 else 0
                 
                 keys = pygame.key.get_pressed()
                 if keys[pygame.K_LEFT]:

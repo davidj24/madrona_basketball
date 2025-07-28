@@ -37,7 +37,7 @@ EVENT_DEFINITIONS = {
 
     "pass" : {
         "action_idx" : 4,
-        "conditions" : lambda log_data_tensor, step_num, world_num, agent_num=0: int(log_data_tensor.get('agent_possession')[step_num-1, world_num, agent_num, 0]) > 0.5,
+        "conditions" : lambda log_data_tensor, step_num, world_num, agent_num=0: (int(log_data_tensor.get('agent_possession')[step_num-1, world_num, agent_num, 0]) == 1),  # Agent had ball previous step
         "outcome_func" : lambda log_data, step_num, world_num: True, # Later this should calculate if a pass is a turnover or something, so we can see different outcomes of passes
         "visuals" : {
             True : {"shape" : "circle", "color" : (0, 255, 0), "size" : 7},
@@ -46,7 +46,7 @@ EVENT_DEFINITIONS = {
 
     "grab" : {
         "action_idx" : 3,
-        "conditions" : lambda log_data_tensor, step_num, world_num, agent_num=0: int(log_data_tensor.get('agent_possession')[step_num, world_num, agent_num, 0]) != int(log_data_tensor.get('agent_possession')[step_num-1, world_num, agent_num, 0]),
+        "conditions" : lambda log_data_tensor, step_num, world_num, agent_num=0: (int(log_data_tensor.get('agent_possession')[step_num, world_num, agent_num, 0]) != int(log_data_tensor.get('agent_possession')[step_num-1, world_num, agent_num, 0])),  # Possession state changed
         "outcome_func" : lambda log_data, step_num, world_num: True,
         "visuals" : {
             True : {"shape" : "circle", "color" : (0, 255, 0), "size" : 7},
@@ -67,11 +67,6 @@ BALL_CIRCUMFERENCE_M = 0.749  # Official basketball circumference
 
 
 
-# ======================================== Pygame/Visualization Constants ========================================
-WINDOW_WIDTH = 3500
-WINDOW_HEIGHT = 2000
-BACKGROUND_COLOR = (50, 50, 50)  # Dark gray
-TEXT_COLOR = (255, 255, 255)     # White
 
 
 
@@ -112,6 +107,10 @@ BACKBOARD_OFFSET_FROM_HOOP_M = (HOOP_FROM_BASELINE_M - 1.22)  # Distance from ho
 
 
 # ======================================== Rendering & Scaling ========================================
-PIXELS_PER_METER = 110.0  # Single source of truth for visualization scaling
+PIXELS_PER_METER = 54.0  # Single source of truth for visualization scaling
+WINDOW_WIDTH = PIXELS_PER_METER * 32.3
+WINDOW_HEIGHT = PIXELS_PER_METER * 18.2
+BACKGROUND_COLOR = (50, 50, 50)  # Dark gray
+TEXT_COLOR = (255, 255, 255)     # White
 TEAM0_COLOR = (0, 100, 255)
 TEAM1_COLOR = (128, 0, 128)

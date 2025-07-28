@@ -339,7 +339,7 @@ void resetWorld(Engine &ctx) {
                 pos.position.y = clamp(pos.position.y, 0.f, grid->height);
                 agent_pos_for_ball = pos;
                 offensive_agent_id = agent.id;
-                in_pos = {1, basketball_entity.id, 2};
+                in_pos = {0, ENTITY_ID_PLACEHOLDER, 2};
             }
             else
             {
@@ -386,7 +386,7 @@ void resetWorld(Engine &ctx) {
         Grabbed &grabbed = ctx.get<Grabbed>(ball);
         if (gameState.isOneOnOne == 1.f)
         {
-            grabbed = Grabbed{1, offensive_agent_id};
+            grabbed = Grabbed{0, ENTITY_ID_PLACEHOLDER};
         }
         else
         {

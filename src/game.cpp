@@ -132,7 +132,7 @@ inline void updatePointsWorthSystem(Engine &ctx,
 {
     // Get all hoop positions
     Vector3 hoop_score_zones[NUM_HOOPS];
-    int32_t hoop_ids[NUM_HOOPS];
+    uint32_t hoop_ids[NUM_HOOPS];
     for (CountT i = 0; i < NUM_HOOPS; i++) {
         Entity hoop = ctx.data().hoops[i];
         hoop_score_zones[i] = ctx.get<ScoringZone>(hoop).center;
