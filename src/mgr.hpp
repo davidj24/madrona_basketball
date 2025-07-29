@@ -63,6 +63,8 @@ public:
     MGR_EXPORT madrona::py::Tensor ballPhysicsTensor() const;
     MGR_EXPORT madrona::py::Tensor ballGrabbedTensor() const;
     MGR_EXPORT madrona::py::Tensor ballEntityIDTensor() const;
+    MGR_EXPORT madrona::py::Tensor ballVelocityTensor() const;
+
     
     
     //=================================================== Hoop Tensors ===================================================

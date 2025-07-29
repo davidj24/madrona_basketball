@@ -27,7 +27,7 @@ AGENT_ORIENTATION_ARROW_LENGTH_M = 0.5  # Length of orientation arrow
 EVENT_DEFINITIONS = {
     "shoot" : {
         "action_idx" : 5,
-        "conditions" : lambda log_data_tensor, step_num, world_num, agent_num=0: int(log_data_tensor.get('ball_physics')[step_num, world_num, agent_num][0]) == 1 and int(log_data_tensor.get('ball_physics')[step_num-1, world_num, agent_num][0]) == 0,
+        "conditions" : lambda log_data_tensor, step_num, world_num, agent_num=0: int(log_data_tensor.get('ball_physics')[step_num, world_num, 0][0]) == 1 and int(log_data_tensor.get('ball_physics')[step_num-1, world_num, 0][0]) == 0,
         "outcome_func" : lambda log_data, step_num, world_num: log_data.get('ball_physics')[step_num, world_num, 0][6] == 1,
         "visuals" : {
             True : {"shape" : "circle", "color" : (0, 255, 0), "size" : 7},
@@ -37,8 +37,12 @@ EVENT_DEFINITIONS = {
 
     "pass" : {
         "action_idx" : 4,
-        "conditions" : lambda log_data_tensor, step_num, world_num, agent_num=0: (int(log_data_tensor.get('agent_possession')[step_num-1, world_num, agent_num, 0]) == 1),  # Agent had ball previous step
-        "outcome_func" : lambda log_data, step_num, world_num: True, # Later this should calculate if a pass is a turnover or something, so we can see different outcomes of passes
+        "conditions" : lambda log_data_tensor, step_num, world_num, agent_num=0: (int(log_data_tensor.get('agent_possession')[step_num-1, world_num, agent_num, 0]) == 1) and #Agent had the ball
+                                                                                 (step_num+1 < len(log_data_tensor.get('ball_vel')) and # there is a next step
+                                                                                 (abs(log_data_tensor.get('ball_vel')[step_num+1, world_num, 0][0]) > 0.001 or # ball has x velocity on next step
+                                                                                  abs(log_data_tensor.get('ball_vel')[step_num+1, world_num, 0][1]) > 0.001)) and # ball has y velocity on next step
+                                                                                  int(log_data_tensor.get('ball_physics')[step_num+1, world_num, 0][0]) == 0, # ball is not in flight
+        "outcome_func" : lambda log_data, step_num, world_num: True,
         "visuals" : {
             True : {"shape" : "circle", "color" : (0, 255, 0), "size" : 7},
         }

@@ -430,6 +430,12 @@ namespace madBasketball {
             {impl_->cfg.numWorlds, NUM_BASKETBALLS});
     }
 
+    Tensor Manager::ballVelocityTensor() const
+    {
+        return impl_->exportTensor(ExportID::BallVelocity, TensorElementType::Float32,
+            {impl_->cfg.numWorlds, NUM_BASKETBALLS, 3});
+    }
+
 
     //=================================================== Hoop Tensors ===================================================
     Tensor Manager::hoopPosTensor() const

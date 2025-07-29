@@ -69,6 +69,8 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.exportColumn<Basketball, Position>((uint32_t)ExportID::BasketballPos);
     registry.exportColumn<Basketball, BallPhysics>((uint32_t)ExportID::BallPhysicsData);
     registry.exportColumn<Basketball, Grabbed>((uint32_t)ExportID::BallGrabbed);
+    registry.exportColumn<Basketball, Velocity>((uint32_t)ExportID::BallVelocity);
+    
 
     registry.exportColumn<Hoop, Position>((uint32_t)ExportID::HoopPos);
 

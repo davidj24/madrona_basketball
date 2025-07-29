@@ -31,6 +31,7 @@ namespace madBasketball {
         BallPhysicsData,
         BallEntityID,
         BallGrabbed,
+        BallVelocity,
 
         // Hoop Exports
         HoopPos,

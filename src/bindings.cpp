@@ -92,6 +92,7 @@ NB_MODULE(madrona_basketball, m) {
         .def("ball_physics_tensor", &Manager::ballPhysicsTensor)
         .def("ball_grabbed_tensor", &Manager::ballGrabbedTensor)
         .def("ball_entity_id_tensor", &Manager::ballEntityIDTensor)
+        .def("ball_velocity_tensor", &Manager::ballVelocityTensor)
 
 
         //=================================================== Hoop Tensors ===================================================

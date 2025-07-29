@@ -319,7 +319,7 @@ void resetWorld(Engine &ctx) {
         // reward.r = 0.f;
         ctx.get<Done>(agent).episodeDone = 1.f;
         ctx.get<CurStep>(agent).step = 0;
-        ctx.get<InPossession>(agent) = InPossession{0, ENTITY_ID_PLACEHOLDER, 2};
+        ctx.get<InPossession>(agent) = InPossession{0, basketball_entity.id, 2};
         ctx.get<Orientation>(agent) = (i % 2 == 0) ? Orientation{Quat::angleAxis(-madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})} : Orientation{Quat::angleAxis(madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})};
         ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
         ctx.get<Stats>(agent) = Stats{0.f, 0.f};
@@ -339,7 +339,7 @@ void resetWorld(Engine &ctx) {
                 pos.position.y = clamp(pos.position.y, 0.f, grid->height);
                 agent_pos_for_ball = pos;
                 offensive_agent_id = agent.id;
-                in_pos = {0, ENTITY_ID_PLACEHOLDER, 2};
+                in_pos = {1, basketball_entity.id, 2};
             }
             else
             {
@@ -386,7 +386,7 @@ void resetWorld(Engine &ctx) {
         Grabbed &grabbed = ctx.get<Grabbed>(ball);
         if (gameState.isOneOnOne == 1.f)
         {
-            grabbed = Grabbed{0, ENTITY_ID_PLACEHOLDER};
+            grabbed = Grabbed{1, offensive_agent_id};
         }
         else
         {

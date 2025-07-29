@@ -125,6 +125,7 @@ def infer(args):
             log_entry = {
                 "agent_pos" : environment.worlds.agent_pos_tensor().to_torch().cpu().numpy().copy(),
                 "ball_pos" : environment.worlds.basketball_pos_tensor().to_torch().cpu().numpy().copy(),
+                "ball_vel" : environment.worlds.ball_velocity_tensor().to_torch().cpu().numpy().copy(),
                 "orientation" : environment.worlds.orientation_tensor().to_torch().cpu().numpy().copy(),
                 "ball_physics" : environment.worlds.ball_physics_tensor().to_torch().cpu().numpy().copy(),
                 "agent_possession" : environment.worlds.agent_possession_tensor().to_torch().cpu().numpy().copy(),
