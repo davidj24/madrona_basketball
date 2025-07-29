@@ -180,6 +180,7 @@ namespace madBasketball {
         float freeThrowPercentage;
         float reactionSpeed;
         Vector3 currentTargetPosition;
+        float currentShotPercentage; // The likelihood of a shot going in from the agent's current state
     };
 
     // ======================================================================================================= Ball Components =======================================================================================================

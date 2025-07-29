@@ -55,9 +55,9 @@ namespace madBasketball {
 
 
     // Shooting
-    constexpr float DIST_DEVIATION_PER_METER = .8f;
-    constexpr float DEF_DEVIATION_PER_METER = .2f;
-    constexpr float VEL_DEVIATION_FACTOR = .1f;
+    constexpr float DIST_DEVIATION_PER_METER = .008f;
+    constexpr float DEF_DEVIATION_PER_METER = .002f;
+    constexpr float VEL_DEVIATION_FACTOR = .001f;
 
 
 

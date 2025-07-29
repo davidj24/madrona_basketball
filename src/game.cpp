@@ -3,6 +3,7 @@
 #include "constants.hpp"
 #include "gen.hpp"
 #include "helper.hpp"
+#include <cmath>
 
 using namespace madrona;
 using namespace madrona::math;
@@ -278,7 +279,8 @@ inline void shootSystem(Engine &ctx,
                         Inbounding &inbounding,
                         InPossession &in_possession,
                         Team &team,
-                        Reward &reward)
+                        Reward &reward,
+                        Velocity &vel)
 {
     if (action_mask.can_shoot == 0 || action.shoot == 0) {return;}
 
@@ -303,7 +305,7 @@ inline void shootSystem(Engine &ctx,
 
     // 1. Mess up angle based on distance
     float distance_to_hoop = ideal_shot_vector.length();
-    float dist_stddev = DIST_DEVIATION_PER_METER/100 * distance_to_hoop;
+    float dist_stddev = DIST_DEVIATION_PER_METER * distance_to_hoop;
     float deviation_from_distance = sampleUniform(ctx, -dist_stddev, dist_stddev);
 
 
@@ -311,13 +313,12 @@ inline void shootSystem(Engine &ctx,
     float deviation_from_defender = 0.0f;
     float distance_to_nearest_defender = std::numeric_limits<float>::infinity();
     for (CountT i = 0; i < NUM_AGENTS; i++) {
-        Entity agent = ctx.data().agents[i];
-        Team &defender_team = ctx.get<Team>(agent);
-        Position &defender_pos = ctx.get<Position>(agent);
+        Entity defender = ctx.data().agents[i];
+        Team &defender_team = ctx.get<Team>(defender);
+        Position &defender_pos = ctx.get<Position>(defender);
         if (defender_team.teamIndex != team.teamIndex)
         {
-            Vector3 diff = agent_pos.position - defender_pos.position;
-            float dist_to_def = diff.length();
+            float dist_to_def = (agent_pos.position - defender_pos.position).length();
             if (dist_to_def < distance_to_nearest_defender)
             {
                 distance_to_nearest_defender = dist_to_def;
@@ -326,7 +327,7 @@ inline void shootSystem(Engine &ctx,
     };
 
     if (distance_to_nearest_defender < 2.0f) { // Only apply pressure if defender is  close
-        float def_stddev = (DEF_DEVIATION_PER_METER/100) / (distance_to_nearest_defender + 0.1f);
+        float def_stddev = (DEF_DEVIATION_PER_METER) / (distance_to_nearest_defender + 0.1f);
         deviation_from_defender = sampleUniform(ctx, -def_stddev, def_stddev);
     }
 
@@ -334,17 +335,16 @@ inline void shootSystem(Engine &ctx,
     // 3. Mess up angle based on agent velocity
     float deviation_from_velocity = 0.0f;
     if (action.move > 0) {
-        float vel_stddev = VEL_DEVIATION_FACTOR/100 * action.move;
+        float vel_stddev = VEL_DEVIATION_FACTOR * vel.velocity.length();
         deviation_from_velocity = sampleUniform(ctx, -vel_stddev, vel_stddev);
     }
 
     // Combine all deviations and apply to the final shot direction
     float total_deviation = deviation_from_distance + deviation_from_defender + deviation_from_velocity;
     float shot_direction = intended_direction + total_deviation;
-
-    // This is the final, correct trajectory vector for the ball
     Vector3 final_shot_vec = {sinf(shot_direction), cosf(shot_direction), 0.f};
-    // final_shot_vec = (distance_to_hoop <= 5.f) ? ideal_shot_vector : Vector3{0, 1, 0}; // DEBUG
+
+
     float shot_is_going_in = 0.0f;
     float how_far_to_go_along_shot_to_be_closest_to_hoop = ideal_shot_vector.dot(final_shot_vec);
     if (how_far_to_go_along_shot_to_be_closest_to_hoop < 0) {shot_is_going_in = 0.0f;}
@@ -726,7 +726,58 @@ inline void hardCodeDefenseSystem(Engine &ctx,
 }
 
 
+inline void updateCurrentShotPercentage(Engine &ctx,
+                                        Attributes &attributes,
+                                        Position &agent_pos,
+                                        Velocity &agent_vel,
+                                        InPossession &in_possession,
+                                        Team &agent_team)
+{
+    if (in_possession.hasBall == 0) 
+    {
+        attributes.currentShotPercentage = 0.f;
+        return;
+    }
 
+    Position hoop_positions[NUM_HOOPS];
+    int32_t hoop_ids[NUM_HOOPS];
+    for (CountT i = 0; i < NUM_HOOPS; i++) 
+    {
+        Entity hoop = ctx.data().hoops[i];
+        hoop_positions[i] = ctx.get<Position>(hoop);
+        hoop_ids[i] = hoop.id;
+    };
+
+    Position attacking_hoop_pos = (hoop_ids[0] != agent_team.defendingHoopID) ? hoop_positions[0] : hoop_positions[1];
+
+    float dist_to_hoop = (attacking_hoop_pos.position - agent_pos.position).length();
+    float distance_to_nearest_defender = std::numeric_limits<float>::infinity();
+    for (CountT i = 0; i < NUM_AGENTS; i++) {
+        Entity defender = ctx.data().agents[i];
+        Team &defender_team = ctx.get<Team>(defender);
+        Position &defender_pos = ctx.get<Position>(defender);
+        if (defender_team.teamIndex != agent_team.teamIndex)
+        {
+            float dist_to_def = (agent_pos.position - defender_pos.position).length();
+            if (dist_to_def < distance_to_nearest_defender)
+            {
+                distance_to_nearest_defender = dist_to_def;
+            }
+        }
+    };
+
+    float dist_stddev = DIST_DEVIATION_PER_METER * dist_to_hoop;
+    float def_stddev = DEF_DEVIATION_PER_METER / distance_to_nearest_defender + .0001f;
+    float vel_stddev = VEL_DEVIATION_FACTOR * agent_vel.velocity.length();
+    // In order to get the normal distribution that will give us the probability of the shot going in,
+    // we are getting the standard deviation (sqrt of variance) by square rooting the sum of the variances of 
+    // each uniform distribution which is the stddev^2/3
+    float final_stddev = std::sqrt((dist_stddev*dist_stddev/3.f) + (def_stddev*def_stddev/3) + (vel_stddev*vel_stddev/3));
+
+    float max_make_angle = std::atan(HOOP_SCORE_ZONE_SIZE/dist_to_hoop); // The greatest angle from ideal vec that could occur with a make
+    float z_score = max_make_angle / final_stddev;
+    attributes.currentShotPercentage = erf(z_score / std::sqrt(2.f));
+}
 
 inline void rewardSystem(Engine &ctx,
                          Entity agent_entity,
@@ -1042,6 +1093,7 @@ struct AgentObservationData {
     InPossession in_pos;
     Inbounding inb;
     GrabCooldown cooldown;
+    Attributes attributes;
 };
 
 
@@ -1054,7 +1106,8 @@ inline void fillObservationsSystem(Engine &ctx,
                                    Inbounding &inbounding,
                                    Team &agent_team,
                                    GrabCooldown &grab_cooldown,
-                                   Velocity &agent_vel)
+                                   Velocity &agent_vel,
+                                   Attributes &agent_attributes)
 {
     auto &obs = observations.observationsArray;
     const GameState &gameState = ctx.singleton<GameState>();
@@ -1114,7 +1167,8 @@ inline void fillObservationsSystem(Engine &ctx,
         InPossession &ip = ctx.get<InPossession>(agent);
         Inbounding &ib = ctx.get<Inbounding>(agent);
         GrabCooldown &gc = ctx.get<GrabCooldown>(agent);
-        all_agents[agent_idx++] = { agent.id, t.teamIndex, p, o, v, ip, ib, gc };
+        Attributes &attr = ctx.get<Attributes>(agent);
+        all_agents[agent_idx++] = { agent.id, t.teamIndex, p, o, v, ip, ib, gc, attr };
         if (ib.imInbounding > 0.5f) {
             inbounder_id = agent.id;
         }
@@ -1159,14 +1213,23 @@ inline void fillObservationsSystem(Engine &ctx,
 
     // Self Data
     fill_vec3(agent_pos.position);
+    fill_vec3(Vector3::zero());
+    obs[idx++] = 0.f;
     fill_quat(agent_orientation.orientation);
     fill_vec3(agent_vel.velocity);
-    obs[idx++] = in_possession.hasBall;
-    obs[idx++] = (float)in_possession.pointsWorth;
+    fill_vec3((attacking_hoop_pos.position - agent_pos.position).normalize()); // direction to hoop
+    obs[idx++] = (attacking_hoop_pos.position - agent_pos.position).length();
     obs[idx++] = inbounding.imInbounding;
     obs[idx++] = grab_cooldown.cooldown;
-    fill_vec3((attacking_hoop_pos.position - agent_pos.position).normalize());
-    obs[idx++] = (attacking_hoop_pos.position - agent_pos.position).length(); // Distance to hoop only for self
+    obs[idx++] = agent_attributes.maxSpeed;
+    obs[idx++] = agent_attributes.quickness;
+    obs[idx++] = agent_attributes.shooting;
+    obs[idx++] = agent_attributes.freeThrowPercentage;
+    obs[idx++] = agent_attributes.reactionSpeed;
+    obs[idx++] = agent_attributes.currentShotPercentage;
+    obs[idx++] = (float)in_possession.pointsWorth;
+    obs[idx++] = in_possession.hasBall;
+    
 
     // Teammate & Opponent Data
     int teammate_count = 0;
@@ -1177,32 +1240,60 @@ inline void fillObservationsSystem(Engine &ctx,
     for (int i = 0; i < agent_idx; i++) {
         if (all_agents[i].id == agent_entity.id) continue;
 
+        Vector3 vec_to_agent = agent_pos.position - all_agents[i].pos.position;
         if (all_agents[i].teamID == agent_team.teamIndex)
         {
             if (teammate_count < max_teammates)
             {
                 fill_vec3(all_agents[i].pos.position);
+                fill_vec3(vec_to_agent);
+                obs[idx++] = vec_to_agent.length();
                 fill_quat(all_agents[i].orient.orientation);
                 fill_vec3(all_agents[i].velocity.velocity);
+                fill_vec3((attacking_hoop_pos.position - all_agents[i].pos.position).normalize());
+                obs[idx++] = (attacking_hoop_pos.position - all_agents[i].pos.position).length();
+                obs[idx++] = all_agents[i].inb.imInbounding;
+                obs[idx++] = all_agents[i].cooldown.cooldown;
+                obs[idx++] = all_agents[i].attributes.maxSpeed;
+                obs[idx++] = all_agents[i].attributes.quickness;
+                obs[idx++] = all_agents[i].attributes.shooting;
+                obs[idx++] = all_agents[i].attributes.freeThrowPercentage;
+                obs[idx++] = all_agents[i].attributes.reactionSpeed;
+                obs[idx++] = all_agents[i].attributes.currentShotPercentage;
+                obs[idx++] = (float)all_agents[i].in_pos.pointsWorth;
                 obs[idx++] = all_agents[i].in_pos.hasBall;
                 teammate_count++;
             }
-        }
+        }   
         else
         {
             if (opponent_count < max_opponents)
-            {
+            {                
                 fill_vec3(all_agents[i].pos.position);
+                fill_vec3(vec_to_agent);
+                obs[idx++] = vec_to_agent.length();
                 fill_quat(all_agents[i].orient.orientation);
                 fill_vec3(all_agents[i].velocity.velocity);
+                fill_vec3((defending_hoop_pos.position - all_agents[i].pos.position).normalize());
+                obs[idx++] = (defending_hoop_pos.position - all_agents[i].pos.position).length();
+                obs[idx++] = all_agents[i].inb.imInbounding;
+                obs[idx++] = all_agents[i].cooldown.cooldown;
+                obs[idx++] = all_agents[i].attributes.maxSpeed;
+                obs[idx++] = all_agents[i].attributes.quickness;
+                obs[idx++] = all_agents[i].attributes.shooting;
+                obs[idx++] = all_agents[i].attributes.freeThrowPercentage;
+                obs[idx++] = all_agents[i].attributes.reactionSpeed;
+                obs[idx++] = all_agents[i].attributes.currentShotPercentage;
+                obs[idx++] = (float)all_agents[i].in_pos.pointsWorth;
                 obs[idx++] = all_agents[i].in_pos.hasBall;
                 opponent_count++;
             }
         }
     }
 
+
     // Padding for agent data
-    constexpr int agent_feature_size = 3 + 4 + 3 + 1; // Pos, Orient, Velocity, HasBall, 
+    constexpr int agent_feature_size = 3 + 3 + 1 + 4 + 3 + 3 + 1 + 1 + 1 + 6 + 1 + 1; // Pos, VecTo, DistanceTo, Orient, Velocity, inbounding, cooldown, attributes, pointsWorth, HasBall, 
     for (int i = teammate_count; i < max_teammates; i++)
     {
         for (int j = 0; j < agent_feature_size; j++) obs[idx++] = 0.f;
@@ -1212,6 +1303,7 @@ inline void fillObservationsSystem(Engine &ctx,
         for (int j = 0; j < agent_feature_size; j++) obs[idx++] = 0.f;
     }
 
+    
     // One-hot encoded vector for who has the ball
     for (int i = 0; i < agent_idx; i++)
     {
@@ -1255,13 +1347,16 @@ TaskGraphNodeID setupGameStepTasks(
         Entity, Action, ActionMask, Orientation, InPossession, Inbounding>>({grabSystemNode});
 
     auto shootSystemNode = builder.addToGraph<ParallelForNode<Engine, shootSystem,
-        Entity, Action, ActionMask, Position, Orientation, Inbounding, InPossession, Team, Reward>>({passSystemNode});
+        Entity, Action, ActionMask, Position, Orientation, Inbounding, InPossession, Team, Reward, Velocity>>({passSystemNode});
 
     auto moveBallSystemNode = builder.addToGraph<ParallelForNode<Engine, moveBallSystem,
         Position, Grabbed, Velocity>>({shootSystemNode});
 
+    auto updateCurrentShotPercentageNode = builder.addToGraph<ParallelForNode<Engine, updateCurrentShotPercentage,
+        Attributes, Position, Velocity, InPossession, Team>>({moveBallSystemNode});
+
     auto scoreSystemNode = builder.addToGraph<ParallelForNode<Engine, scoreSystem,
-        Entity, Position, ScoringZone>>({moveBallSystemNode});
+        Entity, Position, ScoringZone>>({updateCurrentShotPercentageNode});
 
     auto outOfBoundsSystemNode = builder.addToGraph<ParallelForNode<Engine, outOfBoundsSystem,
         Entity, Position, BallPhysics, Velocity>>({scoreSystemNode});
@@ -1289,7 +1384,7 @@ TaskGraphNodeID setupGameStepTasks(
 
     auto fillObservationsNode = builder.addToGraph<ParallelForNode<Engine, fillObservationsSystem,
         Entity, Observations, Position, Orientation, InPossession,
-        Inbounding, Team, GrabCooldown, Velocity>>({hardCodeDefenseSystemNode});
+        Inbounding, Team, GrabCooldown, Velocity, Attributes>>({hardCodeDefenseSystemNode});
 
     auto rewardSystemNode = builder.addToGraph<ParallelForNode<Engine, rewardSystem,
         Entity, Reward, Position, Team, InPossession>>({fillObservationsNode});
