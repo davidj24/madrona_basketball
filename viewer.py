@@ -152,7 +152,7 @@ class ViewerClass:
         # Create display with error handling
         try:
             self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-            pygame.display.set_caption("Madrona Simulation Pipeline")
+            pygame.display.set_caption("Basketball Simulation")
             print("✓ Pygame display created")
         except Exception as e:
             print(f"✗ Pygame display creation failed: {e}")

@@ -784,7 +784,8 @@ inline void rewardSystem(Engine &ctx,
                          Reward &reward,
                          Position &agent_pos,
                          Team &team,
-                         InPossession &in_possession)
+                         InPossession &in_possession,
+                         Attributes &attributes)
 {
     // Find attacking hoop
     Position target_hoop_pos;
@@ -812,9 +813,7 @@ inline void rewardSystem(Engine &ctx,
         }
     }
 
-    float distance_from_hoop = (agent_pos.position - target_hoop_pos.position).length();
-    float proximity_reward = exp(-.1f * distance_from_hoop);
-    reward.r += proximity_reward * in_possession.hasBall;
+    reward.r += attributes.currentShotPercentage;
 }
 
 //=================================================== Hoop Systems ===================================================
@@ -1387,7 +1386,7 @@ TaskGraphNodeID setupGameStepTasks(
         Inbounding, Team, GrabCooldown, Velocity, Attributes>>({hardCodeDefenseSystemNode});
 
     auto rewardSystemNode = builder.addToGraph<ParallelForNode<Engine, rewardSystem,
-        Entity, Reward, Position, Team, InPossession>>({fillObservationsNode});
+        Entity, Reward, Position, Team, InPossession, Attributes>>({fillObservationsNode});
 
     return rewardSystemNode;
 }
