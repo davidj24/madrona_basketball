@@ -9,10 +9,11 @@ sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.')))
 from src.constants import *
 from viewer import ViewerClass
+from agent import Agent
 
 
 class EnvWrapper:
-    def __init__(self, num_worlds: int, use_gpu: bool, gpu_id: int = 0, viewer: bool = False):
+    def __init__(self, num_worlds: int, use_gpu: bool, frozen_path: str, gpu_id: int = 0, viewer: bool = False, trainee_agent_idx: int = 0):
         self.world_width_meters = WORLD_WIDTH_M
         self.world_height_meters = WORLD_HEIGHT_M
 
@@ -78,7 +79,8 @@ class EnvWrapper:
         self.dones = self.worlds.done_tensor().to_torch()
         self.rewards = self.worlds.reward_tensor().to_torch()
         self.resets = self.worlds.reset_tensor().to_torch()
-        self.agent_idx = 0
+        self.agent_idx = trainee_agent_idx
+        
         
         # Track if this is the first step to avoid calling viewer too early
         self.first_reset_done = False
@@ -101,7 +103,11 @@ class EnvWrapper:
         # Shoot            [0, 1]
         self.action_buckets = [2, 8, 3, 2, 2, 2]
 
-
+        # Self Play
+        if frozen_path is not None:
+            self.frozen_policy = Agent(self.get_input_dim(), num_channels=64, num_layers=3, action_buckets=self.get_action_buckets()).to(torch.device("cuda" if torch.cuda.is_available() and args.use_gpu else "cpu"))
+            self.frozen_policy.load(frozen_path)
+        else: self.frozen_policy = None
 
     def get_action_space_size(self):
         return len(self.action_buckets)
@@ -115,9 +121,18 @@ class EnvWrapper:
     def set_agent_idx(self, agent_idx):
         self.agent_idx = agent_idx
 
-    def step(self, actions):
+    def step(self, trainee_actions):
+        if self.frozen_policy is not None:
+            frozen_idx = 1 - self.agent_idx
+            frozen_obs = self.observations[:, frozen_idx, :]
+            with torch.no_grad():
+                frozen_actions, _, _ = self.frozen_policy(frozen_obs)
+            combined_actions = torch.stack([trainee_actions, frozen_actions], dim=1) if self.agent_idx == 0 else torch.stack([frozen_actions, trainee_actions], dim=1)
+            self.actions.copy_(combined_actions)
+
+
         # Set actions for all worlds and the specified agent
-        self.actions[:, self.agent_idx] = actions
+        else: self.actions[:, self.agent_idx] = trainee_actions
 
         # Sync pause state from viewer if available
         if self.viewer is not None and hasattr(self.viewer, 'training_paused'):

@@ -48,7 +48,11 @@ class Args:
     vf_coef: float = 0.5
     max_grad_norm: float = 0.5
     target_kl: float = None
-    checkpoint_path: Optional[str] = None
+
+    # Self Play
+    trainee_idx: Optional[int] = 0
+    trainee_checkpoint_path: Optional[str] = None
+    frozen_checkpoint_path: Optional[str] = None
 
     # to be filled in runtime
     rollout_batch_size: int = 0
@@ -91,15 +95,15 @@ if __name__ == "__main__":
         "cuda" if torch.cuda.is_available() and args.use_gpu else "cpu")
 
     # Environment setup
-    envs = EnvWrapper(args.num_envs, use_gpu=args.use_gpu, gpu_id=0, viewer=args.viewer)
+    envs = EnvWrapper(args.num_envs, use_gpu=args.use_gpu, frozen_path=args.frozen_checkpoint_path, gpu_id=0, viewer=args.viewer)
     obs_size = envs.get_input_dim()
     act_size = envs.get_action_space_size()
     action_buckets = envs.get_action_buckets()
 
     agent = Agent(obs_size, num_channels=64, num_layers=3,
                   action_buckets=action_buckets).to(device)
-    if (args.checkpoint_path is not None):
-        agent.load(args.checkpoint_path)
+    if (args.trainee_checkpoint_path is not None):
+        agent.load(args.trainee_checkpoint_path)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
     # Initialize SimpleControllerManager for interactive training
@@ -156,17 +160,13 @@ if __name__ == "__main__":
             obs[step] = next_obs
             dones[step] = next_done
 
-            # Use SimpleControllerManager to potentially override RL actions with human input
             with torch.no_grad():
-                # Get RL actions for policy gradient and value estimation
                 rl_action, log_prob, value = agent(next_obs)
                 values[step] = value.flatten()
                 
-            actions[step] = rl_action  # Always store RL actions for training
+            actions[step] = rl_action
             log_probs[step] = log_prob
 
-            # Step environment with final actions (RL or human override)
-            # Use the new method that can handle world-specific actions
             if (hasattr(envs, 'viewer') and envs.viewer is not None and 
                 controller_manager.is_human_control_active()):
                 # Get human action for world 0 and the selected agent
