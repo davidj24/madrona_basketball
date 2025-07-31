@@ -95,10 +95,22 @@ if __name__ == "__main__":
         "cuda" if torch.cuda.is_available() and args.use_gpu else "cpu")
 
     # Environment setup
-    envs = EnvWrapper(args.num_envs, use_gpu=args.use_gpu, frozen_path=args.frozen_checkpoint_path, gpu_id=0, viewer=args.viewer)
+    envs = EnvWrapper(args.num_envs, use_gpu=args.use_gpu, frozen_path=args.frozen_checkpoint_path, gpu_id=0, viewer=args.viewer, trainee_agent_idx=args.trainee_idx)
     obs_size = envs.get_input_dim()
     act_size = envs.get_action_space_size()
     action_buckets = envs.get_action_buckets()
+
+    print(f"\n🎯 TRAINING CONFIGURATION:")
+    print(f"   Trainee Agent Index: {args.trainee_idx} ({'Offensive Player (with ball)' if args.trainee_idx == 0 else 'Defensive Player (without ball)'})")
+    if args.frozen_checkpoint_path:
+        print(f"   Frozen Agent: {1-args.trainee_idx} ({'Offensive Player (with ball)' if 1-args.trainee_idx == 0 else 'Defensive Player (without ball)'})")
+        print(f"   Frozen Checkpoint: {args.frozen_checkpoint_path}")
+    else:
+        print(f"   No frozen agent (single agent training)")
+    print(f"   Model Name: {args.model_name}")
+    print(f"   Iterations: {args.num_iterations}")
+    print(f"   Environments: {args.num_envs}")
+    print("="*60)
 
     agent = Agent(obs_size, num_channels=64, num_layers=3,
                   action_buckets=action_buckets).to(device)

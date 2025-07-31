@@ -20,7 +20,7 @@ class Args:
 
     # Self Play Stuff
     num_training_cycles: int = 5
-    iter_per_agent: int = 500
+    iter_per_agent: int = 1000
     first_trainee_idx: int = 0
     checkpoint_0: Optional[str] = None
     checkpoint_1: Optional[str] = None
@@ -94,22 +94,31 @@ if __name__ == '__main__':
         first_model_path = model_0_path if args.first_trainee_idx == 0 else model_1_path
         second_model_path = model_1_path if args.first_trainee_idx == 0 else model_0_path
 
-
+        print(f"\n🔄 GENERATION {generation} - FIRST TRAINING SESSION")
+        print(f"   Training: {first_model_name} (Agent {args.first_trainee_idx} - {'Offensive' if args.first_trainee_idx == 0 else 'Defensive'})")
+        print(f"   Against:  Agent {1-args.first_trainee_idx} ({'Offensive' if 1-args.first_trainee_idx == 0 else 'Defensive'}) - {second_model_path}")
         run_ppo(args.first_trainee_idx, args, first_model_path, second_model_path, first_model_name)
+        
+        # Update the model path after first training
         if args.first_trainee_idx == 0:
             model_0_path = f"{CHECKPOINT_DIR}/{first_model_name}_{args.iter_per_agent}.pth"
+            first_model_path = model_0_path
         else:
             model_1_path = f"{CHECKPOINT_DIR}/{first_model_name}_{args.iter_per_agent}.pth"
+            first_model_path = model_1_path
 
-
+        print(f"\n🔄 GENERATION {generation} - SECOND TRAINING SESSION")
+        print(f"   Training: {second_model_name} (Agent {1-args.first_trainee_idx} - {'Offensive' if 1-args.first_trainee_idx == 0 else 'Defensive'})")
+        print(f"   Against:  Agent {args.first_trainee_idx} ({'Offensive' if args.first_trainee_idx == 0 else 'Defensive'}) - {first_model_path} (updated)")
         run_ppo(1-args.first_trainee_idx, args, second_model_path, first_model_path, second_model_name)
         if args.first_trainee_idx == 0:
             model_1_path = f"{CHECKPOINT_DIR}/{second_model_name}_{args.iter_per_agent}.pth"
         else:
             model_0_path = f"{CHECKPOINT_DIR}/{second_model_name}_{args.iter_per_agent}.pth"
 
-
-        print(f"Cycle {generation}/{args.num_training_cycles} complete.")
+        print(f"\n✅ Cycle {generation}/{args.num_training_cycles} complete.")
+        print(f"   Current Agent 0 (Offensive): {model_0_path}")
+        print(f"   Current Agent 1 (Defensive): {model_1_path}")
 
 
 

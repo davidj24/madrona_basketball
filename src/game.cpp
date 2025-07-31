@@ -519,14 +519,20 @@ inline void actionMaskSystem(Engine &ctx,
     {
         action_mask.can_grab = 0;
     }
+
+    // ======================== FOR TAG ==========================
+    action_mask.can_pass = 0;
+    action_mask.can_shoot = 0;
 }
 
 
 
 inline void agentCollisionSystem(Engine &ctx,
-    Entity entity_a,
-    Position &pos_a,
-    Orientation &orient_a)
+                                 Entity entity_a,
+                                 Position &pos_a,
+                                 Orientation &orient_a,
+                                 Reward &reward,
+                                 Team &team)
 {
     // Query for all agents to check for collisions.
     for (CountT i = 0; i < NUM_AGENTS; i++) {
@@ -606,6 +612,16 @@ inline void agentCollisionSystem(Engine &ctx,
         // --- 5. If all axes had overlaps, then we have a collision ---
         if (is_colliding)
         {
+            // ======================== FOR TAG ==========================
+            GameState gameState = ctx.singleton<GameState>();
+
+            Reward &entity_b_reward = ctx.get<Reward>(entity_b);
+            if (gameState.teamInPossession == team.teamIndex)
+            {
+                reward.r -= 10;
+                entity_b_reward.r += 10;
+            }
+
             // --- Collision Response ---
             float penetration_depth = min_overlap;
             Vector3 correction_vec = mtv_axis;
@@ -1396,7 +1412,7 @@ TaskGraphNodeID setupGameStepTasks(
         Position, InPossession, Team>>({resetSystemNode});
 
     auto agentCollisionNode = builder.addToGraph<ParallelForNode<Engine, agentCollisionSystem,
-        Entity, Position, Orientation>>({updatePointsWorthNode});
+        Entity, Position, Orientation, Reward, Team>>({updatePointsWorthNode});
 
     // auto hardCodeDefenseSystemNode = builder.addToGraph<ParallelForNode<Engine, hardCodeDefenseSystem,
     //     Team, Position, Action, Attributes, Orientation>>({agentCollisionNode});
