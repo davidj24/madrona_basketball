@@ -788,39 +788,51 @@ inline void rewardSystem(Engine &ctx,
                          Attributes &attributes)
 {
     GameState &gameState = ctx.singleton<GameState>();
+    Entity other_agent;
+    for (CountT i = 0; i < NUM_AGENTS; i++)
+    {
+        if (ctx.data().agents[i].id != agent_entity.id) {other_agent = ctx.data().agents[i];}
+    }
+    float dist_to_other_agent = (ctx.get<Position>(other_agent).position - agent_pos.position).length();
     if (team.teamIndex == gameState.teamInPossession)
     {
-        // Find attacking hoop
-        Position target_hoop_pos;
-        for (CountT i = 0; i < NUM_HOOPS; i++)
-        {
-            Entity hoop = ctx.data().hoops[i];
-            if (hoop.id != team.defendingHoopID)
-            {
-                target_hoop_pos = ctx.get<Position>(hoop);
-            }
-        }
+        // ================== FOR NORMAL BASKETBALL ========================
+        // // Find attacking hoop
+        // Position target_hoop_pos;
+        // for (CountT i = 0; i < NUM_HOOPS; i++)
+        // {
+        //     Entity hoop = ctx.data().hoops[i];
+        //     if (hoop.id != team.defendingHoopID)
+        //     {
+        //         target_hoop_pos = ctx.get<Position>(hoop);
+        //     }
+        // }
 
-        // Find agent who shot the ball and reward them if the shot is going in
-        for (CountT j = 0; j < NUM_BASKETBALLS; j++)
-        {
-            Entity ball = ctx.data().balls[j];
-            BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
-            if (ball_physics.shotByAgentID == agent_entity.id && ball_physics.shotIsGoingIn == 1)
-            {
-                reward.r += ball_physics.shotPointValue;
-            }
-            else if (ball_physics.shotByAgentID == agent_entity.id && ball_physics.shotIsGoingIn == 0 && ball_physics.inFlight == 1)
-            {
-                reward.r -= 1;
-            }
-        }
+        // // Find agent who shot the ball and reward them if the shot is going in
+        // for (CountT j = 0; j < NUM_BASKETBALLS; j++)
+        // {
+        //     Entity ball = ctx.data().balls[j];
+        //     BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
+        //     if (ball_physics.shotByAgentID == agent_entity.id && ball_physics.shotIsGoingIn == 1)
+        //     {
+        //         reward.r += ball_physics.shotPointValue;
+        //     }
+        //     else if (ball_physics.shotByAgentID == agent_entity.id && ball_physics.shotIsGoingIn == 0 && ball_physics.inFlight == 1)
+        //     {
+        //         reward.r -= 1;
+        //     }
+        // }
+        
+        // reward.r += attributes.currentShotPercentage;
 
-        reward.r += attributes.currentShotPercentage;
+
+
+        // ======================== FOR TAG ==========================
+        reward.r += 1-exp(-dist_to_other_agent);
     }
     else
     {
-        reward.r = 0;
+        reward.r += exp(-dist_to_other_agent);
     }
 }
 
@@ -1386,12 +1398,12 @@ TaskGraphNodeID setupGameStepTasks(
     auto agentCollisionNode = builder.addToGraph<ParallelForNode<Engine, agentCollisionSystem,
         Entity, Position, Orientation>>({updatePointsWorthNode});
 
-    auto hardCodeDefenseSystemNode = builder.addToGraph<ParallelForNode<Engine, hardCodeDefenseSystem,
-        Team, Position, Action, Attributes, Orientation>>({agentCollisionNode});
+    // auto hardCodeDefenseSystemNode = builder.addToGraph<ParallelForNode<Engine, hardCodeDefenseSystem,
+    //     Team, Position, Action, Attributes, Orientation>>({agentCollisionNode});
 
     auto fillObservationsNode = builder.addToGraph<ParallelForNode<Engine, fillObservationsSystem,
         Entity, Observations, Position, Orientation, InPossession,
-        Inbounding, Team, GrabCooldown, Velocity, Attributes>>({hardCodeDefenseSystemNode});
+        Inbounding, Team, GrabCooldown, Velocity, Attributes>>({agentCollisionNode});
 
     auto rewardSystemNode = builder.addToGraph<ParallelForNode<Engine, rewardSystem,
         Entity, Reward, Position, Team, InPossession, Attributes>>({fillObservationsNode});
