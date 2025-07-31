@@ -46,7 +46,7 @@ namespace madBasketball {
     constexpr float START_POS_STDDEV = .5f; 
     constexpr float DEFAULT_SPEED = 3.f;
     constexpr float DEFENDER_SLOWDOWN = 0.2f; // The speed of the defender is 1 - DEFENDER_SLOWDOWN
-    constexpr float DEFENDER_REACTION = 3.5f;
+    constexpr float DEFENDER_REACTION = 10.f;
     
     // Movement
     constexpr float ANGLE_BETWEEN_DIRECTIONS = madrona::math::pi / 4.0f; // π/4 for 8-directional movement

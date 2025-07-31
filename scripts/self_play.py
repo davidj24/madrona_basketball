@@ -89,15 +89,25 @@ if __name__ == '__main__':
 
 
     for generation in range(args.num_training_cycles):
-        model_name_0 = f"{args.model_name_0}_gen_{generation}"
-        run_ppo(args.first_trainee_idx, args, model_0_path, model_1_path, model_name_0)
+        first_model_name = f"{args.model_name_0 if args.first_trainee_idx == 0 else args.model_name_1}_gen_{generation}"
+        second_model_name = f"{args.model_name_1 if args.first_trainee_idx == 0 else args.model_name_0}_gen_{generation}"
+        first_model_path = model_0_path if args.first_trainee_idx == 0 else model_1_path
+        second_model_path = model_1_path if args.first_trainee_idx == 0 else model_0_path
 
-        model_0_path = f"{CHECKPOINT_DIR}/{model_name_0}_{args.iter_per_agent}.pth"
 
-        model_name_1 = f"{args.model_name_1}_gen_{generation}"
-        run_ppo(1-args.first_trainee_idx, args, model_1_path, model_0_path, model_name_1)
+        run_ppo(args.first_trainee_idx, args, first_model_path, second_model_path, first_model_name)
+        if args.first_trainee_idx == 0:
+            model_0_path = f"{CHECKPOINT_DIR}/{first_model_name}_{args.iter_per_agent}.pth"
+        else:
+            model_1_path = f"{CHECKPOINT_DIR}/{first_model_name}_{args.iter_per_agent}.pth"
 
-        model_1_path = f"{CHECKPOINT_DIR}/{model_name_1}_{args.iter_per_agent}.pth"
+
+        run_ppo(1-args.first_trainee_idx, args, second_model_path, first_model_path, second_model_name)
+        if args.first_trainee_idx == 0:
+            model_1_path = f"{CHECKPOINT_DIR}/{second_model_name}_{args.iter_per_agent}.pth"
+        else:
+            model_0_path = f"{CHECKPOINT_DIR}/{second_model_name}_{args.iter_per_agent}.pth"
+
 
         print(f"Cycle {generation}/{args.num_training_cycles} complete.")
 
