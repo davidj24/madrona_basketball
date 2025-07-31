@@ -111,8 +111,8 @@ BACKBOARD_OFFSET_FROM_HOOP_M = (HOOP_FROM_BASELINE_M - 1.22)  # Distance from ho
 
 
 # ======================================== Rendering & Scaling ========================================
-# PIXELS_PER_METER = 54.0
-PIXELS_PER_METER = 110
+PIXELS_PER_METER = 54.0
+# PIXELS_PER_METER = 110
 WINDOW_WIDTH = PIXELS_PER_METER * 32.3
 WINDOW_HEIGHT = PIXELS_PER_METER * 18.2
 BACKGROUND_COLOR = (50, 50, 50)  # Dark gray

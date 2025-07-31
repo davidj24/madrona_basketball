@@ -60,5 +60,4 @@ class Agent(nn.Module):
 
     def load(self, path):
         state_dict = torch.load(path, weights_only=True, map_location="cpu")
-        print(state_dict)
         self.load_state_dict(state_dict)

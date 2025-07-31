@@ -44,7 +44,6 @@ class EnvWrapper:
                     print("🔧 GPU simulation ready, now initializing viewer...")
                     # Ensure GPU compilation is completely finished
                     try:
-                        import torch
                         if torch.cuda.is_available():
                             torch.cuda.synchronize()
                             torch.cuda.empty_cache()
@@ -105,8 +104,11 @@ class EnvWrapper:
 
         # Self Play
         if frozen_path is not None:
-            self.frozen_policy = Agent(self.get_input_dim(), num_channels=64, num_layers=3, action_buckets=self.get_action_buckets()).to(torch.device("cuda" if torch.cuda.is_available() and args.use_gpu else "cpu"))
+            device = torch.device("cuda" if torch.cuda.is_available() and use_gpu else "cpu")
+            self.frozen_policy = Agent(self.get_input_dim(), num_channels=64, num_layers=3, action_buckets=self.get_action_buckets())
             self.frozen_policy.load(frozen_path)
+            self.frozen_policy.to(device)
+            self.frozen_policy.eval()  # Set to evaluation mode
         else: self.frozen_policy = None
 
     def get_action_space_size(self):
@@ -125,8 +127,24 @@ class EnvWrapper:
         if self.frozen_policy is not None:
             frozen_idx = 1 - self.agent_idx
             frozen_obs = self.observations[:, frozen_idx, :]
+            
+            # Debug: Check for NaN/inf in observations
+            if torch.isnan(frozen_obs).any() or torch.isinf(frozen_obs).any():
+                print("WARNING: NaN or inf detected in frozen_obs")
+                print(f"frozen_obs stats: min={frozen_obs.min()}, max={frozen_obs.max()}, mean={frozen_obs.mean()}")
+            
             with torch.no_grad():
-                frozen_actions, _, _ = self.frozen_policy(frozen_obs)
+                try:
+                    frozen_actions, _, _ = self.frozen_policy(frozen_obs)
+                except RuntimeError as e:
+                    print(f"Error in frozen policy forward pass: {e}")
+                    print(f"frozen_obs shape: {frozen_obs.shape}")
+                    print(f"frozen_obs stats: min={frozen_obs.min()}, max={frozen_obs.max()}, mean={frozen_obs.mean()}")
+                    print(f"frozen_obs device: {frozen_obs.device}")
+                    print(f"frozen_policy device: {next(self.frozen_policy.parameters()).device}")
+                    # Use dummy actions as fallback
+                    frozen_actions = torch.zeros_like(trainee_actions)
+                    
             combined_actions = torch.stack([trainee_actions, frozen_actions], dim=1) if self.agent_idx == 0 else torch.stack([frozen_actions, trainee_actions], dim=1)
             self.actions.copy_(combined_actions)
 

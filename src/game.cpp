@@ -787,33 +787,41 @@ inline void rewardSystem(Engine &ctx,
                          InPossession &in_possession,
                          Attributes &attributes)
 {
-    // Find attacking hoop
-    Position target_hoop_pos;
-    for (CountT i = 0; i < NUM_HOOPS; i++)
+    GameState &gameState = ctx.singleton<GameState>();
+    if (team.teamIndex == gameState.teamInPossession)
     {
-        Entity hoop = ctx.data().hoops[i];
-        if (hoop.id != team.defendingHoopID)
+        // Find attacking hoop
+        Position target_hoop_pos;
+        for (CountT i = 0; i < NUM_HOOPS; i++)
         {
-            target_hoop_pos = ctx.get<Position>(hoop);
+            Entity hoop = ctx.data().hoops[i];
+            if (hoop.id != team.defendingHoopID)
+            {
+                target_hoop_pos = ctx.get<Position>(hoop);
+            }
         }
-    }
 
-    // Find agent who shot the ball and reward them if the shot is going in
-    for (CountT j = 0; j < NUM_BASKETBALLS; j++)
+        // Find agent who shot the ball and reward them if the shot is going in
+        for (CountT j = 0; j < NUM_BASKETBALLS; j++)
+        {
+            Entity ball = ctx.data().balls[j];
+            BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
+            if (ball_physics.shotByAgentID == agent_entity.id && ball_physics.shotIsGoingIn == 1)
+            {
+                reward.r += ball_physics.shotPointValue;
+            }
+            else if (ball_physics.shotByAgentID == agent_entity.id && ball_physics.shotIsGoingIn == 0 && ball_physics.inFlight == 1)
+            {
+                reward.r -= 1;
+            }
+        }
+
+        reward.r += attributes.currentShotPercentage;
+    }
+    else
     {
-        Entity ball = ctx.data().balls[j];
-        BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
-        if (ball_physics.shotByAgentID == agent_entity.id && ball_physics.shotIsGoingIn == 1)
-        {
-            reward.r += ball_physics.shotPointValue;
-        }
-        else if (ball_physics.shotByAgentID == agent_entity.id && ball_physics.shotIsGoingIn == 0 && ball_physics.inFlight == 1)
-        {
-            reward.r -= 1;
-        }
+        reward.r = 0;
     }
-
-    reward.r += attributes.currentShotPercentage;
 }
 
 //=================================================== Hoop Systems ===================================================

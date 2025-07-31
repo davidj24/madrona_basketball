@@ -29,7 +29,7 @@ class Args:
     wandb_track: bool = True
     wandb_project_name: str = "MadronaBasketballPPO"
     wandb_entity: str = None
-    run_name: Optional[str] = None
+    model_name: Optional[str] = None
 
     # Algorithm specific arguments
     num_iterations: int = 100_000
@@ -63,10 +63,10 @@ if __name__ == "__main__":
     args = tyro.cli(Args)
     args.rollout_batch_size = int(args.num_envs * args.num_rollout_steps)
     args.minibatch_size = int(args.rollout_batch_size // args.num_minibatches)
-    if args.run_name:
-        run_name = args.run_name
+    if args.model_name:
+        model_name = args.model_name
     else:
-        run_name = f"{args.env_id}__{args.seed}__{int(time.time())}"
+        model_name = f"{args.env_id}__{args.seed}__{int(time.time())}"
     if args.wandb_track:
         import wandb
 
@@ -75,11 +75,11 @@ if __name__ == "__main__":
             entity=args.wandb_entity,
             sync_tensorboard=True,
             config=vars(args),
-            name=run_name,
+            name=model_name,
             monitor_gym=True,
             save_code=True,
         )
-    writer = SummaryWriter(f"runs/{run_name}")
+    writer = SummaryWriter(f"runs/{model_name}")
     writer.add_text(
         "hyperparameters",
         "|param|value|\n|-|-|\n%s" % ("\n".join(
@@ -303,9 +303,9 @@ if __name__ == "__main__":
             if not os.path.exists(folder):
                 os.makedirs(folder)
 
-            if (args.run_name):
-                torch.save(agent.state_dict(), os.path.join(folder, f"{args.run_name}_{iteration}.pth"))
-                print(f"Model {args.run_name} saved at iteration {iteration}")
+            if (args.model_name):
+                torch.save(agent.state_dict(), os.path.join(folder, f"{args.model_name}_{iteration}.pth"))
+                print(f"Model {args.model_name} saved at iteration {iteration}")
                 
             else:
                 torch.save(agent.state_dict(), os.path.join(folder, f"{iteration}.pth"))
