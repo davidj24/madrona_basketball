@@ -23,16 +23,17 @@ def infer(args):
     device = torch.device('cuda' if args.gpu_sim and torch.cuda.is_available() else 'cpu')
     print(f"Using {device} for inference")
 
+
     # Create environment
-    environment = EnvWrapper(args.num_envs, args.gpu_sim, args.gpu_id, args.viewer)
+    environment = EnvWrapper(args.num_envs, args.gpu_sim, frozen_path=args.checkpoint_1, gpu_id=args.gpu_id, viewer=args.viewer)
     input_dimensions = environment.get_input_dim()
     action_buckets = environment.get_action_buckets()
 
     # Load policy
     policy = Agent(input_dimensions, num_channels=64, num_layers=3, action_buckets=action_buckets).to(device)
-    policy.load(args.checkpoint_path)
+    policy.load(args.checkpoint_0)
     policy.eval()
-    print(f"Successfully loaded policies from {args.checkpoint_path}.")
+    print(f"Successfully loaded policies from {args.checkpoint_0}.")
 
     # Initialize SimpleControllerManager for interactive inference
     controller_manager = SimpleControllerManager(policy, device)
@@ -83,7 +84,7 @@ def infer(args):
     while step < args.max_steps:
         with torch.no_grad():
             if args.stochastic:
-                actions, _, _ = policy.forward(obs)
+                actions, _, _ = policy(obs)
             else:
                 backbone_features = policy.backbone(obs)
                 logits = policy.actor(backbone_features)
@@ -92,8 +93,6 @@ def infer(args):
                 action_dists.best(best_actions)
                 actions = best_actions
                 
-                if step % 50 == 0:
-                    print(f"Step {step}: Agent actions = {actions[0].cpu().numpy()}")
             
             # Check if viewer exists and human control is active
             if (environment.viewer is not None and 
@@ -156,7 +155,14 @@ def infer(args):
         print(f"Finished logging. Trajectory saved to {args.log_path}")
     print("Inference Complete")
 
-    
+
+
+
+
+
+
+
+
 
 
 if __name__ == "__main__":
@@ -173,12 +179,16 @@ if __name__ == "__main__":
 
     # For inference specifically
     arg_parser.add_argument("--viewer", action='store_true', default=True)
-    arg_parser.add_argument("--checkpoint-path", required=True)
+    arg_parser.add_argument("--checkpoint-0", required=True)
+    arg_parser.add_argument("--checkpoint-1", required=False)
     arg_parser.add_argument("--log-path", type=str, default="logs/trajectories.npz")
     arg_parser.add_argument("--max-steps", type=int, default=10000)
     arg_parser.add_argument("--num-episodes", type=int, default=5)
     arg_parser.add_argument("--stochastic", action='store_true', default=True) # Determines if the policy only uses its best action or samples from its distribution
-
+    
 
     args = arg_parser.parse_args()
     infer(args)
+
+
+    

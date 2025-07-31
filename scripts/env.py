@@ -2,6 +2,7 @@ import math
 import os
 import sys
 import torch
+from typing import Optional
 
 import madrona_basketball as mba
 
@@ -13,7 +14,7 @@ from agent import Agent
 
 
 class EnvWrapper:
-    def __init__(self, num_worlds: int, use_gpu: bool, frozen_path: str, gpu_id: int = 0, viewer: bool = False, trainee_agent_idx: int = 0):
+    def __init__(self, num_worlds: int, use_gpu: bool=False, frozen_path: Optional[str]=None, gpu_id: int = 0, viewer: bool = True, trainee_agent_idx: int = 0):
         self.world_width_meters = WORLD_WIDTH_M
         self.world_height_meters = WORLD_HEIGHT_M
 
@@ -127,12 +128,7 @@ class EnvWrapper:
         if self.frozen_policy is not None:
             frozen_idx = 1 - self.agent_idx
             frozen_obs = self.observations[:, frozen_idx, :]
-            
-            # Debug: Check for NaN/inf in observations
-            if torch.isnan(frozen_obs).any() or torch.isinf(frozen_obs).any():
-                print("WARNING: NaN or inf detected in frozen_obs")
-                print(f"frozen_obs stats: min={frozen_obs.min()}, max={frozen_obs.max()}, mean={frozen_obs.mean()}")
-            
+
             with torch.no_grad():
                 try:
                     frozen_actions, _, _ = self.frozen_policy(frozen_obs)
@@ -180,11 +176,9 @@ class EnvWrapper:
 
     def reset(self):
         self.resets.fill_(1)
-        dummy_actions = torch.zeros_like(self.actions[:, self.agent_idx])
-        obs, rew, done = self.step(dummy_actions)
+        empty_actions = torch.zeros_like(self.actions[:, self.agent_idx])
+        obs, rew, done = self.step(empty_actions)
         self.resets.fill_(0)
-        
-        # Mark that first reset is complete - now safe to use viewer
         self.first_reset_done = True
         
         return obs, rew, done

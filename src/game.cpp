@@ -828,7 +828,7 @@ inline void rewardSystem(Engine &ctx,
 
 
         // ======================== FOR TAG ==========================
-        reward.r += 1-exp(-dist_to_other_agent);
+        reward.r += (1-exp(-dist_to_other_agent)) * in_possession.hasBall;
     }
     else
     {
