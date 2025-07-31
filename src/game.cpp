@@ -1251,9 +1251,12 @@ inline void fillObservationsSystem(Engine &ctx,
     fill_vec3(Vector3::zero());
     obs[idx++] = 0.f;
     fill_quat(agent_orientation.orientation);
+    fill_vec3(agent_orientation.orientation).rotateVec(AGENT_BASE_FORWARD) // Orientation as direction vector
     fill_vec3(agent_vel.velocity);
     fill_vec3((attacking_hoop_pos.position - agent_pos.position).normalize()); // direction to hoop
-    obs[idx++] = (attacking_hoop_pos.position - agent_pos.position).length();
+    obs[idx++] = (attacking_hoop_pos.position - agent_pos.position).length(); // distance to hoop
+    fill_vec3((ball_pos.position - agent_pos.position).normalize()); // direction to ball
+    obs[idx++] = (ball_pos.position - agent_pos.position).length(); // distance to ball
     obs[idx++] = inbounding.imInbounding;
     obs[idx++] = grab_cooldown.cooldown;
     obs[idx++] = agent_attributes.maxSpeed;
@@ -1284,9 +1287,12 @@ inline void fillObservationsSystem(Engine &ctx,
                 fill_vec3(vec_to_agent);
                 obs[idx++] = vec_to_agent.length();
                 fill_quat(all_agents[i].orient.orientation);
+                fill_vec3(all_agents[i].orient.orientation.rotateVec(AGENT_BASE_FORWARD))
                 fill_vec3(all_agents[i].velocity.velocity);
                 fill_vec3((attacking_hoop_pos.position - all_agents[i].pos.position).normalize());
                 obs[idx++] = (attacking_hoop_pos.position - all_agents[i].pos.position).length();
+                fill_vec3((ball_pos.position - all_agents[i].pos.position).normalize());
+                obs[idx++] = (ball_pos.position - all_agents[i].pos.position).length();
                 obs[idx++] = all_agents[i].inb.imInbounding;
                 obs[idx++] = all_agents[i].cooldown.cooldown;
                 obs[idx++] = all_agents[i].attributes.maxSpeed;
@@ -1308,9 +1314,12 @@ inline void fillObservationsSystem(Engine &ctx,
                 fill_vec3(vec_to_agent);
                 obs[idx++] = vec_to_agent.length();
                 fill_quat(all_agents[i].orient.orientation);
+                fill_vec3(all_agents[i].orient.orientation.rotateVec(AGENT_BASE_FORWARD))
                 fill_vec3(all_agents[i].velocity.velocity);
                 fill_vec3((defending_hoop_pos.position - all_agents[i].pos.position).normalize());
                 obs[idx++] = (defending_hoop_pos.position - all_agents[i].pos.position).length();
+                fill_vec3((ball_pos.position - all_agents[i].pos.position).normalize());
+                obs[idx++] = (ball_pos.position - all_agents[i].pos.position).length();
                 obs[idx++] = all_agents[i].inb.imInbounding;
                 obs[idx++] = all_agents[i].cooldown.cooldown;
                 obs[idx++] = all_agents[i].attributes.maxSpeed;
@@ -1328,7 +1337,7 @@ inline void fillObservationsSystem(Engine &ctx,
 
 
     // Padding for agent data
-    constexpr int agent_feature_size = 3 + 3 + 1 + 4 + 3 + 3 + 1 + 1 + 1 + 6 + 1 + 1; // Pos, VecTo, DistanceTo, Orient, Velocity, inbounding, cooldown, attributes, pointsWorth, HasBall, 
+    constexpr int agent_feature_size = 3 + 3 + 1 + 4 + 3 + 3 + 3 + 1 + 3 + 1 + 1 + 1 + 6 + 1 + 1; // Pos, VecTo, DistanceTo, Orient, orientAsVec, Velocity, DirToHoop, DistToHoop, DirToBall, DistToBall, inbounding, cooldown, attributes, pointsWorth, HasBall
     for (int i = teammate_count; i < max_teammates; i++)
     {
         for (int j = 0; j < agent_feature_size; j++) obs[idx++] = 0.f;
