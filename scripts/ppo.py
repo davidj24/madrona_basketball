@@ -22,7 +22,7 @@ class Args:
     seed: int = 1
     torch_deterministic: bool = True
     use_gpu: bool = True
-    viewer: bool = True
+    viewer: bool = False
 
     # Wandb
     env_id: str = "MadronaBasketball"
@@ -34,10 +34,10 @@ class Args:
     # Algorithm specific arguments
     num_iterations: int = 100_000
     num_envs: int = 8192
-    num_rollout_steps: int = 100
+    num_rollout_steps: int = 16
     learning_rate: float = 2.5e-4
     anneal_lr: bool = True
-    gamma: float = 0.999
+    gamma: float = 0.99
     gae_lambda: float = 0.95
     num_minibatches: int = 4
     update_epochs: int = 4
@@ -157,6 +157,7 @@ if __name__ == "__main__":
     stats = PPOStats()
     global_step = 0
     start_time = time.time()
+    update_timer_start = time.perf_counter()
     next_obs, _, _ = envs.reset()
     next_done = torch.zeros(args.num_envs).to(device)
     for iteration in range(1, args.num_iterations + 1):
@@ -299,8 +300,9 @@ if __name__ == "__main__":
         if iteration % 100 == 0:
             p_advantages = b_advantages.reshape(-1)
             p_values = b_values.reshape(-1)
+            update_timer_end = time.perf_counter()
 
-            print(f"\nUpdate: {iteration}")
+            print(f"\nUpdate: {iteration} took {update_timer_end - update_timer_start:.4f} seconds")
             print(f"    Loss: {stats.loss: .3e}, A: {stats.action_loss: .3e}, V: {stats.value_loss: .3e}, E: {stats.entropy_loss: .3e}")
             print()
             print(f"    Rewards          => Avg: {stats.rewards_mean: .3f}, Min: {stats.rewards_min: .3f}, Max: {stats.rewards_max: .3f}")
@@ -309,6 +311,9 @@ if __name__ == "__main__":
             print(f"    Returns          => Avg: {stats.returns_mean}")
             stats.reset()
 
+            update_timer_start = time.perf_counter()
+
+            
         # Every 100 iterations, save the model
         if iteration % 100 == 0:
             folder = "checkpoints"

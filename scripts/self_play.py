@@ -17,6 +17,7 @@ class Args:
     num_envs: int = 8192
     model_name_0: Optional[str] = 'model_0'
     model_name_1: Optional[str] = 'model_1'
+    viewer: bool = False
 
 
     # Self Play Stuff
@@ -46,6 +47,8 @@ def run_ppo(trainee_idx: int, args: Args, trainee_checkpoint: str, frozen_checkp
         command.append("--no-use-gpu")
     if not args.wandb_track:
         command.append("--no-wandb-track")
+    if args.viewer:
+        command.append("--viewer")
 
     print(f"Executing command: {' '.join(command)}")
     try:

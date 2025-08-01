@@ -849,7 +849,7 @@ class ViewerClass:
         self.draw_simulation_data(data)
 
         pygame.display.flip()
-        self.clock.tick(60)
+        # self.clock.tick(60)
 
     def set_controller_manager(self, controller_manager):
         """Set the controller manager for interactive training"""
@@ -1448,7 +1448,7 @@ class ViewerClass:
                     paused = True
                     is_paused_for_next_episode = True
 
-                self.clock.tick(60)
+                # self.clock.tick(60)
 
             pygame.quit()
             sys.exit()
@@ -1461,7 +1461,7 @@ class ViewerClass:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Madrona Basketball Viewer: Live Sim or Trajectory Playback")
-    parser.add_argument('--playback-log', type=str, help="Path to an .npz trajectory log file for playback.")
+    parser.add_argument('--playback-log', type=str, default="logs/trajectories.npz", help="Path to an .npz trajectory log file for playback.")
     parser.add_argument('--track-event', type=str, default="shoot", help="name of event to track: shoot, pass, grab, etc. Events defined in constants.py")
     parser.add_argument('--fading-trails', action='store_true', default=False) # Darkening trails slow down performance, only use if necessary
     args = parser.parse_args()

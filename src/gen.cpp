@@ -345,7 +345,7 @@ void resetWorld(Engine &ctx) {
             {
                 float random_angle = sampleUniform(ctx, 0.f, 2.f * madrona::math::pi);
 
-                float spawn_radius = 2.0f;
+                float spawn_radius = 8.0f;
 
                 Vector3 offset = {
                     spawn_radius * cosf(random_angle),

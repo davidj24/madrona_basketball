@@ -133,7 +133,7 @@ inline void updatePointsWorthSystem(Engine &ctx,
 {
     // Get all hoop positions
     Vector3 hoop_score_zones[NUM_HOOPS];
-    uint32_t hoop_ids[NUM_HOOPS];
+    int32_t hoop_ids[NUM_HOOPS];
     for (CountT i = 0; i < NUM_HOOPS; i++) {
         Entity hoop = ctx.data().hoops[i];
         hoop_score_zones[i] = ctx.get<ScoringZone>(hoop).center;
@@ -441,7 +441,7 @@ inline void moveAgentSystem(Engine &ctx,
 
     if (dot_between_orientation_and_velocity < -0.1f) // moving backwards
     {
-        maximum_speed *= .4f;
+        maximum_speed *= .1f;
         delta_vel *= .1f;
     } 
     else if (dot_between_orientation_and_velocity <= 0.8f) // moving sideways
@@ -524,10 +524,10 @@ inline void actionMaskSystem(Engine &ctx,
     // ======================== FOR TAG ==========================
     action_mask.can_pass = 0;
     action_mask.can_shoot = 0;
-    // if (gameState.teamInPossession == team.teamIndex) 
-    // {
-    //     action_mask.can_move = 0;
-    // }
+    if (gameState.teamInPossession == team.teamIndex) 
+    {
+        action_mask.can_move = 0;
+    }
 }
 
 
@@ -1259,6 +1259,7 @@ inline void fillObservationsSystem(Engine &ctx,
     Vector3 agent_orient_as_vec = (agent_orientation.orientation).rotateVec(AGENT_BASE_FORWARD);                                    
     fill_vec3(agent_orient_as_vec);                                                                                                             // 3
     fill_vec3(agent_vel.velocity);                                                                                                              // 3
+    obs[idx++] = agent_vel.velocity.length();                                                                                                   // 1
     float dot_between_orient_and_vel = 0.f;
     if (agent_vel.velocity.length2() > 1e-6f) {dot_between_orient_and_vel = agent_vel.velocity.normalize().dot(agent_orient_as_vec);}
     obs[idx++] = dot_between_orient_and_vel; // Dot product between orientation vec and velocity that determines acceleration                   // 1
@@ -1306,6 +1307,7 @@ inline void fillObservationsSystem(Engine &ctx,
                 Vector3 teammate_orient_as_vec = all_agents[i].orient.orientation.rotateVec(AGENT_BASE_FORWARD);
                 fill_vec3(teammate_orient_as_vec);
                 fill_vec3(all_agents[i].velocity.velocity);
+                obs[idx++] = all_agents[i].velocity.velocity.length(); // Speed
                 float teammate_dot_between_orient_and_vel = 0.f;
                 if (all_agents[i].velocity.velocity.length2() > 1e-6f) {teammate_dot_between_orient_and_vel = all_agents[i].velocity.velocity.normalize().dot(teammate_orient_as_vec);}
                 obs[idx++] = teammate_dot_between_orient_and_vel; // Dot product between orientation vec and velocity
@@ -1344,6 +1346,7 @@ inline void fillObservationsSystem(Engine &ctx,
                 Vector3 opponent_orient_as_vec = all_agents[i].orient.orientation.rotateVec(AGENT_BASE_FORWARD);
                 fill_vec3(opponent_orient_as_vec);
                 fill_vec3(all_agents[i].velocity.velocity);
+                obs[idx++] = all_agents[i].velocity.velocity.length(); // Speed
                 float opponent_dot_between_orient_and_vel = 0.f;
                 if (all_agents[i].velocity.velocity.length2() > 1e-6f) {opponent_dot_between_orient_and_vel = all_agents[i].velocity.velocity.normalize().dot(opponent_orient_as_vec);}
                 obs[idx++] = opponent_dot_between_orient_and_vel; // Dot product between orientation vec and velocity
@@ -1383,7 +1386,7 @@ inline void fillObservationsSystem(Engine &ctx,
 
 
     // Padding for agent data
-    constexpr int agent_feature_size = 3 + 3 + 1 + 4 + 3 + 3 + 1 + 1 + 3 + 1 + 3 + 11; // 37 total: Pos, VecTo, DistanceTo, Orient, orientAsVec, Velocity, VelOrientDot, acceleration, DirToHoop, DistToHoop, DirToBall, DistToBall, inbounding, cooldown, attributes, pointsWorth, HasBall
+    constexpr int agent_feature_size = 3 + 3 + 1 + 4 + 3 + 3 + 1 + 1 + 1 + 3 + 1 + 3 + 11; // 37 total: Pos, VecTo, DistanceTo, Orient, orientAsVec, Velocity, Speed, VelOrientDot, acceleration, DirToHoop, DistToHoop, DirToBall, DistToBall, inbounding, cooldown, attributes, pointsWorth, HasBall
     for (int i = teammate_count; i < max_teammates; i++)
     {
         for (int j = 0; j < agent_feature_size; j++) obs[idx++] = 0.f;
