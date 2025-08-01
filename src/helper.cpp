@@ -104,5 +104,59 @@ bool projectionsOverlap(const Projection& p1, const Projection& p2) {
     return p1.max > p2.min && p2.max > p1.min;
 }
 
+// Helper function to setup agent positions and ball possession consistently
+void setupAgentPositions(Engine &ctx, Entity basketball_entity, int32_t &offensive_agent_id, Position &agent_pos_for_ball) {
+    const GridState *grid = ctx.data().grid;
+    GameState &gameState = ctx.singleton<GameState>();
+    
+    for (int i = 0; i < NUM_AGENTS; i++) {
+        Entity agent = ctx.data().agents[i];
+        Position &pos = ctx.get<Position>(agent);
+        InPossession &in_pos = ctx.get<InPossession>(agent);
+        
+        if (gameState.isOneOnOne == 1.f) {
+            if (i == 0) {
+                // Agent 0 (offensive) - base position with random deviation
+                Vector3 base_pos = { grid->startX + (i * 2.f), grid->startY, 0.f };
+                float x_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
+                float y_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
+                pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
+                pos.position.x = clamp(pos.position.x, 0.f, grid->width);
+                pos.position.y = clamp(pos.position.y, 0.f, grid->height);
+                
+                agent_pos_for_ball = pos;
+                offensive_agent_id = agent.id;
+                in_pos = {1, basketball_entity.id, 2};
+            } else {
+                // Agent 1 (defensive) - spawn at radius away from agent 0
+                float random_angle = sampleUniform(ctx, 0.f, 2.f * madrona::math::pi);
+                
+                Vector3 offset = {
+                    DEFENDER_SPAWN_RADIUS * cosf(random_angle),
+                    DEFENDER_SPAWN_RADIUS * sinf(random_angle),
+                    0.f
+                };
+                
+                pos.position = agent_pos_for_ball.position + offset;
+                pos.position.x = clamp(pos.position.x, 0.f, grid->width);
+                pos.position.y = clamp(pos.position.y, 0.f, grid->height);
+                
+                in_pos = {0, ENTITY_ID_PLACEHOLDER, 2};
+            }
+        } else {
+            // Original 5v5 starting positions
+            pos = Position { Vector3{ grid->startX - 1 - (-2*(i % 2)), grid->startY - 2 + i/2, 0.f } };
+            if (i == 0) {
+                offensive_agent_id = agent.id;
+                in_pos = {1, basketball_entity.id, 2};
+            } else {
+                in_pos = {0, ENTITY_ID_PLACEHOLDER, 2};
+            }
+        }
+        
+        // Set common attributes for all agents
+        ctx.get<Attributes>(agent) = {DEFAULT_SPEED - i*DEFENDER_SLOWDOWN, 1.f, 0.f, 0.f, i*DEFENDER_REACTION, pos.position, 0.f};
+    }
+}
 
 }

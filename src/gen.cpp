@@ -180,57 +180,14 @@ void generateWorld(Engine &ctx) {
 
     // Now create agents with proper hoop references
     int32_t offensive_agent_id = ENTITY_ID_PLACEHOLDER;
-    for (int i = 0; i < NUM_AGENTS; i++)
-    {
+    Position agent_pos_for_ball = {grid->startX, grid->startY, 0.f};
+    
+    // Create agent entities first
+    for (int i = 0; i < NUM_AGENTS; i++) {
         Entity agent = ctx.makeEntity<Agent>();
         ctx.data().agents[i] = agent;
         ctx.get<Action>(agent) = Action{0, 0, 0, 0, 0, 0};
         ctx.get<ActionMask>(agent) = ActionMask{0, 0, 0, 0};
-        Position &agent_pos = ctx.get<Position>(agent);
-        if (gameState.isOneOnOne == 1.f)
-        {
-            // Calculate the base starting position
-            Vector3 base_pos = {
-                grid->startX + (i * 2.f), // Spread them out for 1v1
-                grid->startY,
-                0.f
-            };
-
-            // Generate a random deviation
-            float x_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
-            float y_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
-
-            // Add the deviation to the base position
-            agent_pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
-
-            agent_pos.position.x = clamp(agent_pos.position.x, 0.f, grid->width);
-            agent_pos.position.y = clamp(agent_pos.position.y, 0.f, grid->height);
-
-            if (i == 0)
-            {
-                offensive_agent_id = agent.id;
-                // Give them possession of the ball we just created.
-                ctx.get<InPossession>(agent) = {1, basketball.id, 2};
-            }
-            else
-            {
-                
-                // All other agents in 1v1 mode start without the ball.
-                ctx.get<InPossession>(agent) = {0, ENTITY_ID_PLACEHOLDER, 2};
-            }
-        }
-        else
-        {
-            // Original 5v5 starting positions
-            agent_pos = Position {
-                Vector3{
-                    grid->startX - 1 - (-2*(i % 2)),
-                    grid->startY - 2,
-                    0.f
-                }
-            };
-        }
-
         ctx.get<Reset>(agent) = Reset{0};
         ctx.get<Inbounding>(agent) = Inbounding{0, 1};
         ctx.get<Reward>(agent).r = 0.f;
@@ -239,22 +196,22 @@ void generateWorld(Engine &ctx) {
         ctx.get<Orientation>(agent) = (i % 2 == 0) ? Orientation{Quat::angleAxis(-madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})} : Orientation{Quat::angleAxis(madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})};
         ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
         ctx.get<Stats>(agent) = {0.f, 0.f};
-        ctx.get<Attributes>(agent) = {DEFAULT_SPEED - i*DEFENDER_SLOWDOWN, 1.f, 0.f, 0.f, i*DEFENDER_REACTION, ctx.get<Position>(agent).position, 0.f};
         ctx.get<Velocity>(agent).velocity = Vector3::zero();
+        
         // Use actual hoop entity IDs from gameState
         int32_t defending_hoop_id = (i % 2 == 0) ? gameState.team0Hoop : gameState.team1Hoop;
         // Use team color constants
         const madrona::math::Vector3 team_color = (i % 2 == 0) ? TEAM0_COLOR : TEAM1_COLOR;
         ctx.get<Team>(agent) = Team{i % 2, team_color, defending_hoop_id};
-    };
+    }
+    
+    // Use helper function to setup positions and ball possession
+    setupAgentPositions(ctx, basketball, offensive_agent_id, agent_pos_for_ball);
 
-    if (gameState.isOneOnOne == 1.f)
-    {
+    if (gameState.isOneOnOne == 1.f) {
         ctx.get<Grabbed>(basketball) = {1, offensive_agent_id};
     }
 }
-
-
 
 void resetWorld(Engine &ctx) {
     GameState &gameState = ctx.singleton<GameState>();
@@ -306,7 +263,7 @@ void resetWorld(Engine &ctx) {
     }
     int32_t offensive_agent_id = ENTITY_ID_PLACEHOLDER;
     Position agent_pos_for_ball = {grid->startX, grid->startY, 0.f};
-    int agent_i = 0;
+    
     for (CountT i = 0; i < NUM_AGENTS; i++) {
         Entity agent = ctx.data().agents[i];
 
@@ -315,64 +272,19 @@ void resetWorld(Engine &ctx) {
         ctx.get<ActionMask>(agent) = ActionMask{0, 0, 0, 0};
         ctx.get<Reset>(agent) = Reset{0};
         ctx.get<Inbounding>(agent) = Inbounding{0, 1};
-
-        // reward.r = 0.f;
         ctx.get<Done>(agent).episodeDone = 1.f;
         ctx.get<CurStep>(agent).step = 0;
-        ctx.get<InPossession>(agent) = InPossession{0, basketball_entity.id, 2};
         ctx.get<Orientation>(agent) = (i % 2 == 0) ? Orientation{Quat::angleAxis(-madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})} : Orientation{Quat::angleAxis(madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})};
         ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
         ctx.get<Stats>(agent) = Stats{0.f, 0.f};
         ctx.get<Velocity>(agent).velocity = Vector3::zero();
-
-        Position &pos = ctx.get<Position>(agent);
-        InPossession &in_pos = ctx.get<InPossession>(agent);
-        if (gameState.isOneOnOne == 1.f)
-        {
-            if (agent_i == 0)
-            {
-                Vector3 base_pos = { grid->startX + (agent_i * 2.f), grid->startY, 0.f };
-                float x_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
-                float y_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
-                pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
-                pos.position.x = clamp(pos.position.x, 0.f, grid->width);
-                pos.position.y = clamp(pos.position.y, 0.f, grid->height);
-                agent_pos_for_ball = pos;
-                offensive_agent_id = agent.id;
-                in_pos = {1, basketball_entity.id, 2};
-            }
-            else
-            {
-                float random_angle = sampleUniform(ctx, 0.f, 2.f * madrona::math::pi);
-
-                float spawn_radius = 8.0f;
-
-                Vector3 offset = {
-                    spawn_radius * cosf(random_angle),
-                    spawn_radius * sinf(random_angle),
-                    0.f
-                };
-
-                pos.position = agent_pos_for_ball.position + offset;
-
-                pos.position.x = clamp(pos.position.x, 0.f, grid->width);
-                pos.position.y = clamp(pos.position.y, 0.f, grid->height);
-                
-                in_pos = {0, ENTITY_ID_PLACEHOLDER, 2};
-            }
-        }
-        else
-        {
-            pos = Position { Vector3{ grid->startX - 1 - (-2*(agent_i % 2)), grid->startY - 2 + agent_i/2, 0.f } };
-        }
-
-        ctx.get<Attributes>(agent) = {DEFAULT_SPEED - agent_i*DEFENDER_SLOWDOWN, 1.f, 0.f, 0.f, agent_i*DEFENDER_REACTION, pos.position, 0.f};
-
-        int32_t defending_hoop_id = (agent_i % 2 == 0) ? gameState.team0Hoop : gameState.team1Hoop;
-        ctx.get<Team>(agent) = Team{agent_i % 2, team_colors[agent_i % 2], defending_hoop_id};
-
-        agent_i++;
+        
+        int32_t defending_hoop_id = (i % 2 == 0) ? gameState.team0Hoop : gameState.team1Hoop;
+        ctx.get<Team>(agent) = Team{static_cast<int32_t>(i % 2), team_colors[i % 2], defending_hoop_id};
     }
+    
+    // Use helper function to setup positions and ball possession consistently
+    setupAgentPositions(ctx, basketball_entity, offensive_agent_id, agent_pos_for_ball);
 
     // --- Part 3: Reset All Basketballs ---
     for (CountT i = 0; i < NUM_BASKETBALLS; i++) {
