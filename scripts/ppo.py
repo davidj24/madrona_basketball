@@ -1,17 +1,18 @@
 import os
 import random
 import time
-from dataclasses import dataclass
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import tyro
+from dataclasses import dataclass
 from torch.utils.tensorboard import SummaryWriter
 from typing import Optional
 
 from agent import Agent
+from helpers import infer
 from env import EnvWrapper
 from ppo_stats import PPOStats
 from controllers import SimpleControllerManager
@@ -298,6 +299,8 @@ if __name__ == "__main__":
 
         # Print every 100 update iterations
         if iteration % 100 == 0:
+            if args.viewer:
+                infer(device, envs, agent, num_episodes=1)
             p_advantages = b_advantages.reshape(-1)
             p_values = b_values.reshape(-1)
             update_timer_end = time.perf_counter()
@@ -313,7 +316,7 @@ if __name__ == "__main__":
 
             update_timer_start = time.perf_counter()
 
-            
+
         # Every 100 iterations, save the model
         if iteration % 100 == 0:
             folder = "checkpoints"

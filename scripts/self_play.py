@@ -17,7 +17,7 @@ class Args:
     num_envs: int = 8192
     model_name_0: Optional[str] = 'model_0'
     model_name_1: Optional[str] = 'model_1'
-    viewer: bool = False
+    viewer: bool = True
 
 
     # Self Play Stuff

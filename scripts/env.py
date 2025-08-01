@@ -17,6 +17,7 @@ class EnvWrapper:
     def __init__(self, num_worlds: int, use_gpu: bool=False, frozen_path: Optional[str]=None, gpu_id: int = 0, viewer: bool = True, trainee_agent_idx: int = 0):
         self.world_width_meters = WORLD_WIDTH_M
         self.world_height_meters = WORLD_HEIGHT_M
+        self.num_worlds = num_worlds
 
         world_discrete_width = math.ceil(self.world_width_meters)
         world_discrete_height = math.ceil(self.world_height_meters)

@@ -1448,7 +1448,7 @@ class ViewerClass:
                     paused = True
                     is_paused_for_next_episode = True
 
-                # self.clock.tick(60)
+                self.clock.tick(60)
 
             pygame.quit()
             sys.exit()
