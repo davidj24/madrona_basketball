@@ -448,7 +448,7 @@ inline void moveAgentSystem(Engine &ctx,
     {
         maximum_speed *= .7f;
         delta_vel *= .1f;
-    } 
+    }
     agent_vel.velocity += delta_vel;
     if (agent_vel.velocity.length() > maximum_speed) {agent_vel.velocity *= maximum_speed / agent_vel.velocity.length();}
     if (inbounding.imInbounding == 1) {delta_vel.x = 0.f;}
@@ -1252,32 +1252,27 @@ inline void fillObservationsSystem(Engine &ctx,
     fill_vec3(defending_hoop_pos.position);
 
     // Self Data
-    fill_vec3(agent_pos.position);
-    fill_vec3(Vector3::zero());
-    obs[idx++] = 0.f;
-    fill_quat(agent_orientation.orientation);
-    Vector3 agent_orient_as_vec = (agent_orientation.orientation).rotateVec(AGENT_BASE_FORWARD);
-    fill_vec3(agent_orient_as_vec);
-    fill_vec3(agent_vel.velocity);
-    obs[idx++] = (agent_vel.velocity).dot(agent_orient_as_vec); // Dot product between orientation vec and velocity that determines acceleration
-    // Safe direction to hoop (handle zero-length case)
+    fill_vec3(agent_pos.position);                                                                                                              // 3
+    fill_vec3(Vector3::zero());                                                                                                                 // 3
+    obs[idx++] = 0.f;                                                                                                                           // 1
+    fill_quat(agent_orientation.orientation);                                                                                                   // 4
+    Vector3 agent_orient_as_vec = (agent_orientation.orientation).rotateVec(AGENT_BASE_FORWARD);                                    
+    fill_vec3(agent_orient_as_vec);                                                                                                             // 3
+    fill_vec3(agent_vel.velocity);                                                                                                              // 3
+    float dot_between_orient_and_vel = 0.f;
+    if (agent_vel.velocity.length2() > 1e-6f) {dot_between_orient_and_vel = agent_vel.velocity.normalize().dot(agent_orient_as_vec);}
+    obs[idx++] = dot_between_orient_and_vel; // Dot product between orientation vec and velocity that determines acceleration                   // 1
+    obs[idx++] = (dot_between_orient_and_vel <= 0.8f) ? 0.1f : 1.f; // Acceleration based on the dot product ^                                  // 1
     Vector3 dir_to_hoop = (attacking_hoop_pos.position - agent_pos.position);
     float dist_to_hoop = dir_to_hoop.length();
-    if (dist_to_hoop > 1e-6f) {
-        fill_vec3(dir_to_hoop.normalize());
-    } else {
-        fill_vec3(Vector3{0.f, 0.f, 0.f}); // Safe default direction
-    }
-    obs[idx++] = dist_to_hoop; // distance to hoop
-    // Safe direction to ball (handle zero-length case)
+    if (dist_to_hoop > 1e-6f) {fill_vec3(dir_to_hoop.normalize());}                                                                             // 3
+    else {fill_vec3(Vector3{0.f, 0.f, 0.f});}
+    obs[idx++] = dist_to_hoop; // distance to hoop                                                                                              // 1    
     Vector3 dir_to_ball = (ball_pos.position - agent_pos.position);
     float dist_to_ball = dir_to_ball.length();
-    if (dist_to_ball > 1e-6f) {
-        fill_vec3(dir_to_ball.normalize());
-    } else {
-        fill_vec3(Vector3{0.f, 0.f, 0.f}); // Safe default direction
-    }
-    obs[idx++] = dist_to_ball; // distance to ball
+    if (dist_to_ball > 1e-6f) {fill_vec3(dir_to_ball.normalize());}                                                                             // 3
+    else {fill_vec3(Vector3{0.f, 0.f, 0.f});}
+    obs[idx++] = dist_to_ball; // distance to ball                                                                                              // 11
     obs[idx++] = inbounding.imInbounding;
     obs[idx++] = grab_cooldown.cooldown;
     obs[idx++] = agent_attributes.maxSpeed;
@@ -1311,24 +1306,19 @@ inline void fillObservationsSystem(Engine &ctx,
                 Vector3 teammate_orient_as_vec = all_agents[i].orient.orientation.rotateVec(AGENT_BASE_FORWARD);
                 fill_vec3(teammate_orient_as_vec);
                 fill_vec3(all_agents[i].velocity.velocity);
-                obs[idx++] = (all_agents[i].velocity.velocity).dot(teammate_orient_as_vec); // Dot product between orientation vec and velocity
-                // Safe direction to hoop for teammate (handle zero-length case)
+                float teammate_dot_between_orient_and_vel = 0.f;
+                if (all_agents[i].velocity.velocity.length2() > 1e-6f) {teammate_dot_between_orient_and_vel = all_agents[i].velocity.velocity.normalize().dot(teammate_orient_as_vec);}
+                obs[idx++] = teammate_dot_between_orient_and_vel; // Dot product between orientation vec and velocity
+                obs[idx++] = (teammate_dot_between_orient_and_vel <= 0.8f) ? 0.1f : 1.f; // Acceleration based on dot ^
                 Vector3 teammate_dir_to_hoop = (attacking_hoop_pos.position - all_agents[i].pos.position);
                 float teammate_dist_to_hoop = teammate_dir_to_hoop.length();
-                if (teammate_dist_to_hoop > 1e-6f) {
-                    fill_vec3(teammate_dir_to_hoop.normalize());
-                } else {
-                    fill_vec3(Vector3{0.f, 0.f, 0.f}); // Safe default direction
-                }
+                if (teammate_dist_to_hoop > 1e-6f) {fill_vec3(teammate_dir_to_hoop.normalize());} 
+                else {fill_vec3(Vector3{0.f, 0.f, 0.f});}
                 obs[idx++] = teammate_dist_to_hoop;
-                // Safe direction to ball for teammate (handle zero-length case)
                 Vector3 teammate_dir_to_ball = (ball_pos.position - all_agents[i].pos.position);
                 float teammate_dist_to_ball = teammate_dir_to_ball.length();
-                if (teammate_dist_to_ball > 1e-6f) {
-                    fill_vec3(teammate_dir_to_ball.normalize());
-                } else {
-                    fill_vec3(Vector3{0.f, 0.f, 0.f}); // Safe default direction
-                }
+                if (teammate_dist_to_ball > 1e-6f) {fill_vec3(teammate_dir_to_ball.normalize());} 
+                else {fill_vec3(Vector3{0.f, 0.f, 0.f});}
                 obs[idx++] = teammate_dist_to_ball;
                 obs[idx++] = all_agents[i].inb.imInbounding;
                 obs[idx++] = all_agents[i].cooldown.cooldown;
@@ -1354,7 +1344,10 @@ inline void fillObservationsSystem(Engine &ctx,
                 Vector3 opponent_orient_as_vec = all_agents[i].orient.orientation.rotateVec(AGENT_BASE_FORWARD);
                 fill_vec3(opponent_orient_as_vec);
                 fill_vec3(all_agents[i].velocity.velocity);
-                obs[idx++] = (all_agents[i].velocity.velocity).dot(opponent_orient_as_vec); // Dot product between orientation vec and velocity
+                float opponent_dot_between_orient_and_vel = 0.f;
+                if (all_agents[i].velocity.velocity.length2() > 1e-6f) {opponent_dot_between_orient_and_vel = all_agents[i].velocity.velocity.normalize().dot(opponent_orient_as_vec);}
+                obs[idx++] = opponent_dot_between_orient_and_vel; // Dot product between orientation vec and velocity
+                obs[idx++] = (opponent_dot_between_orient_and_vel <= 0.8f) ? 0.1f : 1.f; // Acceleration based on dot ^
                 // Safe direction to hoop for opponent (handle zero-length case)
                 Vector3 opponent_dir_to_hoop = (defending_hoop_pos.position - all_agents[i].pos.position);
                 float opponent_dist_to_hoop = opponent_dir_to_hoop.length();
@@ -1390,7 +1383,7 @@ inline void fillObservationsSystem(Engine &ctx,
 
 
     // Padding for agent data
-    constexpr int agent_feature_size = 3 + 3 + 1 + 4 + 3 + 3 + 1 + 3 + 1 + 3 + 1 + 1 + 1 + 6 + 1 + 1; // Pos, VecTo, DistanceTo, Orient, orientAsVec, Velocity, VelOrientDot, DirToHoop, DistToHoop, DirToBall, DistToBall, inbounding, cooldown, attributes, pointsWorth, HasBall
+    constexpr int agent_feature_size = 3 + 3 + 1 + 4 + 3 + 3 + 1 + 1 + 3 + 1 + 3 + 11; // 37 total: Pos, VecTo, DistanceTo, Orient, orientAsVec, Velocity, VelOrientDot, acceleration, DirToHoop, DistToHoop, DirToBall, DistToBall, inbounding, cooldown, attributes, pointsWorth, HasBall
     for (int i = teammate_count; i < max_teammates; i++)
     {
         for (int j = 0; j < agent_feature_size; j++) obs[idx++] = 0.f;

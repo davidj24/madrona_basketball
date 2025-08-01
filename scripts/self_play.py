@@ -90,6 +90,7 @@ if __name__ == '__main__':
 
     # Vector to hold old models/generations for trainee to go against randomly. Models are stored in chronological order
     model_list = []
+    max_models_in_list = 3 # The maximum number of models per agent we want to keep in the list at a time. Ex: if max_models = 3, we will have a max of 6 total models in the list, 3 for each agent
     probability_train_against_old_model = 0
 
     second_model_path = model_1_path if args.first_trainee_idx == 0 else model_0_path
@@ -125,6 +126,12 @@ if __name__ == '__main__':
         # ====================== SECOND TRAINING SESSION ========================
         second_model_path = model_1_path if args.first_trainee_idx == 0 else model_0_path
         model_list.append(second_model_path)
+
+        if len(model_list) > 2*max_models_in_list: # If the model list has gotten too long, remove the oldest 2
+            print(f"Retiring models {model_list[0]} and {model_list[1]}. They're too old now.")
+            del model_list[0]
+            del model_list[1]
+
         print(f"\n🔄 GENERATION {generation} - SECOND TRAINING SESSION")
         print(f"   Training: {second_model_name} (Agent {1-args.first_trainee_idx} - {'Offensive' if 1-args.first_trainee_idx == 0 else 'Defensive'}) with path: {second_model_path}")
         print(f"   Against:  Agent {args.first_trainee_idx} ({'Offensive' if args.first_trainee_idx == 0 else 'Defensive'}) - {first_model_path}")
