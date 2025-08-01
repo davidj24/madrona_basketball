@@ -239,7 +239,7 @@ void generateWorld(Engine &ctx) {
         ctx.get<Orientation>(agent) = (i % 2 == 0) ? Orientation{Quat::angleAxis(-madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})} : Orientation{Quat::angleAxis(madrona::math::pi / 2.0f, {0.f, 0.f, 1.f})};
         ctx.get<GrabCooldown>(agent) = GrabCooldown{0.f};
         ctx.get<Stats>(agent) = {0.f, 0.f};
-        ctx.get<Attributes>(agent) = {DEFAULT_SPEED - i*DEFENDER_SLOWDOWN, 1.f - i, 0.f, 0.f, i*DEFENDER_REACTION, ctx.get<Position>(agent).position, 0.f};
+        ctx.get<Attributes>(agent) = {DEFAULT_SPEED - i*DEFENDER_SLOWDOWN, 1.f, 0.f, 0.f, i*DEFENDER_REACTION, ctx.get<Position>(agent).position, 0.f};
         ctx.get<Velocity>(agent).velocity = Vector3::zero();
         // Use actual hoop entity IDs from gameState
         int32_t defending_hoop_id = (i % 2 == 0) ? gameState.team0Hoop : gameState.team1Hoop;
