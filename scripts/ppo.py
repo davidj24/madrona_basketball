@@ -158,10 +158,11 @@ if __name__ == "__main__":
     global_step = 0
     start_time = time.time()
     update_timer_start = time.perf_counter()
+
     next_obs, _, _ = envs.reset()
     next_done = torch.zeros(args.num_envs).to(device)
     for iteration in range(1, args.num_iterations + 1):
-        # Annealing the rate
+        # anneal lr
         if args.anneal_lr:
             frac = 1.0 - (iteration - 1.0) / args.num_iterations
             lr_now = frac * args.learning_rate
@@ -192,12 +193,22 @@ if __name__ == "__main__":
                     next_obs, reward, next_done = envs.step(rl_action)
             else:
                 next_obs, reward, next_done = envs.step(rl_action)
+
             rewards[step] = reward.view(-1)
             # time.sleep(1)
 
-        # bootstrap value if not done
+        # Advantages and bootstrap
         with torch.no_grad():
+            # update observation normalizer
+            obs_raw = agent.unnorm_obs(obs.view(-1, obs.size(-1)))
+            agent.update_obs_normalizer(obs_raw)
+
+            # invert value normalizer
+            values = agent.unnorm_value(values)
             next_value = agent.get_value(next_obs).reshape(1, -1)
+            next_value = agent.unnorm_value(next_value)
+
+            # bootstrap value if not done
             advantages = torch.zeros_like(rewards).to(device)
             last_gae_lam = 0
             for t in reversed(range(args.num_rollout_steps)):
@@ -210,6 +221,10 @@ if __name__ == "__main__":
                 delta = rewards[t] + args.gamma * next_values * next_nonterminal - values[t]
                 advantages[t] = last_gae_lam = delta + args.gamma * args.gae_lambda * next_nonterminal * last_gae_lam
             returns = advantages + values
+
+            # normalize returns and update value normalizer
+            agent.update_value_normalizer(returns.view(-1, 1))
+            returns = agent.normalize_value(returns)
 
         # Flatten the batch
         b_obs = obs.reshape((-1, obs_size))
@@ -242,8 +257,8 @@ if __name__ == "__main__":
 
                 mb_advantages = b_advantages[mb_inds]
                 if args.norm_adv:
-                    mb_advantages = (mb_advantages - mb_advantages.mean()) / (
-                                mb_advantages.std() + 1e-8)
+                    sigma, mu = torch.std_mean(mb_advantages, dim=0, unbiased=True)
+                    mb_advantages = (mb_advantages - mu) / (sigma + 1e-8)
 
                 # Policy loss
                 mb_advantages = mb_advantages.reshape(-1, 1)
@@ -287,6 +302,7 @@ if __name__ == "__main__":
                 break
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
+        fps = int(global_step / (time.time() - start_time))
         writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
         writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
         writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
@@ -294,7 +310,7 @@ if __name__ == "__main__":
         writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), global_step)
         writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
         writer.add_scalar("losses/clipfrac", np.mean(clip_fracs), global_step)
-        writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+        writer.add_scalar("charts/SPS", fps, global_step)
 
         # Print every 100 update iterations
         if iteration % 100 == 0:
@@ -302,7 +318,7 @@ if __name__ == "__main__":
             p_values = b_values.reshape(-1)
             update_timer_end = time.perf_counter()
 
-            print(f"\nUpdate: {iteration} took {update_timer_end - update_timer_start:.4f} seconds")
+            print(f"\nUpdate: {iteration} took {update_timer_end - update_timer_start:.4f} seconds. FPS: {fps}")
             print(f"    Loss: {stats.loss: .3e}, A: {stats.action_loss: .3e}, V: {stats.value_loss: .3e}, E: {stats.entropy_loss: .3e}")
             print()
             print(f"    Rewards          => Avg: {stats.rewards_mean: .3f}, Min: {stats.rewards_min: .3f}, Max: {stats.rewards_max: .3f}")
