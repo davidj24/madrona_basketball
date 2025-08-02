@@ -12,7 +12,6 @@ from torch.utils.tensorboard import SummaryWriter
 from typing import Optional
 
 from agent import Agent
-from helpers import infer
 from env import EnvWrapper
 from ppo_stats import PPOStats
 from controllers import SimpleControllerManager
@@ -299,8 +298,6 @@ if __name__ == "__main__":
 
         # Print every 100 update iterations
         if iteration % 100 == 0:
-            if args.viewer:
-                infer(device, envs, agent, num_episodes=1)
             p_advantages = b_advantages.reshape(-1)
             p_values = b_values.reshape(-1)
             update_timer_end = time.perf_counter()
