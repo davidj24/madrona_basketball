@@ -34,7 +34,7 @@ class Args:
 def run_ppo(trainee_idx: int, args: Args, trainee_checkpoint: str, frozen_checkpoint: str, model_name: str):
 
     command = [
-        "python", "scripts/ppo.py",
+        "python3", "scripts/ppo.py",
         "--model-name", model_name,
         "--trainee-idx", str(trainee_idx),
         "--trainee-checkpoint-path", trainee_checkpoint,

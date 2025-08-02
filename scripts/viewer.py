@@ -849,7 +849,7 @@ class ViewerClass:
         self.draw_simulation_data(data)
 
         pygame.display.flip()
-        # self.clock.tick(60)
+        self.clock.tick(60)
 
     def set_controller_manager(self, controller_manager):
         """Set the controller manager for interactive training"""
