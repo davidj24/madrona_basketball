@@ -25,7 +25,7 @@ class Args:
     use_gpu: bool = True
     viewer: bool = False # This runs the viewer constantly, causing 4x slowdown
     log_trajectories: bool = True # This saves the trajectories but runs at full speed
-    log_every_n_iterations: int = 100
+    log_every_n_iterations: int = 200
 
     # Wandb
     env_id: str = "MadronaBasketball"
@@ -70,6 +70,14 @@ if __name__ == "__main__":
         model_name = args.model_name
     else:
         model_name = f"{args.env_id}__{args.seed}__{int(time.time())}"
+
+    is_recording = False # For recording one episode every N iterations
+    is_waiting_for_new_episode = False
+    recorded_trajectory = []
+    static_log = {} # For the hoops
+    
+
+    # ======================================== Weights and Biases ========================================
     if args.wandb_track:
         import wandb
 
@@ -173,7 +181,11 @@ if __name__ == "__main__":
         print(f"Viewer is now watching: {log_folder}")
 
 
-    # Train start
+
+
+
+    # ======================================== Start Training ========================================
+    static_log['hoop_pos'] = envs.worlds.hoop_pos_tensor().to_torch().cpu().numpy().copy()
     stats = PPOStats()
     global_step = 0
     start_time = time.time()
@@ -212,8 +224,51 @@ if __name__ == "__main__":
                     next_obs, reward, next_done = envs.step(rl_action)
             else:
                 next_obs, reward, next_done = envs.step(rl_action)
+
+
+
+
+            # ======================================== Logging ========================================
+            if is_recording:
+                log_entry = {
+                    "agent_pos" : envs.worlds.agent_pos_tensor().to_torch()[:1].cpu().numpy().copy(),
+                    "ball_pos" : envs.worlds.basketball_pos_tensor().to_torch()[:1].cpu().numpy().copy(),
+                    "ball_vel" : envs.worlds.ball_velocity_tensor().to_torch()[:1].cpu().numpy().copy(),
+                    "orientation" : envs.worlds.orientation_tensor().to_torch()[:1].cpu().numpy().copy(),
+                    "ball_physics" : envs.worlds.ball_physics_tensor().to_torch()[:1].cpu().numpy().copy(),
+                    "agent_possession" : envs.worlds.agent_possession_tensor().to_torch()[:1].cpu().numpy().copy(),
+                    "actions" : actions[step][:1].cpu().numpy().copy(), # Local because we are tracking the policy actions not the action component from the environment
+                    "done": dones[step][:1].cpu().numpy().copy()
+                }
+                recorded_trajectory.append(log_entry)
+
+            if is_recording and dones[step][0].item() > 0:
+                print(f"Recorded episode has finished.")
+                is_recording = False
+                log_path = os.path.join(log_folder, f"iter_{iteration}_episode.npz")
+                episode_log = {}
+                for key in recorded_trajectory[0].keys():
+                    episode_log[key] = np.array([step[key] for step in recorded_trajectory])
+
+                np.savez_compressed(log_path, **static_log, **episode_log)
+                print(f"Episode trajectory saved to {log_path}")
+                recorded_trajectory = []
+
+            if is_waiting_for_new_episode and dones[step][0].item() > 0:
+                print(f"Episode of world 0 has just ended. Starting recording next step.")
+                is_recording = True
+                is_waiting_for_new_episode = False
+
+            
+
+
+                
+
+
             rewards[step] = reward.view(-1)
             # time.sleep(1)
+
+
 
         # bootstrap value if not done
         with torch.no_grad():
@@ -334,53 +389,9 @@ if __name__ == "__main__":
             update_timer_start = time.perf_counter()
 
 
-
-
-
-        # Logging for visualization without slowdown
         if args.log_trajectories and iteration % args.log_every_n_iterations == 0:
-            log_path = os.path.join(log_folder, f"iter_{iteration}_log.npz")
-
-            trajectory_log = []
-            static_log = {}
-
-            torch.manual_seed(int(time.time()))
-
-            log_obs, _, _ = envs.reset()
-            static_log['hoop_pos'] = envs.worlds.hoop_pos_tensor().to_torch().cpu().numpy().copy()
-
-            episodes_completed_in_world_0 = 0
-
-            while episodes_completed_in_world_0 < 1:
-                with torch.no_grad():
-                    log_actions, _, _ = agent(log_obs)
-                
-                log_obs, _, done = envs.step(log_actions)
-
-                log_entry = {
-                    "agent_pos" : envs.worlds.agent_pos_tensor().to_torch()[:1].cpu().numpy().copy(),
-                    "ball_pos" : envs.worlds.basketball_pos_tensor().to_torch()[:1].cpu().numpy().copy(),
-                    "ball_vel" : envs.worlds.ball_velocity_tensor().to_torch()[:1].cpu().numpy().copy(),
-                    "orientation" : envs.worlds.orientation_tensor().to_torch()[:1].cpu().numpy().copy(),
-                    "ball_physics" : envs.worlds.ball_physics_tensor().to_torch()[:1].cpu().numpy().copy(),
-                    "agent_possession" : envs.worlds.agent_possession_tensor().to_torch()[:1].cpu().numpy().copy(),
-                    "actions" : log_actions[:1].cpu().numpy().copy(), # Local because we are tracking the policy actions not the action component from the environment
-                    "done": done[:1].cpu().numpy().copy()
-                }
-                trajectory_log.append(log_entry)
-
-                if done[0].item() > 0:
-                    episodes_completed_in_world_0 += 1
-
-            if trajectory_log:
-                episode_log = {}
-                for key in trajectory_log[0].keys():
-                    episode_log[key] = np.array([step[key] for step in trajectory_log])
-                
-                np.savez_compressed(log_path, **static_log, **episode_log)
-                print(f"Training trajectory saved to {log_path}")
-
-
+            print(f"multiple of {args.log_every_n_iterations} reached. Waiting for next episode of world 0")
+            is_waiting_for_new_episode = True
 
 
         # Every 100 iterations, save the model

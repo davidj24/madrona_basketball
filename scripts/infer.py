@@ -17,10 +17,27 @@ import warnings
 warnings.filterwarnings("error")
 
 
+@dataclass
+class Args:
+    checkpoint_0: str
+    checkpoint_1: Optional[str]
+    log_path: Optional[str]="logs/trajectories.npz"
+    max_steps: int=10000
+    num_episodes: int=5
+    stochastic: bool=True
+    viewer: bool=True
+
+    discrete_x: int=20
+    discrete_y: int=15
+    start_x: float=10.0
+    start_y: float=7.5
+    num_envs: int=10
+    gpu_id: int=0
+    gpu_sim: bool=False
 
 def infer(device, environment, policy, log_path: str = "logs/trajectories.npz", num_episodes: int = 5, max_steps: int = 10000, stochastic: bool = True):
     policy.eval()
-    print(f"Successfully loaded policies from {policy}.")
+    print(f"Successfully loaded {policy}.")
 
     # Initialize SimpleControllerManager for interactive inference
     controller_manager = SimpleControllerManager(policy, device)
@@ -137,25 +154,6 @@ def infer(device, environment, policy, log_path: str = "logs/trajectories.npz", 
         np.savez_compressed(log_path, **static_log, **episode_log)
         print(f"Finished logging. Trajectory saved to {log_path}")
     print("Inference Complete")
-
-@dataclass
-class Args:
-    checkpoint_0: str
-    checkpoint_1: Optional[str]
-    log_path: Optional[str]="logs/trajectories.npz"
-    max_steps: int=10000
-    num_episodes: int=5
-    stochastic: bool=True
-    viewer: bool=True
-
-    discrete_x: int=20
-    discrete_y: int=15
-    start_x: float=10.0
-    start_y: float=7.5
-    num_envs: int=10
-    gpu_id: int=0
-    gpu_sim: bool=False
-
 
     
 
