@@ -10,19 +10,20 @@ import numpy as np
 import os
 import math
 import argparse
+import time
 
 # Import constants
+
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = os.environ.get('CUDA_VISIBLE_DEVICES', '0')
+os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+sys.path.append(project_root)
+
 from src.constants import *
 
-# CRITICAL: Set environment variables before any CUDA/OpenGL operations
-import os
-# Prevent CUDA from initializing OpenGL context that conflicts with pygame
-os.environ['CUDA_VISIBLE_DEVICES'] = os.environ.get('CUDA_VISIBLE_DEVICES', '0')
-# Force CUDA to use a specific device context
-os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-# Note: CUDA_LAUNCH_BLOCKING=1 causes very slow GPU compilation, so we only set it during tensor operations
-
-# Try to import and initialize PyTorch early to avoid issues later
 try:
     import torch
     torch.set_num_threads(1)  # Limit CPU threads
@@ -1108,24 +1109,7 @@ class ViewerClass:
             episodes_completed_log = np.cumsum(done_log, axis=0)
 
             print("Parsing episodes and events from log...")
-            
-            # Debug: Print agent_possession array info
-            if 'agent_possession' in log_data:
-                possession_shape = log_data['agent_possession'].shape
-                print(f"DEBUG: agent_possession shape: {possession_shape}")
-                print(f"DEBUG: Sample possession values at step 10:")
-                if len(possession_shape) >= 3:
-                    for w in range(min(3, possession_shape[1])):  # Show first 3 worlds
-                        for a in range(min(2, possession_shape[2])):  # Show first 2 agents
-                            if len(possession_shape) == 4:
-                                # Show all components to understand the structure
-                                for c in range(possession_shape[3]):
-                                    val = log_data['agent_possession'][10, w, a, c] if possession_shape[0] > 10 else "N/A"
-                                    print(f"  World {w}, Agent {a}, Component {c}: {val}")
-                            else:
-                                val = log_data['agent_possession'][10, w, a] if possession_shape[0] > 10 else "N/A"
-                                print(f"  World {w}, Agent {a}: {val}")
-                print("") # Empty line for readability
+        
             
             for world_num in range(num_worlds):
                 last_done_step = -1
@@ -1311,6 +1295,10 @@ class ViewerClass:
                 if len(world_info) > current_playback_episode
             ]
 
+
+
+
+
             while running:
                 for event in pygame.event.get():
                     if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -1427,6 +1415,7 @@ class ViewerClass:
                 status_text = f"Viewing Episode: {current_playback_episode}/{total_episodes_in_log} | step: {episode_step}"
                 if is_paused_for_next_episode:
                     status_text += f" | Press 'N' for Next Episode || max episode length is: {max(episode_lengths)}"
+                    running = False
                 elif paused:
                     status_text += " | Paused"
                 status_text += f" | Trails: {'On' if show_trails else 'Off'}"
@@ -1450,8 +1439,8 @@ class ViewerClass:
 
                 self.clock.tick(60)
 
-            pygame.quit()
-            sys.exit()
+            # pygame.quit()
+            # sys.exit()
 
         except Exception as e:
             print(f"Error in trajectory playback: {e}")
@@ -1459,15 +1448,57 @@ class ViewerClass:
             traceback.print_exc()
             return
 
+    def watch_training(self, log_directory, fading_trails=False, event_to_track="shoot"):
+        print(f"Watching logs from {log_directory}")
+
+        processed_files = set()
+
+        running = True
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                    running = False
+
+            if not running: break
+
+            try:
+                log_files = sorted([f for f in os.listdir(log_directory) if f.endswith('.npz')])
+            except FileNotFoundError:
+                print(f"Directory not found: {log_directory}.")
+                log_files = []
+
+            new_files = [f for f in log_files if f not in processed_files]
+
+            if new_files:
+                for filename in new_files:
+                    print(f"Playing back {filename}")
+                    filepath = os.path.join(log_directory, filename)
+
+                    self.run_trajectory_playback(filepath, fading_trails=fading_trails, event_to_track=event_to_track)
+
+                    processed_files.add(filename)
+                    print(f"Finished playing back {filename}")
+            else:
+                print(f"No new files found, retrying in 5 seconds")
+                time.sleep(5)
+        print(f"Exiting live training viewer")
+        pygame.quit()
+        sys.exit()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Madrona Basketball Viewer: Live Sim or Trajectory Playback")
     parser.add_argument('--playback-log', type=str, default="logs/trajectories.npz", help="Path to an .npz trajectory log file for playback.")
+    parser.add_argument('--live-log-folder', type=str, help="Path to a folder that will be updated during training with new trajectories to playback")
     parser.add_argument('--track-event', type=str, default="shoot", help="name of event to track: shoot, pass, grab, etc. Events defined in constants.py")
     parser.add_argument('--fading-trails', action='store_true', default=False) # Darkening trails slow down performance, only use if necessary
     args = parser.parse_args()
 
-    if args.playback_log:
-        viewer = ViewerClass()
+
+    viewer = ViewerClass()
+    if args.live_log_folder:
+        viewer.watch_training(args.live_log_folder, False, args.track_event)
+    elif args.playback_log:
         viewer.run_trajectory_playback(args.playback_log, args.fading_trails, args.track_event)
     else:
         print("No playback log provided. To view trajectories, run with:")

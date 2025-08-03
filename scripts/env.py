@@ -41,10 +41,8 @@ class EnvWrapper:
             if num_worlds > 1:
                 print("Viewer is enabled. Only rendering world 0")
             try:
-                # CRITICAL: Wait for GPU compilation to complete before creating viewer
                 if use_gpu:
                     print("🔧 GPU simulation ready, now initializing viewer...")
-                    # Ensure GPU compilation is completely finished
                     try:
                         if torch.cuda.is_available():
                             torch.cuda.synchronize()
@@ -60,7 +58,6 @@ class EnvWrapper:
                 test_obs = self.worlds.observations_tensor().to_torch()
                 print(f"✓ Simulation accessible, obs shape: {test_obs.shape}")
                 
-                # Now it's safe to create the viewer
                 print("Creating viewer...")
                 # Create viewer with training mode flag to prevent action input conflicts
                 self.viewer = ViewerClass(sim_instance=self.worlds, training_mode=True)

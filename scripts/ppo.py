@@ -1,6 +1,7 @@
 import os
 import random
 import time
+import subprocess
 
 import numpy as np
 import torch
@@ -22,7 +23,9 @@ class Args:
     seed: int = 1
     torch_deterministic: bool = True
     use_gpu: bool = True
-    viewer: bool = False
+    viewer: bool = False # This runs the viewer constantly, causing 4x slowdown
+    log_trajectories: bool = True # This saves the trajectories but runs at full speed
+    log_every_n_iterations: int = 100
 
     # Wandb
     env_id: str = "MadronaBasketball"
@@ -85,6 +88,8 @@ if __name__ == "__main__":
         "|param|value|\n|-|-|\n%s" % ("\n".join(
             [f"|{key}|{value}|" for key, value in vars(args).items()])),
     )
+
+
 
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
@@ -152,6 +157,21 @@ if __name__ == "__main__":
     rewards = torch.zeros((args.num_rollout_steps, args.num_envs)).to(device)
     dones = torch.zeros((args.num_rollout_steps, args.num_envs)).to(device)
     values = torch.zeros((args.num_rollout_steps, args.num_envs)).to(device)
+
+
+    viewer_process = None
+    log_folder = f"logs/{model_name}"
+    if args.log_trajectories:
+        # print(f"Launching live viewer")
+        os.makedirs(log_folder, exist_ok=True)
+
+        command = [
+            "python3", "-m", "scripts.viewer",
+            "--live-log-folder", log_folder
+        ]
+        viewer_process = subprocess.Popen(command)
+        print(f"Viewer is now watching: {log_folder}")
+
 
     # Train start
     stats = PPOStats()
@@ -314,8 +334,57 @@ if __name__ == "__main__":
             update_timer_start = time.perf_counter()
 
 
+
+
+
+        # Logging for visualization without slowdown
+        if args.log_trajectories and iteration % args.log_every_n_iterations == 0:
+            log_path = os.path.join(log_folder, f"iter_{iteration}_log.npz")
+
+            trajectory_log = []
+            static_log = {}
+
+            torch.manual_seed(int(time.time()))
+
+            log_obs, _, _ = envs.reset()
+            static_log['hoop_pos'] = envs.worlds.hoop_pos_tensor().to_torch().cpu().numpy().copy()
+
+            episodes_completed_in_world_0 = 0
+
+            while episodes_completed_in_world_0 < 1:
+                with torch.no_grad():
+                    log_actions, _, _ = agent(log_obs)
+                
+                log_obs, _, done = envs.step(log_actions)
+
+                log_entry = {
+                    "agent_pos" : envs.worlds.agent_pos_tensor().to_torch()[:1].cpu().numpy().copy(),
+                    "ball_pos" : envs.worlds.basketball_pos_tensor().to_torch()[:1].cpu().numpy().copy(),
+                    "ball_vel" : envs.worlds.ball_velocity_tensor().to_torch()[:1].cpu().numpy().copy(),
+                    "orientation" : envs.worlds.orientation_tensor().to_torch()[:1].cpu().numpy().copy(),
+                    "ball_physics" : envs.worlds.ball_physics_tensor().to_torch()[:1].cpu().numpy().copy(),
+                    "agent_possession" : envs.worlds.agent_possession_tensor().to_torch()[:1].cpu().numpy().copy(),
+                    "actions" : log_actions[:1].cpu().numpy().copy(), # Local because we are tracking the policy actions not the action component from the environment
+                    "done": done[:1].cpu().numpy().copy()
+                }
+                trajectory_log.append(log_entry)
+
+                if done[0].item() > 0:
+                    episodes_completed_in_world_0 += 1
+
+            if trajectory_log:
+                episode_log = {}
+                for key in trajectory_log[0].keys():
+                    episode_log[key] = np.array([step[key] for step in trajectory_log])
+                
+                np.savez_compressed(log_path, **static_log, **episode_log)
+                print(f"Training trajectory saved to {log_path}")
+
+
+
+
         # Every 100 iterations, save the model
-        if iteration % 100 == 0:
+        if iteration % 1000 == 0:
             folder = "checkpoints"
             if not os.path.exists(folder):
                 os.makedirs(folder)
