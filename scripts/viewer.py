@@ -27,7 +27,6 @@ from src.constants import *
 try:
     import torch
     torch.set_num_threads(1)  # Limit CPU threads
-    print("✓ PyTorch imported successfully")
     TORCH_AVAILABLE = True
 except Exception as e:
     print(f"⚠ PyTorch import issue: {e}")
@@ -40,7 +39,6 @@ sys.path.append('./build')
 try:
     import madrona_basketball as mba
     from madrona_basketball.madrona import ExecMode
-    print("✓ Successfully imported Madrona C++ module")
 except ImportError as e:
     print(f"✗ Failed to import Madrona C++ module: {e}")
     print("Make sure you've built the project first with 'cmake --build build'")
@@ -106,8 +104,6 @@ class ViewerClass:
         
         self.disable_action_input = False  # Allow interactive input for human control
         self.training_mode = training_mode
-        if training_mode:
-            print("✓ Training mode detected - interactive human control enabled")
         
         # Interactive training support
         self.controller_manager = None
@@ -137,12 +133,10 @@ class ViewerClass:
             
             # Initialize pygame
             pygame.init()
-            print("✓ Pygame core initialized")
             
             # Initialize mixer separately
             try:
                 pygame.mixer.init()
-                print("✓ Pygame mixer initialized")
             except pygame.error as mixer_e:
                 print(f"⚠ Pygame mixer failed: {mixer_e}, continuing without audio")
             
@@ -154,7 +148,6 @@ class ViewerClass:
         try:
             self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
             pygame.display.set_caption("Basketball Simulation")
-            print("✓ Pygame display created")
         except Exception as e:
             print(f"✗ Pygame display creation failed: {e}")
             raise RuntimeError(f"Cannot create pygame display: {e}")
@@ -167,7 +160,6 @@ class ViewerClass:
             pygame.mixer.init()  # Initialize the audio mixer
             self.score_sound = pygame.mixer.Sound("assets/swish.wav")
             self.whistle_sound = pygame.mixer.Sound("assets/whistle.wav")
-            print("✓ Audio files loaded successfully.")
         except pygame.error as e:
             print(f"⚠ Warning: Could not initialize audio. Running in silent mode. Error: {e}")
             self.score_sound = None
@@ -215,7 +207,6 @@ class ViewerClass:
                 try:
                     import torch
                     torch.cuda.synchronize()
-                    print("✓ CUDA context verified and synchronized")
                 except Exception as e:
                     print(f"⚠ CUDA verification warning: {e}")
             else:
@@ -239,7 +230,6 @@ class ViewerClass:
                 # Try to check simulation status once
                 if self.check_simulation_status():
                     self.simulation_ready = True
-                    print("✓ Simulation data access ready!")
                 else:
                     # Reset counter to try again later
                     self.ready_check_attempts = 0

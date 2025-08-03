@@ -22,8 +22,8 @@ class Args:
 
     # Self Play Stuff
     num_training_cycles: int = 5
-    iter_per_agent: int = 5000
-    first_trainee_idx: int = 0
+    iter_per_agent: int = 600
+    first_trainee_idx: int = 1
     checkpoint_0: Optional[str] = None
     checkpoint_1: Optional[str] = None
 
@@ -40,7 +40,8 @@ def run_ppo(trainee_idx: int, args: Args, trainee_checkpoint: str, frozen_checkp
         "--trainee-checkpoint-path", trainee_checkpoint,
         "--frozen-checkpoint-path", frozen_checkpoint,
         "--num-iterations", str(args.iter_per_agent),
-        "--num-envs", str(args.num_envs)
+        "--num-envs", str(args.num_envs),
+        "--save-model-every-n-iterations", str(args.iter_per_agent)
     ]
 
     if not args.use_gpu:
@@ -50,9 +51,9 @@ def run_ppo(trainee_idx: int, args: Args, trainee_checkpoint: str, frozen_checkp
     if args.viewer:
         command.append("--viewer")
 
-    print(f"Executing command: {' '.join(command)}")
     try:
         subprocess.run(command, check=True)
+        
     except subprocess.CalledProcessError as e:
         print(f"ERROR: Training session for {model_name} failed with exit code {e.returncode}")
         exit()
@@ -153,7 +154,7 @@ if __name__ == '__main__':
             second_model_path = model_list[model_num]
             print(f"Random Older Opponent chosen. In the next training session, the opponent will be: {second_model_path}")
 
-        print(f"\n✅ Cycle {generation}/{args.num_training_cycles} complete.")
+        print(f"\n✅ Cycle {generation}/{args.num_training_cycles-1} complete.")
         print(f"   Current Agent 0 (Offensive): {model_0_path}")
         print(f"   Current Agent 1 (Defensive): {model_1_path}")
 
