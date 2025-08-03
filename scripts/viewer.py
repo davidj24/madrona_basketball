@@ -1079,6 +1079,7 @@ class ViewerClass:
             ball_physics_log = log_data.get('ball_physics')
             actions_log = log_data.get('actions')
             done_log = log_data.get('done')
+            game_state_log = log_data.get('game_state')
 
             if any(data is None for data in [agent_pos_log, ball_pos_log, hoop_pos, orientation_log, done_log]):
                 print("FATAL: Log file is missing one or more required data arrays.")
@@ -1400,6 +1401,15 @@ class ViewerClass:
 
                     episodes_completed_at_this_step = episodes_completed_log[step_index]
                     self.draw_scene_dynamic(agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step[world_num], current_playback_episode, trail_surface, world_num, fading_trails, 0, max(episode_lengths) if episode_lengths else 1)
+
+                if game_state_log is not None and num_worlds > 0:
+                    step_index = episode_breaks[0][current_playback_episode]['start'] + episode_step
+                    if step_index < num_steps and len(game_state_log[step_index]) > 0:
+                        playback_data = {
+                            'game_state': game_state_log[step_index]
+                        }
+                        self.draw_score_display(playback_data)
+                        self.draw_inbound_clock(playback_data)
 
                 # Draw status text
                 status_text = f"Viewing Episode: {current_playback_episode}/{total_episodes_in_log} | step: {episode_step}"

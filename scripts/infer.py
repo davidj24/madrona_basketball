@@ -128,6 +128,7 @@ def infer(device, environment, policy, log_path: str = "logs/trajectories.npz", 
                 "orientation" : environment.worlds.orientation_tensor().to_torch().cpu().numpy().copy(),
                 "ball_physics" : environment.worlds.ball_physics_tensor().to_torch().cpu().numpy().copy(),
                 "agent_possession" : environment.worlds.agent_possession_tensor().to_torch().cpu().numpy().copy(),
+                "game_state" : environment.worlds.game_state_tensor().to_torch().cpu().numpy().copy(),
                 "actions" : actions.cpu().numpy().copy(), # Local because we are tracking the policy actions not the action component from the environment
                 "done": done.cpu().numpy().copy()
             }

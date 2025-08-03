@@ -244,6 +244,7 @@ if __name__ == "__main__":
                         "orientation" : envs.worlds.orientation_tensor().to_torch()[:1].cpu().numpy().copy(),
                         "ball_physics" : envs.worlds.ball_physics_tensor().to_torch()[:1].cpu().numpy().copy(),
                         "agent_possession" : envs.worlds.agent_possession_tensor().to_torch()[:1].cpu().numpy().copy(),
+                        "game_state" : envs.worlds.game_state_tensor().to_torch()[:1].cpu().numpy().copy(),
                         "actions" : actions[step][:1].cpu().numpy().copy(), # Local because we are tracking the policy actions not the action component from the environment
                         "done": dones[step][:1].cpu().numpy().copy()
                     }
