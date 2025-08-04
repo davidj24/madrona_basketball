@@ -192,13 +192,15 @@ if __name__ == "__main__":
 
 
         # ======================================== Start Training ========================================
-        static_log['hoop_pos'] = envs.worlds.hoop_pos_tensor().to_torch().cpu().numpy().copy()
+        
         stats = PPOStats()
         global_step = 0
         start_time = time.time()
         update_timer_start = time.perf_counter()
         next_obs, _, _ = envs.reset()
         next_done = torch.zeros(args.num_envs).to(device)
+        
+        static_log['hoop_pos'] = envs.worlds.hoop_pos_tensor().to_torch().cpu().numpy().copy()
         for iteration in range(1, args.num_iterations + 1):
             # Annealing the rate
             if args.anneal_lr:
@@ -257,7 +259,6 @@ if __name__ == "__main__":
                     episode_log = {}
                     for key in recorded_trajectory[0].keys():
                         episode_log[key] = np.array([step[key] for step in recorded_trajectory])
-
                     np.savez_compressed(log_path, **static_log, **episode_log)
                     print(f"Episode trajectory saved to {log_path}")
                     recorded_trajectory = []

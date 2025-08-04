@@ -991,8 +991,12 @@ class ViewerClass:
         self.draw_basketball_court()
         
         if hoop_pos is not None:
-            hoop_positions = hoop_pos[0]
-            for pos in hoop_positions:
+            if len(hoop_pos.shape) > 1 and hoop_pos.shape[0] > 0:
+                hoop_positions = hoop_pos[0]
+            else:
+                hoop_positions = hoop_pos
+            
+            for i, pos in enumerate(hoop_positions):
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
                 backboard_width_px = BACKBOARD_WIDTH_M * self.pixels_per_meter
                 rim_radius_px = (RIM_DIAMETER_M / 2) * self.pixels_per_meter
