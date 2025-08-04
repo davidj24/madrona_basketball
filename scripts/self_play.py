@@ -22,7 +22,7 @@ class Args:
 
     # Self Play Stuff
     num_training_cycles: int = 5
-    iter_per_agent: int = 600
+    iter_per_agent: int = 5000
     first_trainee_idx: int = 1
     checkpoint_0: Optional[str] = None
     checkpoint_1: Optional[str] = None

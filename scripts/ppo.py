@@ -348,7 +348,7 @@ if __name__ == "__main__":
                 p_values = b_values.reshape(-1)
                 update_timer_end = time.perf_counter()
 
-                print(f"\nUpdate: {iteration} took {update_timer_end - update_timer_start:.4f} seconds")
+                print(f"\nUpdate: {iteration} took {update_timer_end - update_timer_start:.4f} seconds which is {args.num_rollout_steps * args.num_envs * 100/(update_timer_end - update_timer_start)} steps per second.")
                 print(f"    Loss: {stats.loss: .3e}, A: {stats.action_loss: .3e}, V: {stats.value_loss: .3e}, E: {stats.entropy_loss: .3e}")
                 print()
                 print(f"    Rewards          => Avg: {stats.rewards_mean: .3f}, Min: {stats.rewards_min: .3f}, Max: {stats.rewards_max: .3f}")
