@@ -524,10 +524,10 @@ inline void actionMaskSystem(Engine &ctx,
     // ======================== FOR TAG ==========================
     action_mask.can_pass = 0;
     action_mask.can_shoot = 0;
-    if (gameState.teamInPossession == team.teamIndex) 
-    {
-        action_mask.can_move = 0;
-    }
+    // if (gameState.teamInPossession == team.teamIndex) 
+    // {
+    //     action_mask.can_move = 0;
+    // }
 }
 
 
@@ -849,11 +849,11 @@ inline void rewardSystem(Engine &ctx,
 
 
         // ======================== FOR TAG ==========================
-        reward.r += (1-exp(-dist_to_other_agent)) * in_possession.hasBall;
+        reward.r += (1-exp(-0.4f * dist_to_other_agent)) * in_possession.hasBall;
     }
     else
     {
-        reward.r += exp(-dist_to_other_agent);
+        reward.r += exp(-0.4f * dist_to_other_agent);
     }
 }
 

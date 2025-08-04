@@ -25,7 +25,7 @@ class Args:
     max_steps: int=10000
     num_episodes: int=5
     stochastic: bool=True
-    viewer: bool=True
+    viewer: bool=False
 
     discrete_x: int=20
     discrete_y: int=15

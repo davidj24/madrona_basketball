@@ -41,7 +41,7 @@ def run_ppo(trainee_idx: int, args: Args, trainee_checkpoint: str, frozen_checkp
         "--frozen-checkpoint-path", frozen_checkpoint,
         "--num-iterations", str(args.iter_per_agent),
         "--num-envs", str(args.num_envs),
-        "--save-model-every-n-iterations", str(args.iter_per_agent)
+        "--save-model-every-n-iterations", str(args.iter_per_agent//10)
     ]
 
     if not args.use_gpu:
