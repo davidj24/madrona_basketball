@@ -780,9 +780,8 @@ class ViewerClass:
     def handle_interactive_input(self):
         """Handle keyboard input for interactive training control"""
         if self.controller_manager is None:
-            # Debug: Print when controller manager is missing
             if not hasattr(self, '_controller_manager_warning_shown'):
-                print("🔧 Debug: No controller manager set, interactive input disabled")
+                print("🔧 No controller manager set, interactive input disabled")
                 self._controller_manager_warning_shown = True
             return
             
@@ -855,7 +854,6 @@ class ViewerClass:
         if action_changed:
             self.human_action = new_action
             self.action_changed = True
-            # Debug: Print when any input is detected (reduced frequency)
             if (hasattr(self, '_last_debug_frame') and 
                 (not hasattr(self, '_last_debug_frame') or self.step_count - getattr(self, '_last_debug_frame', 0) > 10)):
                 print(f"🎮 Human input detected for Agent {self.active_agent_idx}: move={move_speed}, angle={move_angle}, rot={rotate}, grab={grab}, pass={pass_ball}, shoot={shoot_ball}")
@@ -1004,7 +1002,7 @@ class ViewerClass:
                 world_num_rect = world_num_surface.get_rect(center=(screen_x, screen_y))
                 self.screen.blit(world_num_surface, world_num_rect)
 
-    def run_trajectory_playback(self, log_path, fading_trails=False, event_to_track="shoot"):
+    def run_trajectory_playback(self, log_path, fading_trails=False, event_to_track="shoot", watching_training=False):
         """
         Loads a trajectory log file and plays back multiple episodes, pausing
         between each one and waiting for user input to continue.
@@ -1074,7 +1072,6 @@ class ViewerClass:
                                     if event_def["conditions"](log_data, step_num, world_num, agent_num):
                                         outcome = event_def["outcome_func"](log_data, step_num, world_num)
                                         
-                                        # Debug: Print possession values for pass events
                                         if event_to_track == "pass":
                                             if 'agent_possession' in log_data:
                                                 # Get possession values for steps before, during, and after the event
@@ -1133,7 +1130,6 @@ class ViewerClass:
                                 if event_def["conditions"](log_data, step_num, world_num, agent_num):
                                     outcome = event_def["outcome_func"](log_data, step_num, world_num)
                                     
-                                    # Debug: Print possession values for pass events
                                     if event_to_track == "pass":
                                         if 'agent_possession' in log_data:
                                             # Get possession values for steps before, during, and after the event
@@ -1224,7 +1220,7 @@ class ViewerClass:
             episode_lengths = [
                 world_info[current_playback_episode]['end'] - world_info[current_playback_episode]['start'] 
                 for world_info in episode_breaks 
-                if len(world_info) > current_playback_episode
+                if len(world_info) > current_playback_episode and current_playback_episode < len(world_info)
             ]
 
 
@@ -1239,7 +1235,7 @@ class ViewerClass:
                         if event.key == pygame.K_SPACE:
                             paused = not paused
                             print("Paused" if paused else "Playing")
-                        if event.key == pygame.K_b:
+                        elif event.key == pygame.K_b:
                             if current_playback_episode > 0:
                                 current_playback_episode -= 1
                                 if not fading_trails:
@@ -1254,7 +1250,7 @@ class ViewerClass:
                                 paused = False
                                 episode_step = 0
                                 print(f"Playing Episode {current_playback_episode}")
-                        if event.key == pygame.K_n:
+                        elif event.key == pygame.K_n:
                             if current_playback_episode < total_episodes_in_log:
                                 current_playback_episode += 1
                                 if not fading_trails:
@@ -1262,27 +1258,27 @@ class ViewerClass:
                                 episode_lengths = [
                                     world_info[current_playback_episode]['end'] - world_info[current_playback_episode]['start'] 
                                     for world_info in episode_breaks 
-                                    if len(world_info) > current_playback_episode
+                                    if len(world_info) > current_playback_episode and current_playback_episode < len(world_info)
                                 ]
                                 print(f"Now, current episode is: {current_playback_episode} and the max lengths are: {episode_lengths}")
                                 is_paused_for_next_episode = False
                                 paused = False
                                 episode_step = 0
                                 print(f"Playing Episode {current_playback_episode}")
-                        if event.key == pygame.K_t:
+                        elif event.key == pygame.K_t:
                             show_trails = not show_trails
-                        if event.key == pygame.K_c:  # Toggle event chart with 'C' key
+                        elif event.key == pygame.K_c:
                             keys = pygame.key.get_pressed()
                             if keys[pygame.K_LSHIFT or pygame.K_RSHIFT]:
                                 event_display_mode_idx = 2 if event_display_mode_idx != 2 else 0
                             else:
                                 event_display_mode_idx = 1 if event_display_mode_idx != 1 else 0
                             print(f"Event chart mode: {event_display_modes[event_display_mode_idx]}")
-                        if event.key == pygame.K_r:
+                        elif event.key == pygame.K_r:
                             episode_step = 0
-                        if event.key == pygame.K_PERIOD:
+                        elif event.key == pygame.K_PERIOD:
                             episode_step += 1 if episode_step < max(episode_lengths) else 0
-                        if event.key == pygame.K_COMMA:
+                        elif event.key == pygame.K_COMMA:
                             episode_step -= 1 if episode_step > 0 else 0
                 
                 keys = pygame.key.get_pressed()
@@ -1307,6 +1303,10 @@ class ViewerClass:
                             if trail_step < 0:
                                 continue
                             for world_num in range(num_worlds):
+                                # Ensure this world has the current episode before accessing it
+                                if len(episode_breaks[world_num]) <= current_playback_episode:
+                                    continue  # Skip this world if it doesn't have this episode
+                                    
                                 if trail_step + episode_breaks[world_num][current_playback_episode]['start'] >= num_steps:
                                     continue
                                 trail_agent_pos = agent_pos_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step][world_num]
@@ -1328,13 +1328,13 @@ class ViewerClass:
                         self.screen.blit(trail_surface, (0, 0))
 
                 for world_num in range(num_worlds):
-                    step_index = episode_breaks[world_num][current_playback_episode]['start'] + episode_step
-                    if step_index >= num_steps:
-                        continue  # Skip this world if we're beyond available data
-                    
                     # Ensure this world has the current episode
                     if len(episode_breaks[world_num]) <= current_playback_episode:
                         continue  # Skip this world if it doesn't have this episode
+                        
+                    step_index = episode_breaks[world_num][current_playback_episode]['start'] + episode_step
+                    if step_index >= num_steps:
+                        continue  # Skip this world if we're beyond available data
                         
                     agent_pos_frame = agent_pos_log[step_index][world_num]
                     ball_pos_frame = ball_pos_log[step_index][world_num]
@@ -1374,7 +1374,6 @@ class ViewerClass:
                 status_text = f"Viewing Episode: {current_playback_episode}/{total_episodes_in_log} | step: {episode_step}"
                 if is_paused_for_next_episode:
                     status_text += f" | Press 'N' for Next Episode || max episode length is: {max(episode_lengths)}"
-                    running = False
                 elif paused:
                     status_text += " | Paused"
                 status_text += f" | Trails: {'On' if show_trails else 'Off'}"
@@ -1393,13 +1392,15 @@ class ViewerClass:
                 max_episode_length = max(episode_lengths) if episode_lengths else 0
                 
                 if episode_step >= max_episode_length:
-                    paused = True
-                    is_paused_for_next_episode = True
+                    if watching_training:
+                        # For training: exit when episode ends (since training logs only have 1 episode)
+                        running = False
+                    else:
+                        # For inference: pause and wait for user input to continue to next episode
+                        paused = True
+                        is_paused_for_next_episode = True
 
                 self.clock.tick(60)
-
-            # pygame.quit()
-            # sys.exit()
 
         except Exception as e:
             print(f"Error in trajectory playback: {e}")
@@ -1433,7 +1434,7 @@ class ViewerClass:
                     print(f"Playing back {filename}")
                     filepath = os.path.join(log_directory, filename)
 
-                    self.run_trajectory_playback(filepath, fading_trails=fading_trails, event_to_track=event_to_track)
+                    self.run_trajectory_playback(filepath, fading_trails=fading_trails, event_to_track=event_to_track, watching_training=True)
 
                     processed_files.add(filename)
                     print(f"Finished playing back {filename}")
@@ -1458,7 +1459,7 @@ if __name__ == "__main__":
     if args.live_log_folder:
         viewer.watch_training(args.live_log_folder, False, args.track_event)
     elif args.playback_log:
-        viewer.run_trajectory_playback(args.playback_log, args.fading_trails, args.track_event)
+        viewer.run_trajectory_playback(args.playback_log, args.fading_trails, args.track_event, watching_training=False)
     else:
         print("No playback log provided. To view trajectories, run with:")
         print("python viewer.py --playback-log path/to/your/log.npz")
