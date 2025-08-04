@@ -424,6 +424,38 @@ class ViewerClass:
         world_border_rect = pygame.Rect(self.world_offset_x, self.world_offset_y, self.world_width_px, self.world_height_px)
         pygame.draw.rect(self.screen, ORANGE_BORDER, world_border_rect, 3)
 
+    def draw_agent_status_text(self, data):
+        """Draw agent status information in the top left corner (excluding ball physics/velocity)"""
+        if data is None or data.get('rewards') is None:
+            print(f"Playback data either did not exist or didn't contain rewards data")
+            return
+        
+        rewards_frame = data['rewards'][0]
+        actions_frame = data['actions'][0] if data.get('actions') is not None else None
+
+        font = pygame.font.Font(None, 30)
+        y_offset = 50
+
+        for agent_idx in range(len(rewards_frame)):
+            team_color = TEAM0_COLOR if agent_idx % 2 == 0 else TEAM1_COLOR
+
+            reward_val = rewards_frame[agent_idx]
+            reward_text = f"Agent {agent_idx} Reward: {reward_val:.3f}"
+            reward_surface = font.render(reward_text, True, team_color)
+            self.screen.blit(reward_surface, (10, y_offset))
+            y_offset += 20
+
+            if actions_frame is not None and len(actions_frame) > agent_idx:
+                action_vals = [int(a) for a in actions_frame[agent_idx]]
+                action_text = f"Action: {action_vals}"
+                action_surface = font.render(action_text, True, (200, 200, 200))
+                self.screen.blit(action_surface, (10, y_offset))
+                y_offset += 25
+
+
+
+
+
     def draw_inbound_clock(self, data):
         """Draws the inbound clock only when an inbound pass is in progress."""
         if data is None or 'game_state' not in data:
@@ -577,6 +609,9 @@ class ViewerClass:
         # Draw the new inbound clock (it will only appear when needed)
         self.draw_inbound_clock(data)
 
+        # Draw agent status text in top left corner (excluding ball physics/velocity)
+        self.draw_agent_status_text(data)
+
         # Draw world index indicator
         world_indicator_text = f"World {self.debug_world_index}/{self.max_worlds_available-1} (Press 1/2/3 to switch)"
         world_indicator_surface = self.font.render(world_indicator_text, True, (255, 255, 0))
@@ -584,20 +619,6 @@ class ViewerClass:
 
         y_offset = 20
         info_texts = [f"Madrona Basketball Simulation - Step {self.step_count}"]
-
-        # --- Info Text (Preserved from your file) ---
-        if 'actions' in data and data['actions'] is not None:
-            world_idx = min(self.debug_world_index, len(data['actions']) - 1)
-            actions = data['actions'][world_idx]
-            for i, action_components in enumerate(actions):
-                if len(action_components) >= 8:
-                    info_texts.append(f"Agent {i}: Speed={int(action_components[0])} Angle={int(action_components[1])} Rotate={int(action_components[2])} Grab={int(action_components[3])} Pass={int(action_components[4])} Shoot={int(action_components[5])} Steal={int(action_components[6])} Contest={int(action_components[7])}")
-                elif len(action_components) >= 6:
-                    info_texts.append(f"Agent {i}: Speed={int(action_components[0])} Angle={int(action_components[1])} Rotate={int(action_components[2])} Grab={int(action_components[3])} Pass={int(action_components[4])} Shoot={int(action_components[5])}")
-
-        if 'rewards' in data and data['rewards'] is not None:
-            world_idx = min(self.debug_world_index, len(data['rewards']) - 1)
-            for i, reward in enumerate(data['rewards'][world_idx]): info_texts.append(f"Agent {i} Reward: {reward:.2f}")
         if 'done' in data and data['done'] is not None:
             world_idx = min(self.debug_world_index, len(data['done']) - 1)
             for i, done in enumerate(data['done'][world_idx]): info_texts.append(f"Agent {i} Done: {done}")
@@ -613,26 +634,20 @@ class ViewerClass:
             world_idx = min(self.debug_world_index, len(data['agent_pos']) - 1)
             positions, team_data, orientations = data['agent_pos'][world_idx], data['agent_teams'][world_idx], data['orientation'][world_idx]
 
-            # Use team color constants (Assuming TEAM0_COLOR and TEAM1_COLOR are defined in constants.py)
             for i, pos in enumerate(positions):
                 screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
                 team_index = int(team_data[i][0]) if i < len(team_data) else 0
                 agent_color = TEAM0_COLOR if team_index == 0 else TEAM1_COLOR
 
-                # Get orientation to calculate rectangle vertices
                 q = orientations[i]
                 forward_vec_3d = rotate_vec(q, np.array([0.0, 1.0, 0.0]))
 
-                # We only need the 2D projection for drawing
                 forward_vec = np.array([forward_vec_3d[0], forward_vec_3d[1]])
-                # The "right" vector is perpendicular to the forward vector
                 right_vec = np.array([forward_vec[1], -forward_vec[0]])
 
-                # Get dimensions in pixels
                 shoulder_width_px = AGENT_SHOULDER_WIDTH * self.pixels_per_meter
                 depth_px = AGENT_DEPTH * self.pixels_per_meter
 
-                # Calculate the four corner points of the rectangle
                 center_point = np.array([screen_x, screen_y])
 
                 half_width_vec = right_vec * (shoulder_width_px / 2)
@@ -645,23 +660,43 @@ class ViewerClass:
 
                 agent_points = [p1, p2, p3, p4]
 
-                # Draw the agent as a polygon
                 pygame.draw.polygon(self.screen, agent_color, agent_points)
 
-                # Draw a special highlight for the active agent
                 if i == self.active_agent_idx:
                     pygame.draw.polygon(self.screen, (0, 255, 255), agent_points, 3) # Bright yellow outline
                 else:
                     pygame.draw.polygon(self.screen, (255, 255, 255), agent_points, 1) # Standard white outline
 
-                # Draw the agent's number (not team ID) inside the rectangle
-                # Using a smaller fixed font size to ensure it fits
                 font_small = pygame.font.Font(None, 20)
                 text_surface = font_small.render(str(i), True, (255, 255, 255))
                 text_rect = text_surface.get_rect(center=(screen_x, screen_y))
                 self.screen.blit(text_surface, text_rect)
 
-                # Draw orientation line (still useful for debugging)
+                # Draw agent reward above the agent (training agent only)
+                if 'rewards' in data and data['rewards'] is not None and len(data['rewards']) > world_idx:
+                    rewards = data['rewards'][world_idx]
+                    reward_value = None
+                    
+                    # Only show reward above the training agent
+                    if i == self.active_agent_idx:
+                        # Extract reward value for the training agent
+                        if hasattr(rewards, '__len__') and len(rewards) > i:
+                            reward_value = rewards[i]
+                        elif hasattr(rewards, '__len__') and len(rewards) == 1:
+                            reward_value = rewards[0]
+                        elif not hasattr(rewards, '__len__'):
+                            reward_value = rewards
+                        
+                    if reward_value is not None:
+                        reward_text = f"{reward_value:.2f}"
+                        reward_font = pygame.font.Font(None, 18)
+                        reward_surface = reward_font.render(reward_text, True, (255, 255, 255))
+                        reward_rect = reward_surface.get_rect(center=(screen_x, screen_y - 25))
+                        # Draw a small background for better visibility
+                        bg_rect = reward_rect.inflate(4, 2)
+                        pygame.draw.rect(self.screen, (0, 0, 0), bg_rect)
+                        self.screen.blit(reward_surface, reward_rect)
+
                 arrow_len_px = self.pixels_per_meter * AGENT_ORIENTATION_ARROW_LENGTH_M
                 arrow_end = (screen_x + arrow_len_px * forward_vec[0], screen_y + arrow_len_px * forward_vec[1])
                 pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 3)
@@ -1010,7 +1045,7 @@ class ViewerClass:
         self.screen = original_screen
         return background
 
-    def draw_scene_dynamic(self, agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step_for_world, current_playback_episode, trail_surface, world_num, fading_trails=False, current_step=0, max_episode_length=1):
+    def draw_scene_dynamic(self, agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step_for_world, current_playback_episode, trail_surface, world_num, fading_trails=False, current_step=0, max_episode_length=1, rewards_frame=None):
         """
         Draws dynamic elements (agents and balls) during trajectory playback,
         but only for worlds that have not yet completed the current target episode number.
@@ -1054,6 +1089,30 @@ class ViewerClass:
                     world_num_rect = world_num_surface.get_rect(center=(screen_x, screen_y))
                     self.screen.blit(world_num_surface, world_num_rect)
 
+                    # Draw agent reward above the agent
+                    if rewards_frame is not None:
+                        # Handle different reward data structures
+                        reward_value = None
+                        if hasattr(rewards_frame, '__len__') and len(rewards_frame) > agent_idx:
+                            # rewards_frame is an array/list of rewards for each agent
+                            reward_value = rewards_frame[agent_idx]
+                        elif hasattr(rewards_frame, '__len__') and len(rewards_frame) == 1:
+                            # rewards_frame is a single-element array
+                            reward_value = rewards_frame[0]
+                        elif not hasattr(rewards_frame, '__len__'):
+                            # rewards_frame is a scalar value (assume it applies to all agents)
+                            reward_value = rewards_frame
+                        
+                        if reward_value is not None:
+                            reward_text = f"{reward_value:.2f}"
+                            reward_font = pygame.font.Font(None, 25)
+                            reward_surface = reward_font.render(reward_text, True, (255, 255, 255))
+                            reward_rect = reward_surface.get_rect(center=(screen_x, screen_y - 25))
+                            # Draw a small background for better visibility
+                            bg_rect = reward_rect.inflate(4, 2)
+                            pygame.draw.rect(self.screen, (0, 0, 0), bg_rect)
+                            self.screen.blit(reward_surface, reward_rect)
+
                     arrow_len_px = self.pixels_per_meter * AGENT_ORIENTATION_ARROW_LENGTH_M
                     arrow_end = (screen_x + arrow_len_px * forward_vec[0], screen_y + arrow_len_px * forward_vec[1])
                     pygame.draw.line(self.screen, (255, 255, 0), (screen_x, screen_y), arrow_end, 2)
@@ -1084,6 +1143,7 @@ class ViewerClass:
             actions_log = log_data.get('actions')
             done_log = log_data.get('done')
             game_state_log = log_data.get('game_state')
+            rewards_log = log_data.get('rewards')
 
             if any(data is None for data in [agent_pos_log, ball_pos_log, hoop_pos, orientation_log, done_log]):
                 print("FATAL: Log file is missing one or more required data arrays.")
@@ -1402,9 +1462,27 @@ class ViewerClass:
                     agent_pos_frame = agent_pos_log[step_index][world_num]
                     ball_pos_frame = ball_pos_log[step_index][world_num]
                     orientation_frame = orientation_log[step_index][world_num]
+                    
+                    # Get rewards for this frame if available
+                    rewards_frame = None
+                    if rewards_log is not None and step_index < len(rewards_log):
+                        rewards_frame = rewards_log[step_index][world_num]
 
                     episodes_completed_at_this_step = episodes_completed_log[step_index]
-                    self.draw_scene_dynamic(agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step[world_num], current_playback_episode, trail_surface, world_num, fading_trails, 0, max(episode_lengths) if episode_lengths else 1)
+                    self.draw_scene_dynamic(agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step[world_num], current_playback_episode, trail_surface, world_num, fading_trails, 0, max(episode_lengths) if episode_lengths else 1, rewards_frame)
+
+                # Create playback data for status text display (using world 0 for agent status)
+                if num_worlds > 0:
+                    step_index = episode_breaks[0][current_playback_episode]['start'] + episode_step
+                    if step_index < num_steps:
+                        
+                        playback_data = {
+                            'agent_pos': [agent_pos_log[step_index][0]] if agent_pos_log is not None else None,
+                            'rewards': rewards_log[step_index] if rewards_log is not None else None,
+                            'actions': actions_log[step_index] if actions_log is not None else None,
+                            'done': [[False, False]] if step_index < num_steps else None  # Simple done status for display
+                        }
+                        self.draw_agent_status_text(playback_data)
 
                 if game_state_log is not None and num_worlds > 0:
                     step_index = episode_breaks[0][current_playback_episode]['start'] + episode_step
