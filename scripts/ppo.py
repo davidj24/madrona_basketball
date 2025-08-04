@@ -23,19 +23,17 @@ class Args:
     seed: int = 1
     torch_deterministic: bool = True
     use_gpu: bool = True
-    full_viewer: bool = False # This runs the viewer constantly, causing 4x slowdown
-    viewer: bool = True # This saves the trajectories but runs at full speed
+    full_viewer: bool = False
+    viewer: bool = True
     log_every_n_iterations: int = 200
     save_model_every_n_iterations: int = 500
 
-    # Wandb
     env_id: str = "MadronaBasketball"
     wandb_track: bool = True
     wandb_project_name: str = "MadronaBasketballPPO"
-    wandb_entity: str = None
+    wandb_entity: Optional[str] = None
     model_name: Optional[str] = None
 
-    # Algorithm specific arguments
     num_iterations: int = 100_000
     num_envs: int = 8192
     num_rollout_steps: int = 16
@@ -51,9 +49,8 @@ class Args:
     ent_coef: float = 0.01
     vf_coef: float = 0.5
     max_grad_norm: float = 0.5
-    target_kl: float = None
+    target_kl: Optional[float] = None
 
-    # Self Play
     trainee_idx: Optional[int] = 0
     trainee_checkpoint_path: Optional[str] = None
     frozen_checkpoint_path: Optional[str] = None
@@ -67,21 +64,17 @@ if __name__ == "__main__":
     args = tyro.cli(Args)
     args.rollout_batch_size = int(args.num_envs * args.num_rollout_steps)
     args.minibatch_size = int(args.rollout_batch_size // args.num_minibatches)
-    if args.model_name:
-        model_name = args.model_name
-    else:
-        model_name = f"{args.env_id}__{args.seed}__{int(time.time())}"
+    model_name = args.model_name if args.model_name else f"{args.env_id}__{args.seed}__{int(time.time())}"
 
-    is_recording = False # For recording one episode every N iterations
+    is_recording = False
     is_waiting_for_new_episode = False
     recorded_trajectory = []
-    static_log = {} # For the hoops
+    static_log = {}
     
 
     # ======================================== Weights and Biases ========================================
     if args.wandb_track:
         import wandb
-
         wandb.init(
             project=args.wandb_project_name,
             entity=args.wandb_entity,
@@ -99,16 +92,13 @@ if __name__ == "__main__":
     )
 
 
-
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
-    device = torch.device(
-        "cuda" if torch.cuda.is_available() and args.use_gpu else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() and args.use_gpu else "cpu")
 
-    # Environment setup
     envs = EnvWrapper(args.num_envs, use_gpu=args.use_gpu, frozen_path=args.frozen_checkpoint_path, gpu_id=0, viewer=args.full_viewer, trainee_agent_idx=args.trainee_idx)
     obs_size = envs.get_input_dim()
     act_size = envs.get_action_space_size()
@@ -126,19 +116,14 @@ if __name__ == "__main__":
     print(f"   Environments: {args.num_envs}")
     print("="*60)
 
-    agent = Agent(obs_size, num_channels=64, num_layers=3,
-                  action_buckets=action_buckets).to(device)
-    if (args.trainee_checkpoint_path is not None):
+    agent = Agent(obs_size, num_channels=64, num_layers=3, action_buckets=action_buckets).to(device)
+    if args.trainee_checkpoint_path is not None:
         agent.load(args.trainee_checkpoint_path)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
-    # Initialize SimpleControllerManager for interactive training
     controller_manager = SimpleControllerManager(agent, device)
-    
-    # Connect controller manager to environment for interactive training
     envs.set_controller_manager(controller_manager)
     
-    # Print interactive training instructions if viewer is enabled
     if args.full_viewer:
         print("\n" + "="*60)
         print("🎮 INTERACTIVE TRAINING MODE ENABLED")
@@ -159,7 +144,6 @@ if __name__ == "__main__":
         print("="*60)
         print("Training will proceed normally. Use H to take control when needed.\n")
 
-    # Storage setup
     obs = torch.zeros((args.num_rollout_steps, args.num_envs, obs_size)).to(device)
     actions = torch.zeros((args.num_rollout_steps, args.num_envs, act_size)).to(device)
     log_probs = torch.zeros((args.num_rollout_steps, args.num_envs, act_size)).to(device)
@@ -188,11 +172,7 @@ if __name__ == "__main__":
                 viewer_process = None
 
 
-
-
-
         # ======================================== Start Training ========================================
-        
         stats = PPOStats()
         global_step = 0
         start_time = time.time()
@@ -202,13 +182,11 @@ if __name__ == "__main__":
         
         static_log['hoop_pos'] = envs.worlds.hoop_pos_tensor().to_torch().cpu().numpy().copy()
         for iteration in range(1, args.num_iterations + 1):
-            # Annealing the rate
             if args.anneal_lr:
                 frac = 1.0 - (iteration - 1.0) / args.num_iterations
                 lr_now = frac * args.learning_rate
                 optimizer.param_groups[0]["lr"] = lr_now
 
-            # Begin rollouts
             for step in range(0, args.num_rollout_steps):
                 global_step += args.num_envs
                 obs[step] = next_obs
@@ -223,7 +201,6 @@ if __name__ == "__main__":
 
                 if (hasattr(envs, 'viewer') and envs.viewer is not None and 
                     controller_manager.is_human_control_active()):
-                    # Get human action for world 0 and the selected agent
                     try:
                         selected_agent_idx = envs.viewer.get_selected_agent_index()
                         human_action_world_0 = controller_manager.get_action(next_obs[0], envs.viewer)
@@ -233,8 +210,6 @@ if __name__ == "__main__":
                         next_obs, reward, next_done = envs.step(rl_action)
                 else:
                     next_obs, reward, next_done = envs.step(rl_action)
-
-
 
 
                 # ======================================== Logging ========================================
@@ -248,7 +223,7 @@ if __name__ == "__main__":
                         "agent_possession" : envs.worlds.agent_possession_tensor().to_torch()[:1].cpu().numpy().copy(),
                         "game_state" : envs.worlds.game_state_tensor().to_torch()[:1].cpu().numpy().copy(),
                         "rewards" : envs.worlds.reward_tensor().to_torch()[:1].cpu().numpy().copy(),
-                        "actions" : envs.worlds.action_tensor().to_torch()[:1].cpu().numpy().copy(), # Local because we are tracking the policy actions not the action component from the environment
+                        "actions" : envs.worlds.action_tensor().to_torch()[:1].cpu().numpy().copy(),
                         "done": dones[step][:1].cpu().numpy().copy()
                     }
                     recorded_trajectory.append(log_entry)
@@ -276,11 +251,7 @@ if __name__ == "__main__":
 
 
                 rewards[step] = reward.view(-1)
-                # time.sleep(1)
 
-
-
-            # bootstrap value if not done
             with torch.no_grad():
                 next_value = agent.get_value(next_obs).reshape(1, -1)
                 advantages = torch.zeros_like(rewards).to(device)
@@ -296,7 +267,6 @@ if __name__ == "__main__":
                     advantages[t] = last_gae_lam = delta + args.gamma * args.gae_lambda * next_nonterminal * last_gae_lam
                 returns = advantages + values
 
-            # Flatten the batch
             b_obs = obs.reshape((-1, obs_size))
             b_logprobs = log_probs.reshape((-1, act_size))
             b_actions = actions.reshape((-1, act_size))
@@ -304,39 +274,32 @@ if __name__ == "__main__":
             b_returns = returns.reshape(-1)
             b_values = values.reshape(-1)
 
-            # Optimization steps
             b_inds = np.arange(args.rollout_batch_size)
             clip_fracs = []
             for epoch in range(args.update_epochs):
-                # Sample minibatches
                 np.random.shuffle(b_inds)
                 for start in range(0, args.rollout_batch_size, args.minibatch_size):
                     end = start + args.minibatch_size
                     mb_inds = b_inds[start:end]
 
-                    new_log_prob, entropy, new_value = agent.get_stats(
-                        b_obs[mb_inds], b_actions[mb_inds])
+                    new_log_prob, entropy, new_value = agent.get_stats(b_obs[mb_inds], b_actions[mb_inds])
                     log_ratio = new_log_prob - b_logprobs[mb_inds]
                     ratio = log_ratio.exp()
 
                     with torch.no_grad():
-                        # calculate approx_kl http://joschu.net/blog/kl-approx.html
                         old_approx_kl = (-log_ratio).mean()
                         approx_kl = ((ratio - 1) - log_ratio).mean()
                         clip_fracs += [((ratio - 1.0).abs() > args.clip_coef).float().mean().item()]
 
                     mb_advantages = b_advantages[mb_inds]
                     if args.norm_adv:
-                        mb_advantages = (mb_advantages - mb_advantages.mean()) / (
-                                    mb_advantages.std() + 1e-8)
+                        mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
 
-                    # Policy loss
                     mb_advantages = mb_advantages.reshape(-1, 1)
                     pg_loss1 = -ratio * mb_advantages
                     pg_loss2 = -torch.clamp(ratio, 1 - args.clip_coef, 1 + args.clip_coef) * mb_advantages
                     pg_loss = torch.max(pg_loss1, pg_loss2).mean()
 
-                    # Value loss
                     new_value = new_value.view(-1)
                     if args.clip_vloss:
                         v_loss_unclipped = (new_value - b_returns[mb_inds]) ** 2
@@ -359,7 +322,6 @@ if __name__ == "__main__":
                     nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
                     optimizer.step()
 
-                    # Update the stats
                     returns_mean, returns_stdev = torch.var_mean(b_returns[mb_inds])
                     rewards_mean, rewards_min, rewards_max = rewards.mean(), rewards.min(), rewards.max()
                     stats.update(loss.item(), pg_loss.item(), v_loss.item(), entropy_loss.item(),
@@ -367,9 +329,9 @@ if __name__ == "__main__":
                                 rewards_min.item(), rewards_max.item())
 
 
-                # Break if the approximate KL divergence exceeds the target
                 if args.target_kl is not None and approx_kl > args.target_kl:
                     break
+
 
             # TRY NOT TO MODIFY: record rewards for plotting purposes
             writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
@@ -381,7 +343,6 @@ if __name__ == "__main__":
             writer.add_scalar("losses/clipfrac", np.mean(clip_fracs), global_step)
             writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
-            # Print every 100 update iterations
             if iteration % 100 == 0:
                 p_advantages = b_advantages.reshape(-1)
                 p_values = b_values.reshape(-1)
@@ -404,7 +365,6 @@ if __name__ == "__main__":
                 is_waiting_for_new_episode = True
 
 
-            # Every 100 iterations, save the model
             if iteration % args.save_model_every_n_iterations == 0:
                 folder = "checkpoints"
                 if not os.path.exists(folder):
@@ -430,11 +390,10 @@ if __name__ == "__main__":
         if viewer_process is not None:
             print(f"Terminating viewer process (PID: {viewer_process.pid})...")
             
-            # Check if process is still running
-            if viewer_process.poll() is None:  # None means process is still running
+            if viewer_process.poll() is None:
                 viewer_process.terminate()
                 try:
-                    viewer_process.wait(timeout=5)  # Wait up to 5 seconds for clean termination
+                    viewer_process.wait(timeout=5)
                     print("Viewer process terminated successfully")
                 except subprocess.TimeoutExpired:
                     print("Viewer process didn't terminate gracefully, forcing kill...")
@@ -444,6 +403,5 @@ if __name__ == "__main__":
             else:
                 print(f"Viewer process already exited with code: {viewer_process.returncode}")
         
-        # Close tensorboard writer
         writer.close()
         print("Cleanup completed")
