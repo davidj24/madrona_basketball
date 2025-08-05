@@ -1194,7 +1194,7 @@ class ViewerClass:
         paused = False
         running = True
         show_trails = False
-        show_rewards = False
+        show_rewards = True
         event_display_modes = ['Off', 'Current Episode', 'All Episodes']
         event_display_mode_idx = 0
         
@@ -1341,6 +1341,15 @@ class ViewerClass:
 
                 self.screen.blit(background, (0, 0))
                 
+                if game_state_log is not None and num_worlds > 0:
+                    step_index = episode_breaks[0][current_playback_episode]['start'] + episode_step
+                    if step_index < num_steps and len(game_state_log[step_index]) > 0:
+                        playback_data = {
+                            'game_state': game_state_log[step_index]
+                        }
+                        self.draw_score_display(playback_data)
+                        self.draw_inbound_clock(playback_data)
+
                 current_display_mode = event_display_modes[event_display_mode_idx]
                 
                 self.draw_events(parsed_events, event_def, current_playback_episode, current_display_mode)
@@ -1411,14 +1420,6 @@ class ViewerClass:
                         }
                         self.draw_agent_status_text(playback_data)
 
-                if game_state_log is not None and num_worlds > 0:
-                    step_index = episode_breaks[0][current_playback_episode]['start'] + episode_step
-                    if step_index < num_steps and len(game_state_log[step_index]) > 0:
-                        playback_data = {
-                            'game_state': game_state_log[step_index]
-                        }
-                        self.draw_score_display(playback_data)
-                        self.draw_inbound_clock(playback_data)
 
                 if is_multi_gen_mode:
                     status_text = f"Model: {current_filename} | Gen: {generation_idx}/{len(model_data_playlist)-1} | Ep: {current_playback_episode}/{total_episodes_in_log-1} | Step: {episode_step}"
