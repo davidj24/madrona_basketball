@@ -34,7 +34,7 @@ class Args:
     # Algorithm specific arguments
     num_iterations: int = 100_000
     num_envs: int = 8192
-    num_rollout_steps: int = 8
+    num_rollout_steps: int = 32
     learning_rate: float = 3e-4
     gamma: float = 0.95
     gae_lambda: float = 0.95
@@ -199,7 +199,7 @@ if __name__ == "__main__":
         # Advantages and bootstrap
         with torch.no_grad():
             # update observation normalizer
-            # agent.update_obs_normalizer(obs)
+            agent.update_obs_normalizer(obs)
 
             # invert value normalizer
             next_value = agent.get_value(next_obs).reshape(1, -1)

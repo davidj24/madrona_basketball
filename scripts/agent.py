@@ -121,7 +121,7 @@ class Agent(nn.Module):
 
     def norm_obs_backbone(self, obs):
         # normalize observations and run through backbone MLP
-        # obs_norm = self.ob_normalizer(obs)
+        obs = self.ob_normalizer(obs)
         x = self.backbone(obs)
         return x
 
