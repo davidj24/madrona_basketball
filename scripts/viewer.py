@@ -5,18 +5,19 @@ import sys
 import numpy as np
 import os
 import math
-import argparse
+import tyro
 import time
 
 import os
+from dataclasses import dataclass
+from typing import Optional
+
 os.environ['CUDA_VISIBLE_DEVICES'] = os.environ.get('CUDA_VISIBLE_DEVICES', '0')
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 sys.path.append(project_root)
-
-from src.constants import *
 
 try:
     import torch
@@ -36,6 +37,23 @@ except ImportError as e:
     print(f"✗ Failed to import Madrona C++ module: {e}")
     print("Make sure you've built the project first with 'cmake --build build'")
     sys.exit(1)
+
+
+from src.constants import *
+
+
+
+
+
+@dataclass
+class Args:
+    playback_log: Optional[str]=None
+    watch_model: Optional[str]=None
+    playback_log: Optional[str]=None
+    live_log_folder: Optional[str]=None
+    track_event: Optional[str]=None
+    fading_trails: bool=False
+
 
 def rotate_vec(q, v):
     scalar = q[0]
@@ -378,10 +396,6 @@ class ViewerClass:
                 self.screen.blit(action_surface, (10, y_offset))
                 y_offset += 25
 
-
-
-
-
     def draw_inbound_clock(self, data):
         if data is None or 'game_state' not in data:
             return
@@ -637,9 +651,6 @@ class ViewerClass:
         screen_x = self.world_offset_x + (meter_x * self.pixels_per_meter)
         screen_y = self.world_offset_y + (meter_y * self.pixels_per_meter)
         return int(screen_x), int(screen_y)
-
-    def step_simulation(self):
-        self.sim.step(); self.step_count += 1
 
     def reset_simulation(self):
         if hasattr(self, 'disable_action_input') and self.disable_action_input:
@@ -920,7 +931,17 @@ class ViewerClass:
         self.screen = original_screen
         return background
 
-    def draw_scene_dynamic(self, agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step_for_world, current_playback_episode, trail_surface, world_num, fading_trails=False, current_step=0, max_episode_length=1, rewards_frame=None):
+    def draw_scene_dynamic(self, agent_pos_frame, 
+                           ball_pos_frame, 
+                           orientation_frame, 
+                           episodes_completed_at_this_step_for_world, 
+                           current_playback_episode, 
+                           trail_surface, 
+                           world_num, 
+                           fading_trails=False, 
+                           current_step=0, 
+                           max_episode_length=1, 
+                           rewards_frame=None):
         """
         Draws dynamic elements (agents and balls) during trajectory playback,
         but only for worlds that have not yet completed the current target episode number.
@@ -1002,6 +1023,90 @@ class ViewerClass:
                 world_num_rect = world_num_surface.get_rect(center=(screen_x, screen_y))
                 self.screen.blit(world_num_surface, world_num_rect)
 
+    def load_and_parse_log(self, log_path, event_to_track="shoot"):
+        """"""
+        try:
+            log_data = np.load(log_path, allow_pickle=True)
+            agent_pos_log = log_data.get('agent_pos')
+            ball_pos_log = log_data.get('ball_pos')
+            hoop_pos = log_data.get('hoop_pos')
+            orientation_log = log_data.get('orientation')
+            ball_physics_log = log_data.get('ball_physics')
+            actions_log = log_data.get('actions')
+            done_log = log_data.get('done')
+            game_state_log = log_data.get('game_state')
+            rewards_log = log_data.get('rewards')
+
+            if any(data is None for data in [agent_pos_log, ball_pos_log, hoop_pos, orientation_log, done_log]):
+                print("FATAL: Log file is missing one or more required data arrays.")
+                return
+        
+            num_steps, num_worlds, num_agents, _ = agent_pos_log.shape
+
+
+            episode_breaks = [[] for _ in range(num_worlds)]
+            for world_num in range(num_worlds):
+                last_done_step = -1
+                for step_num in range(1, num_steps):
+                    if (done_log[step_num][world_num] > 0):
+                        episode_breaks[world_num].append({'start': last_done_step + 1, 'end': step_num})
+                        last_done_step = step_num
+
+
+
+            parsed_events = []
+            event_def = EVENT_DEFINITIONS.get(event_to_track)
+            episodes_completed_log = np.cumsum(done_log, axis=0)
+
+            if event_def and actions_log is not None and ball_physics_log is not None and 'agent_possession' in log_data:
+                action_idx = event_def['action_idx']
+                conditions_func = event_def.get('conditions')
+                outcome_func = event_def.get('outcome_func')
+
+        
+                for step in range(1, num_steps):
+                    for world in range(num_worlds):
+                        for agent in range(num_agents):
+                            if actions_log[step, world, agent, action_idx] == 1 and actions_log[step-1, world, agent, action_idx] == 0:
+                                if conditions_func is None or conditions_func(log_data, step, world, agent):
+                                    ball_physics_at_event = ball_physics_log[step, world, 0]
+                                    outcome = outcome_func(log_data, step, world)
+
+                                    current_episode = int(episodes_completed_log[step, world])
+                                    parsed_events.append({
+                                        'pos' : agent_pos_log[step, world, agent],
+                                        'outcome' : outcome,
+                                        'episode_idx' : current_episode
+                                    })
+
+            total_episodes = max(len(markers) for markers in episode_breaks) if any(episode_breaks) else 0
+
+            return {
+                "log_data" : log_data,
+                "agent_pos_log" : agent_pos_log,
+                "ball_pos_log": ball_pos_log,
+                "hoop_pos" : hoop_pos,
+                "orientation_log" :orientation_log,
+                "ball_physics_log" : ball_physics_log ,
+                "actions_log" : actions_log,
+                "done_log" : done_log,
+                "game_state_log" : game_state_log,
+                "rewards_log" : rewards_log,
+                "episode_breaks": episode_breaks,
+                "parsed_events": parsed_events,
+                "episodes_completed_log": episodes_completed_log,
+                "total_episodes": total_episodes,
+                "num_worlds": num_worlds,
+                "num_agents": num_agents,
+                "num_steps": num_steps,
+            }
+        
+        except Exception as e:
+            print(f"Error loading or parsing file: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+                        
     def run_trajectory_playback(self, log_path, fading_trails=False, event_to_track="shoot", watching_training=False):
         """
         Loads a trajectory log file and plays back multiple episodes, pausing
@@ -1408,6 +1513,262 @@ class ViewerClass:
             traceback.print_exc()
             return
 
+    def multi_gen_run_trajectory_playback(self, model_name, fading_trails=False, event_to_track="shoot", watching_training=False):
+        """
+        Loads a trajectory log file and plays back multiple episodes, pausing
+        between each one and waiting for user input to continue.
+        """
+        try:
+            model_directory = f"logs/mgi/{model_name}_"
+            print(f"Getting all logs of {model_name}")
+            try:
+                sorted_model_files = sorted([os.path.join(model_directory, f) for f in os.listdir(model_directory) if f.endswith(".npz")])
+                if sorted_model_files[-1].endswith("initial"):
+                    initial_file = sorted_model_files.pop(-1)
+                    sorted_model_files.insert(0, initial_file)
+                print(sorted_model_files)
+
+                print(f"The code at least made it this far")
+                model_data_playlist = [self.load_and_parse_log(file, event_to_track=args.track_event) for file in sorted_model_files]
+                model_data_playlist = [_ for _ in model_data_playlist if _ is not None]
+                if not model_data_playlist: 
+                    print(f"No model multi-gen-inference logs were found. Exiting.")
+                    return
+            
+
+            except Exception as e:
+                print(f"Error loading {model_name}.")
+                return
+            
+            generation_idx = 0
+            episode_step = 0
+            current_playback_episode = 0
+            is_paused_for_next_episode = False
+            paused = False
+            running = True
+            show_trails = False
+            event_display_modes = ['Off', 'Current Episode', 'All Episodes']
+            event_display_mode_idx = 0
+            event_def = EVENT_DEFINITIONS.get(args.track_event)
+            current_gen_data = model_data_playlist[generation_idx]
+
+            episode_lengths = [
+                world_info[current_playback_episode]['end'] - world_info[current_playback_episode]['start'] 
+                for world_info in model_data_playlist[generation_idx]['episode_breaks']
+                if len(world_info) > current_playback_episode and current_playback_episode < len(world_info)
+            ]
+            background = self.draw_scene_static(model_data_playlist[generation_idx]['hoop_pos'])
+            trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+
+
+
+
+            while running:
+                for event in pygame.event.get():
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                        running = False
+                    if event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_SPACE:
+                            paused = not paused
+                            print("Paused" if paused else "Playing")
+                        elif event.key == pygame.K_b:
+                            keys = pygame.key.get_pressed()
+                            if (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) and generation_idx >= 0:
+                                generation_idx -= 1
+                                episode_step = 0
+                                current_gen_data = model_data_playlist[generation_idx]
+                                if not fading_trails:
+                                    trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+                                print(f"Shift and episode changer was detected. Changing generation to {generation_idx}")
+
+                            else:
+                                if current_playback_episode > 0:
+                                    current_playback_episode -= 1
+                                    if not fading_trails:
+                                        trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+                                    episode_lengths = [
+                                        world_info[current_playback_episode]['end'] - world_info[current_playback_episode]['start'] 
+                                        for world_info in current_gen_data['episode_breaks'] 
+                                        if len(world_info) > current_playback_episode
+                                    ]
+                                    print(f"Now, current episode is: {current_playback_episode} and the max lengths are: {episode_lengths}")
+                                    is_paused_for_next_episode = False
+                                    paused = False
+                                    episode_step = 0
+                                    print(f"Playing Episode {current_playback_episode}")
+                        elif event.key == pygame.K_n:
+                            keys = pygame.key.get_pressed()
+                            if (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) and generation_idx < len(model_data_playlist) - 1:
+                                generation_idx += 1
+                                episode_step = 0
+                                current_gen_data = model_data_playlist[generation_idx]
+                                if not fading_trails:
+                                    trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+                                print(f"Shift and episode changer was detected. Changing generation to {generation_idx}")
+                                
+                            else:
+                                if current_playback_episode < current_gen_data['total_episodes']-1:
+                                    current_playback_episode += 1
+                                    if not fading_trails:
+                                        trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+                                    episode_lengths = [
+                                        world_info[current_playback_episode]['end'] - world_info[current_playback_episode]['start'] 
+                                        for world_info in current_gen_data['episode_breaks'] 
+                                        if len(world_info) > current_playback_episode and current_playback_episode < len(world_info)
+                                    ]
+                                    print(f"Now, current episode is: {current_playback_episode} and the max lengths are: {episode_lengths}")
+                                    is_paused_for_next_episode = False
+                                    paused = False
+                                    episode_step = 0
+                                    print(f"Playing Episode {current_playback_episode}")
+                        elif event.key == pygame.K_t:
+                            show_trails = not show_trails
+                        elif event.key == pygame.K_c:
+                            keys = pygame.key.get_pressed()
+                            if keys[pygame.K_LSHIFT or pygame.K_RSHIFT]:
+                                event_display_mode_idx = 2 if event_display_mode_idx != 2 else 0
+                            else:
+                                event_display_mode_idx = 1 if event_display_mode_idx != 1 else 0
+                            print(f"Event chart mode: {event_display_modes[event_display_mode_idx]}")
+                        elif event.key == pygame.K_r:
+                            episode_step = 0
+                        elif event.key == pygame.K_PERIOD:
+                            episode_step += 1 if episode_step < max(episode_lengths) else 0
+                        elif event.key == pygame.K_COMMA:
+                            episode_step -= 1 if episode_step > 0 else 0
+                # Holdable key presses
+                keys = pygame.key.get_pressed()
+                if keys[pygame.K_LEFT]:
+                    is_paused_for_next_episode = False
+                    episode_step = max(0, episode_step-1 if not keys[pygame.K_LSHIFT] else episode_step-5)
+                if keys[pygame.K_RIGHT]:
+                    episode_step = min(max(episode_lengths), episode_step+1 if not keys[pygame.K_LSHIFT] else episode_step+5)
+
+
+
+
+                if current_gen_data['game_state_log'] is not None and current_gen_data['num_worlds'] > 0:
+                    step_index = current_gen_data['episode_breaks'][0][current_playback_episode]['start'] + episode_step
+                    if step_index < current_gen_data['num_steps'] and len(current_gen_data['game_state_log'][step_index]) > 0:
+                        playback_data = {
+                            'game_state': current_gen_data['game_state_log'][step_index]
+                        }
+                        self.draw_score_display(playback_data)
+                        self.draw_inbound_clock(playback_data)
+
+                self.screen.blit(background, (0, 0))
+                
+                current_display_mode = event_display_modes[event_display_mode_idx]
+                
+                self.draw_events(current_gen_data['parsed_events'], event_def, current_playback_episode, current_display_mode)
+                
+                if show_trails:
+                    if fading_trails:
+                        max_episode_length = max(episode_lengths) if episode_lengths else 1
+                        
+                        # Draw fading trails
+                        for trail_step in range(max(0, episode_step - max_episode_length + 1), episode_step + 1):
+                            if trail_step < 0:
+                                continue
+                            for world_num in range(num_worlds):
+                                # Ensure this world has the current episode before accessing it
+                                if len(episode_breaks[world_num]) <= current_playback_episode:
+                                    continue  # Skip this world if it doesn't have this episode
+                                    
+                                if trail_step + episode_breaks[world_num][current_playback_episode]['start'] >= num_steps:
+                                    continue
+                                trail_agent_pos = agent_pos_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step][world_num]
+                                trail_episodes_completed = episodes_completed_log[episode_breaks[world_num][current_playback_episode]['start'] + trail_step]
+                                
+                                # Draw fading trail points directly for this step
+                                if trail_episodes_completed[world_num] == current_playback_episode:
+                                    num_agents, _ = trail_agent_pos.shape
+                                    for agent_idx in range(num_agents):
+                                        pos = trail_agent_pos[agent_idx]
+                                        screen_x, screen_y = self.meters_to_screen(pos[0], pos[1])
+                                        
+                                        # Calculate fading color
+                                        base_trail_color = TEAM0_COLOR if agent_idx % 2 == 0 else TEAM1_COLOR
+                                        x = (episode_step - trail_step) / max_episode_length if max_episode_length > 0 else 0
+                                        faded_trail_color = tuple(int(x * 0.5 * c + (1 - x) * c) for c in base_trail_color)
+                                        pygame.draw.circle(self.screen, faded_trail_color, (screen_x, screen_y), 3)
+                    else:
+                        self.screen.blit(trail_surface, (0, 0))
+
+                for world_num in range(current_gen_data['num_worlds']):
+                    # Ensure this world has the current episode
+                    if len(current_gen_data['episode_breaks'][world_num]) <= current_playback_episode:
+                        continue  # Skip this world if it doesn't have this episode
+                        
+                    step_index = current_gen_data['episode_breaks'][world_num][current_playback_episode]['start'] + episode_step
+                    if step_index >= current_gen_data['num_steps']:
+                        continue  # Skip this world if we're beyond available data
+                        
+                    agent_pos_frame = current_gen_data['agent_pos_log'][step_index][world_num]
+                    ball_pos_frame = current_gen_data['ball_pos_log'][step_index][world_num]
+                    orientation_frame = current_gen_data['orientation_log'][step_index][world_num]
+                    
+                    # Get rewards for this frame if available
+                    rewards_frame = None
+                    if current_gen_data['rewards_log'] is not None and step_index < len(current_gen_data['rewards_log']):
+                        rewards_frame = current_gen_data['rewards_log'][step_index][world_num]
+
+                    episodes_completed_at_this_step = current_gen_data['episodes_completed_log'][step_index]
+                    self.draw_scene_dynamic(agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step[world_num], current_playback_episode, trail_surface, world_num, fading_trails, 0, max(episode_lengths) if episode_lengths else 1, rewards_frame)
+
+                # Create playback data for status text display (using world 0 for agent status)
+                if current_gen_data['num_worlds'] > 0:
+                    step_index = current_gen_data['episode_breaks'][0][current_playback_episode]['start'] + episode_step
+                    if step_index < current_gen_data['num_steps']:
+                        
+                        playback_data = {
+                            'agent_pos': [current_gen_data['agent_pos_log'][step_index][0]] if current_gen_data['agent_pos_log'] is not None else None,
+                            'rewards': current_gen_data['rewards_log'][step_index] if current_gen_data['rewards_log'] is not None else None,
+                            'actions': current_gen_data['actions_log'][step_index] if current_gen_data['actions_log'] is not None else None,
+                            'done': [[False, False]] if step_index < current_gen_data['num_steps'] else None  # Simple done status for display
+                        }
+                        self.draw_agent_status_text(playback_data)
+
+                
+
+                # Draw status text
+                status_text = f"Viewing Episode: {current_playback_episode}/{current_gen_data['total_episodes']-1} | step: {episode_step}"
+                if is_paused_for_next_episode:
+                    status_text += f" | Press 'N' for Next Episode || max episode length is: {max(episode_lengths)}"
+                elif paused:
+                    status_text += " | Paused"
+                status_text += f" | Trails: {'On' if show_trails else 'Off'}"
+                status_text += f" | Events: {current_display_mode}"
+                text_surface = self.font.render(status_text, True, (255, 255, 0))
+                self.screen.blit(text_surface, (10, 10))
+                controls_text = f"Pause: Space | FF: shift + right | Trails: T | Events: C/ShiftC | frame by frame: , or ."
+                controls_surface = self.font.render(controls_text, True, (255, 255, 255))
+                self.screen.blit(controls_surface, (10, WINDOW_HEIGHT-30))
+
+                pygame.display.flip()
+
+                if not paused and not is_paused_for_next_episode:
+                    episode_step += 1
+
+                max_episode_length = max(episode_lengths) if episode_lengths else 0
+                
+                if episode_step >= max_episode_length:
+                    if watching_training:
+                        # For training: exit when episode ends (since training logs only have 1 episode)
+                        running = False
+                    else:
+                        # For inference: pause and wait for user input to continue to next episode
+                        paused = True
+                        is_paused_for_next_episode = True
+
+                self.clock.tick(60)
+
+        except Exception as e:
+            print(f"Error in trajectory playback: {e}")
+            import traceback
+            traceback.print_exc()
+            return
+
     def watch_training(self, log_directory, fading_trails=False, event_to_track="shoot"):
         print(f"Watching logs from {log_directory}")
 
@@ -1445,21 +1806,22 @@ class ViewerClass:
         pygame.quit()
         sys.exit()
 
+    
+
+
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Madrona Basketball Viewer: Live Sim or Trajectory Playback")
-    parser.add_argument('--playback-log', type=str, default="logs/trajectories.npz", help="Path to an .npz trajectory log file for playback.")
-    parser.add_argument('--live-log-folder', type=str, help="Path to a folder that will be updated during training with new trajectories to playback")
-    parser.add_argument('--track-event', type=str, default="shoot", help="name of event to track: shoot, pass, grab, etc. Events defined in constants.py")
-    parser.add_argument('--fading-trails', action='store_true', default=False) # Darkening trails slow down performance, only use if necessary
-    args = parser.parse_args()
-
-
+    args = tyro.cli(Args)
+    if args.playback_log is None and args.watch_model is None:
+        print(f"You need either a playback log or a model evolution to watch.")
     viewer = ViewerClass()
     if args.live_log_folder:
         viewer.watch_training(args.live_log_folder, False, args.track_event)
     elif args.playback_log:
         viewer.run_trajectory_playback(args.playback_log, args.fading_trails, args.track_event, watching_training=False)
+    elif args.watch_model:
+        viewer.multi_gen_run_trajectory_playback(args.watch_model, event_to_track=args.track_event, watching_training=False)
     else:
         print("No playback log provided. To view trajectories, run with:")
         print("python viewer.py --playback-log path/to/your/log.npz")
