@@ -1085,15 +1085,7 @@ class ViewerClass:
 
             return {
                 "log_data" : log_data,
-                "agent_pos_log" : agent_pos_log,
-                "ball_pos_log": ball_pos_log,
-                "hoop_pos" : hoop_pos,
-                "orientation_log" :orientation_log,
-                "ball_physics_log" : ball_physics_log ,
-                "actions_log" : actions_log,
-                "done_log" : done_log,
-                "game_state_log" : game_state_log,
-                "rewards_log" : rewards_log,
+
                 "episode_breaks": episode_breaks,
                 "parsed_events": parsed_events,
                 "episodes_completed_log": episodes_completed_log,
@@ -1173,15 +1165,17 @@ class ViewerClass:
                 return
 
         # Extract data for easier access
-        agent_pos_log = current_gen_data['agent_pos_log']
-        ball_pos_log = current_gen_data['ball_pos_log']
-        hoop_pos = current_gen_data['hoop_pos']
-        orientation_log = current_gen_data['orientation_log']
-        ball_physics_log = current_gen_data['ball_physics_log']
-        actions_log = current_gen_data['actions_log']
-        done_log = current_gen_data['done_log']
-        game_state_log = current_gen_data['game_state_log']
-        rewards_log = current_gen_data['rewards_log']
+        agent_pos_log = current_gen_data['log_data'].get('agent_pos')
+        ball_pos_log = current_gen_data['log_data'].get('ball_pos')
+        hoop_pos = current_gen_data['log_data'].get('hoop_pos')
+        orientation_log = current_gen_data['log_data'].get('orientation')
+        ball_physics_log = current_gen_data['log_data'].get('ball_physics')
+        actions_log = current_gen_data['log_data'].get('actions')
+        done_log = current_gen_data['log_data'].get('done')
+        game_state_log = current_gen_data['log_data'].get('game_state')
+        rewards_log = current_gen_data['log_data'].get('rewards')
+
+
         episode_breaks = current_gen_data['episode_breaks']
         parsed_events = current_gen_data['parsed_events']
         episodes_completed_log = current_gen_data['episodes_completed_log']
@@ -1280,15 +1274,16 @@ class ViewerClass:
                                 current_filename = model_data_playlist[generation_idx]['filename']
                                 
                                 # Update all data references
-                                agent_pos_log = current_gen_data['agent_pos_log']
-                                ball_pos_log = current_gen_data['ball_pos_log']
-                                hoop_pos = current_gen_data['hoop_pos']
-                                orientation_log = current_gen_data['orientation_log']
-                                ball_physics_log = current_gen_data['ball_physics_log']
-                                actions_log = current_gen_data['actions_log']
-                                done_log = current_gen_data['done_log']
-                                game_state_log = current_gen_data['game_state_log']
-                                rewards_log = current_gen_data['rewards_log']
+                                agent_pos_log = current_gen_data['log_data'].get('agent_pos')
+                                ball_pos_log = current_gen_data['log_data'].get('ball_pos')
+                                hoop_pos = current_gen_data['log_data'].get('hoop_pos')
+                                orientation_log = current_gen_data['log_data'].get('orientation')
+                                ball_physics_log = current_gen_data['log_data'].get('ball_physics')
+                                actions_log = current_gen_data['log_data'].get('actions')
+                                done_log = current_gen_data['log_data'].get('done')
+                                game_state_log = current_gen_data['log_data'].get('game_state')
+                                rewards_log = current_gen_data['log_data'].get('rewards')
+
                                 episode_breaks = current_gen_data['episode_breaks']
                                 parsed_events = current_gen_data['parsed_events']
                                 episodes_completed_log = current_gen_data['episodes_completed_log']
