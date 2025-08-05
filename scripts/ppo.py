@@ -112,7 +112,7 @@ if __name__ == "__main__":
     print(f"   Environments: {args.num_envs}")
     print("="*60)
 
-    agent = Agent(obs_size, num_channels=256, num_layers=3,
+    agent = Agent(obs_size, num_channels=256, num_layers=2,
                   action_buckets=action_buckets).to(device)
     if (args.trainee_checkpoint_path is not None):
         agent.load(args.trainee_checkpoint_path)
@@ -207,12 +207,11 @@ if __name__ == "__main__":
         # Advantages and bootstrap
         with torch.no_grad():
             # update observation normalizer
-            obs_raw = agent.unnorm_obs(obs.view(-1, obs.size(-1)))
-            agent.update_obs_normalizer(obs_raw)
+            agent.update_obs_normalizer(obs.view(-1, obs.size(-1)))
 
             # invert value normalizer
-            values = agent.unnorm_value(values)
             next_value = agent.get_value(next_obs).reshape(1, -1)
+            values = agent.unnorm_value(values)
             next_value = agent.unnorm_value(next_value)
 
             # bootstrap value if not done
@@ -341,6 +340,7 @@ if __name__ == "__main__":
             print(f"    Advantages       => Avg: {p_advantages.mean(): .3f}, Min: {p_advantages.min(): .3f}, Max: {p_advantages.max(): .3f}")
             print(f"    Returns          => Avg: {stats.returns_mean}")
             stats.reset()
+            ppo_timer.reset()
 
             update_timer_start = time.perf_counter()
 

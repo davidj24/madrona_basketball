@@ -79,7 +79,7 @@ class PPOTimer:
         self.t_iter += elapsed
         self.iter_start = None
 
-    def _reset_iter_timer(self):
+    def reset(self):
         self.t_iter = 0.0
         self.t_sim = 0.0
         self.t_inference = 0.0
@@ -88,7 +88,6 @@ class PPOTimer:
         self.iter_step = 0
 
     def start_rollout(self):
-        self._reset_iter_timer()
         self.rollout_start = perf_counter()
 
     def end_rollout(self):

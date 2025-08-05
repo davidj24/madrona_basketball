@@ -30,7 +30,7 @@ def infer(args):
     action_buckets = environment.get_action_buckets()
 
     # Load policy
-    policy = Agent(input_dimensions, num_channels=64, num_layers=3, action_buckets=action_buckets).to(device)
+    policy = Agent(input_dimensions, num_channels=256, num_layers=2, action_buckets=action_buckets).to(device)
     policy.load(args.checkpoint_0)
     policy.eval()
     print(f"Successfully loaded policies from {args.checkpoint_0}.")
