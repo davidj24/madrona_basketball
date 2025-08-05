@@ -1249,6 +1249,8 @@ class ViewerClass:
                                     for world_info in episode_breaks 
                                     if len(world_info) > current_playback_episode and current_playback_episode < len(world_info)
                                 ]
+                                is_paused_for_next_episode = False
+                                paused = False
                                 print(f"Changed to generation {generation_idx}")
                             else:
                                 # Regular episode navigation
@@ -1300,6 +1302,8 @@ class ViewerClass:
                                     for world_info in episode_breaks 
                                     if len(world_info) > current_playback_episode and current_playback_episode < len(world_info)
                                 ]
+                                is_paused_for_next_episode = False
+                                paused = False
                                 print(f"Changed to generation {generation_idx}")
                             else:
                                 # Regular episode navigation
