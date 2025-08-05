@@ -29,10 +29,10 @@ class Args:
     save_model_every_n_iterations: int = 500
 
     env_id: str = "MadronaBasketball"
-    wandb_track: bool = True
+    wandb_track: bool = False
     wandb_project_name: str = "MadronaBasketballPPO"
     wandb_entity: Optional[str] = None
-    model_name: Optional[str] = None
+    model_name: Optional[str] = "Model"
 
     num_iterations: int = 100_000
     num_envs: int = 8192

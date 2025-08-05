@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 import tyro
+import os
+import random
 
 
 import madrona_basketball as mba
@@ -19,13 +21,16 @@ warnings.filterwarnings("error")
 
 @dataclass
 class Args:
-    checkpoint_0: str
-    checkpoint_1: Optional[str]
+    model_name: Optional[str]=None # This is for inferring all versions of a model
+    trainee_idx: int=1
+    trainee_checkpoint: Optional[str]=None # The model you want to evaluate
+    frozen_checkpoint: Optional[str]=None
     log_path: Optional[str]="logs/trajectories.npz"
     max_steps: int=10000
     num_episodes: int=5
     stochastic: bool=True
     viewer: bool=False
+    test_seed: int=0
 
     discrete_x: int=20
     discrete_y: int=15
@@ -157,7 +162,41 @@ def infer(device, environment, policy, log_path: str = "logs/trajectories.npz", 
         print(f"Finished logging. Trajectory saved to {log_path}")
     print("Inference Complete")
 
+
+def multi_gen_infer(device):
+    """Saves inferences of all versions of a given model underneath logs/model_name"""
+    checkpoint_dir = "checkpoints"
+    all_files = os.listdir(checkpoint_dir)
+    print(f"All files in {checkpoint_dir}: {all_files}")
     
+    checkpoints_to_test = sorted([f for f in all_files if f.startswith(f"{args.model_name}_") and f.endswith(".pth")])
+    print(f"Found {len(checkpoints_to_test)} different models to test: {checkpoints_to_test}")
+    
+    if len(checkpoints_to_test) == 0:
+        print(f"No checkpoints found matching pattern '{args.model_name}_*.pth'")
+        return
+
+
+
+    # Testing loop
+    for checkpoint_name in checkpoints_to_test:
+        checkpoint_path = os.path.join(checkpoint_dir, checkpoint_name)
+        log_path = f"logs/mgi/{args.model_name}_/{checkpoint_name.replace('.pth', '.npz')}"
+        
+        print(f"Testing checkpoint: {checkpoint_path}")
+        print(f"Saving results to: {log_path}")
+
+        torch.manual_seed(args.test_seed)
+        np.random.seed(args.test_seed)
+        random.seed(args.test_seed)
+
+        environment = EnvWrapper(num_worlds=args.num_envs, frozen_path=args.frozen_checkpoint, viewer=False, trainee_agent_idx=args.trainee_idx)
+        evaluated_agent = Agent(environment.get_input_dim(), num_channels=64, num_layers=3, action_buckets=environment.get_action_buckets()).to(device)
+        evaluated_agent.load(checkpoint_path)
+
+        infer(device, environment, evaluated_agent, log_path, args.num_episodes, args.max_steps, args.stochastic)
+
+
 
 
 if __name__ == "__main__":
@@ -166,20 +205,24 @@ if __name__ == "__main__":
     print(f"Using {device} for inference")
 
 
-    # Create environment
-    environment = EnvWrapper(args.num_envs, args.gpu_sim, frozen_path=args.checkpoint_1, gpu_id=args.gpu_id, viewer=args.viewer)
-    input_dimensions = environment.get_input_dim()
-    action_buckets = environment.get_action_buckets()
+    if args.model_name is None:
+        # Single model inference
+        environment = EnvWrapper(args.num_envs, args.gpu_sim, frozen_path=args.frozen_checkpoint, gpu_id=args.gpu_id, viewer=args.viewer)
+        input_dimensions = environment.get_input_dim()
+        action_buckets = environment.get_action_buckets()
 
-    # Load policy
-    policy = Agent(input_dimensions, num_channels=64, num_layers=3, action_buckets=action_buckets).to(device)
-    policy.load(args.checkpoint_0)
+        # Load policy
+        policy = Agent(input_dimensions, num_channels=64, num_layers=3, action_buckets=action_buckets).to(device)
+        policy.load(args.trainee_checkpoint)
 
-    # Print interactive inference instructions if viewer is enabled
-    if args.viewer:
-        print("🎮 Interactive mode: Press 'H' to toggle human control for selected agent in World 0")
+        # Print interactive inference instructions if viewer is enabled
+        if args.viewer:
+            print("🎮 Interactive mode: Press 'H' to toggle human control for selected agent in World 0")
 
-    infer(device, environment, policy, "logs/inference_trajectories.npz", stochastic=args.stochastic)
+        infer(device, environment, policy, "logs/inference_trajectories.npz", stochastic=args.stochastic)
+    else:
+        # Multi-generation inference
+        multi_gen_infer(device)
 
 
     
