@@ -13,7 +13,7 @@ from typing import Optional
 
 from agent import Agent
 from env import EnvWrapper
-from ppo_stats import PPOStats
+from ppo_stats import PPOStats, PPOTimer
 from controllers import SimpleControllerManager
 
 
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     print(f"   Environments: {args.num_envs}")
     print("="*60)
 
-    agent = Agent(obs_size, num_channels=64, num_layers=3,
+    agent = Agent(obs_size, num_channels=256, num_layers=3,
                   action_buckets=action_buckets).to(device)
     if (args.trainee_checkpoint_path is not None):
         agent.load(args.trainee_checkpoint_path)
@@ -155,13 +155,13 @@ if __name__ == "__main__":
 
     # Train start
     stats = PPOStats()
-    global_step = 0
-    start_time = time.time()
-    update_timer_start = time.perf_counter()
+    ppo_timer = PPOTimer()
 
     next_obs, _, _ = envs.reset()
     next_done = torch.zeros(args.num_envs).to(device)
     for iteration in range(1, args.num_iterations + 1):
+        ppo_timer.start_iter()
+
         # anneal lr
         if args.anneal_lr:
             frac = 1.0 - (iteration - 1.0) / args.num_iterations
@@ -169,18 +169,19 @@ if __name__ == "__main__":
             optimizer.param_groups[0]["lr"] = lr_now
 
         # Begin rollouts
+        ppo_timer.start_rollout()
         for step in range(0, args.num_rollout_steps):
-            global_step += args.num_envs
-            obs[step] = next_obs
-            dones[step] = next_done
+            ppo_timer.update_step(args.num_envs)
 
+            # policy inference
             with torch.no_grad():
+                ppo_timer.start_inference()
                 rl_action, log_prob, value = agent(next_obs)
                 values[step] = value.flatten()
-                
-            actions[step] = rl_action
-            log_probs[step] = log_prob
+                ppo_timer.end_inference()
 
+            # sim step
+            ppo_timer.start_sim()
             if (hasattr(envs, 'viewer') and envs.viewer is not None and 
                 controller_manager.is_human_control_active()):
                 # Get human action for world 0 and the selected agent
@@ -194,8 +195,14 @@ if __name__ == "__main__":
             else:
                 next_obs, reward, next_done = envs.step(rl_action)
 
+            ppo_timer.end_sim()
+
+            # store
+            obs[step] = next_obs
+            dones[step] = next_done
+            actions[step] = rl_action
+            log_probs[step] = log_prob
             rewards[step] = reward.view(-1)
-            # time.sleep(1)
 
         # Advantages and bootstrap
         with torch.no_grad():
@@ -226,6 +233,8 @@ if __name__ == "__main__":
             agent.update_value_normalizer(returns.view(-1, 1))
             returns = agent.normalize_value(returns)
 
+        ppo_timer.end_rollout()
+
         # Flatten the batch
         b_obs = obs.reshape((-1, obs_size))
         b_logprobs = log_probs.reshape((-1, act_size))
@@ -235,6 +244,7 @@ if __name__ == "__main__":
         b_values = values.reshape(-1)
 
         # Optimization steps
+        ppo_timer.start_update()
         b_inds = np.arange(args.rollout_batch_size)
         clip_fracs = []
         for epoch in range(args.update_epochs):
@@ -301,8 +311,12 @@ if __name__ == "__main__":
             if args.target_kl is not None and approx_kl > args.target_kl:
                 break
 
+        ppo_timer.end_update()
+        ppo_timer.end_iter()
+
         # TRY NOT TO MODIFY: record rewards for plotting purposes
-        fps = int(global_step / (time.time() - start_time))
+        fps = ppo_timer.get_iter_fps()
+        global_step = ppo_timer.global_step
         writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
         writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
         writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
@@ -318,7 +332,8 @@ if __name__ == "__main__":
             p_values = b_values.reshape(-1)
             update_timer_end = time.perf_counter()
 
-            print(f"\nUpdate: {iteration} took {update_timer_end - update_timer_start:.4f} seconds. FPS: {fps}")
+            print(f"\nUpdate: {iteration} took {ppo_timer.t_iter:.4f} seconds. FPS: {fps}")
+            print(f"    Sim only: {ppo_timer.t_sim:.4f}s, Inference: {ppo_timer.t_inference:.4f}s, Update: {ppo_timer.t_update:.4f}s")
             print(f"    Loss: {stats.loss: .3e}, A: {stats.action_loss: .3e}, V: {stats.value_loss: .3e}, E: {stats.entropy_loss: .3e}")
             print()
             print(f"    Rewards          => Avg: {stats.rewards_mean: .3f}, Min: {stats.rewards_min: .3f}, Max: {stats.rewards_max: .3f}")
