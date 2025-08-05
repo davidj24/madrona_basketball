@@ -7,6 +7,7 @@ import os
 import math
 import tyro
 import time
+import re
 
 import os
 from dataclasses import dataclass
@@ -33,13 +34,13 @@ sys.path.append('./build')
 try:
     import madrona_basketball as mba
     from madrona_basketball.madrona import ExecMode
+    from src.constants import *
 except ImportError as e:
     print(f"✗ Failed to import Madrona C++ module: {e}")
     print("Make sure you've built the project first with 'cmake --build build'")
     sys.exit(1)
 
 
-from src.constants import *
 
 
 
@@ -1522,7 +1523,17 @@ class ViewerClass:
             model_directory = f"logs/mgi/{model_name}_"
             print(f"Getting all logs of {model_name}")
             try:
-                sorted_model_files = sorted([os.path.join(model_directory, f) for f in os.listdir(model_directory) if f.endswith(".npz")])
+                model_files = [f for f in os.listdir(model_directory) if f.endswith('.npz')]
+
+                def get_sort_keys(filename):
+                    gen_match = re.search(r'gen_(\d+)', filename)
+                    iter_match = re.search(r'_(\d+)\.npz', filename)
+                    generation = int(gen_match.group(1)) if gen_match else -1
+                    iteration = int(iter_match.group(1)) if iter_match else -1
+                    return (generation, iteration)
+
+                sorted_model_files = sorted(model_files, key=get_sort_keys)
+                sorted_model_files = [os.path.join(model_directory, f) for f in sorted_model_files]
                 if sorted_model_files[-1].endswith("initial"):
                     initial_file = sorted_model_files.pop(-1)
                     sorted_model_files.insert(0, initial_file)
