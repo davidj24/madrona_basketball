@@ -18,14 +18,18 @@ class DiscreteActionDistributions:
             self.unnormalized_logits.append(sliced_logits)
             cur_bucket_offset += num_buckets
 
-    def best(self, out):
+    def best(self):
         actions = [dist.probs.argmax(dim=-1) for dist in self.dists]
-        torch.stack(actions, dim=1, out=out)
+        return torch.stack(actions, dim=1)
+
+    def log_probs(self, actions):
+        log_probs = [dist.log_prob(action) for dist, action in zip(self.dists, actions)]
+        return torch.stack(log_probs, dim=1)
+
 
     def sample(self):
         actions = [dist.sample() for dist in self.dists]
         log_probs = [dist.log_prob(action) for dist, action in zip(self.dists, actions)]
-
         return torch.stack(actions, dim=1), torch.stack(log_probs, dim=1)
 
     def action_stats(self, actions):

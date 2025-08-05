@@ -34,19 +34,17 @@ class Args:
     # Algorithm specific arguments
     num_iterations: int = 100_000
     num_envs: int = 8192
-    num_rollout_steps: int = 16
-    learning_rate: float = 2.5e-4
-    anneal_lr: bool = True
-    gamma: float = 0.99
+    num_rollout_steps: int = 8
+    learning_rate: float = 3e-4
+    gamma: float = 0.95
     gae_lambda: float = 0.95
     num_minibatches: int = 4
     update_epochs: int = 4
-    norm_adv: bool = True
-    clip_coef: float = 0.1
+    clip_coef: float = 0.2
     clip_vloss: bool = True
-    ent_coef: float = 0.01
-    vf_coef: float = 0.5
-    max_grad_norm: float = 0.5
+    ent_coef: float = 0.001
+    vf_coef: float = 4.0
+    max_grad_norm: float = 1.0
     target_kl: float = None
 
     # Self Play
@@ -116,7 +114,7 @@ if __name__ == "__main__":
                   action_buckets=action_buckets).to(device)
     if (args.trainee_checkpoint_path is not None):
         agent.load(args.trainee_checkpoint_path)
-    optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
+    optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate)
 
     # Initialize SimpleControllerManager for interactive training
     controller_manager = SimpleControllerManager(agent, device)
@@ -162,12 +160,6 @@ if __name__ == "__main__":
     for iteration in range(1, args.num_iterations + 1):
         ppo_timer.start_iter()
 
-        # anneal lr
-        if args.anneal_lr:
-            frac = 1.0 - (iteration - 1.0) / args.num_iterations
-            lr_now = frac * args.learning_rate
-            optimizer.param_groups[0]["lr"] = lr_now
-
         # Begin rollouts
         ppo_timer.start_rollout()
         for step in range(0, args.num_rollout_steps):
@@ -207,12 +199,12 @@ if __name__ == "__main__":
         # Advantages and bootstrap
         with torch.no_grad():
             # update observation normalizer
-            agent.update_obs_normalizer(obs.view(-1, obs.size(-1)))
+            # agent.update_obs_normalizer(obs)
 
             # invert value normalizer
             next_value = agent.get_value(next_obs).reshape(1, -1)
-            values = agent.unnorm_value(values)
-            next_value = agent.unnorm_value(next_value)
+            # values = agent.unnorm_value(values)
+            # next_value = agent.unnorm_value(next_value)
 
             # bootstrap value if not done
             advantages = torch.zeros_like(rewards).to(device)
@@ -229,8 +221,8 @@ if __name__ == "__main__":
             returns = advantages + values
 
             # normalize returns and update value normalizer
-            agent.update_value_normalizer(returns.view(-1, 1))
-            returns = agent.normalize_value(returns)
+            # agent.update_value_normalizer(returns.view(-1, 1))
+            # returns = agent.normalize_value(returns)
 
         ppo_timer.end_rollout()
 
@@ -245,7 +237,6 @@ if __name__ == "__main__":
         # Optimization steps
         ppo_timer.start_update()
         b_inds = np.arange(args.rollout_batch_size)
-        clip_fracs = []
         for epoch in range(args.update_epochs):
             # Sample minibatches
             np.random.shuffle(b_inds)
@@ -255,19 +246,11 @@ if __name__ == "__main__":
 
                 new_log_prob, entropy, new_value = agent.get_stats(
                     b_obs[mb_inds], b_actions[mb_inds])
-                log_ratio = new_log_prob - b_logprobs[mb_inds]
-                ratio = log_ratio.exp()
-
-                with torch.no_grad():
-                    # calculate approx_kl http://joschu.net/blog/kl-approx.html
-                    old_approx_kl = (-log_ratio).mean()
-                    approx_kl = ((ratio - 1) - log_ratio).mean()
-                    clip_fracs += [((ratio - 1.0).abs() > args.clip_coef).float().mean().item()]
+                ratio = torch.exp(new_log_prob - b_logprobs[mb_inds])
 
                 mb_advantages = b_advantages[mb_inds]
-                if args.norm_adv:
-                    sigma, mu = torch.std_mean(mb_advantages, dim=0, unbiased=True)
-                    mb_advantages = (mb_advantages - mu) / (sigma + 1e-8)
+                sigma, mu = torch.std_mean(mb_advantages, dim=0, unbiased=True)
+                mb_advantages = (mb_advantages - mu) / (sigma + 1e-8)
 
                 # Policy loss
                 mb_advantages = mb_advantages.reshape(-1, 1)
@@ -277,21 +260,14 @@ if __name__ == "__main__":
 
                 # Value loss
                 new_value = new_value.view(-1)
-                if args.clip_vloss:
-                    v_loss_unclipped = (new_value - b_returns[mb_inds]) ** 2
-                    v_clipped = b_values[mb_inds] + torch.clamp(
-                        new_value - b_values[mb_inds],
-                        -args.clip_coef,
-                        args.clip_coef,
-                    )
-                    v_loss_clipped = (v_clipped - b_returns[mb_inds]) ** 2
-                    v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
-                    v_loss = 0.5 * v_loss_max.mean()
-                else:
-                    v_loss = 0.5 * ((new_value - b_returns[mb_inds]) ** 2).mean()
+                v_loss = ((new_value - b_returns[mb_inds]) ** 2).mean()
 
+                # Entropy loss
                 entropy_loss = entropy.mean()
-                loss = pg_loss - args.ent_coef * entropy_loss + v_loss * args.vf_coef
+
+                loss = (pg_loss
+                        - args.ent_coef * entropy_loss
+                        + 0.5 * v_loss * args.vf_coef)
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -305,24 +281,15 @@ if __name__ == "__main__":
                               returns_mean.item(), returns_stdev.item(), rewards_mean.item(),
                               rewards_min.item(), rewards_max.item())
 
-
-            # Break if the approximate KL divergence exceeds the target
-            if args.target_kl is not None and approx_kl > args.target_kl:
-                break
-
         ppo_timer.end_update()
         ppo_timer.end_iter()
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         fps = ppo_timer.get_iter_fps()
         global_step = ppo_timer.global_step
-        writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
         writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
         writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
         writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
-        writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), global_step)
-        writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
-        writer.add_scalar("losses/clipfrac", np.mean(clip_fracs), global_step)
         writer.add_scalar("charts/SPS", fps, global_step)
 
         # Print every 100 update iterations

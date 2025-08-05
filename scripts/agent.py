@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from action import DiscreteActionDistributions
 
-class RunningMeanStd(torch.nn.Module):
+class RunningMeanStd(nn.Module):
     def __init__(self, dim: int, clamp: float=0):
         super().__init__()
         self.epsilon = 1e-5
@@ -37,7 +37,7 @@ class RunningMeanStd(torch.nn.Module):
         self.count.copy_(count_)
 
 
-class DiagonalPopArt(torch.nn.Module):
+class DiagonalPopArt(nn.Module):
     def __init__(self, dim: int, weight: torch.Tensor, bias: torch.Tensor, momentum:float=0.1):
         super().__init__()
         self.epsilon = 1e-5
@@ -115,28 +115,31 @@ class Agent(nn.Module):
         self.critic = head_layer_init(nn.Linear(num_channels, 1))
 
         # Observation and value normalization
-        self.ob_normalizer = RunningMeanStd(input_dim, clamp=5.0)
-        self.value_normalizer = DiagonalPopArt(1, self.critic.weight, self.critic.bias)
+        self.ob_normalizer = RunningMeanStd(input_dim)
+        # self.value_normalizer = DiagonalPopArt(1, self.critic.weight, self.critic.bias)
+        self.value_normalizer = RunningMeanStd(1)
 
     def norm_obs_backbone(self, obs):
         # normalize observations and run through backbone MLP
-        obs_norm = self.ob_normalizer(obs)
-        x = self.backbone(obs_norm)
+        # obs_norm = self.ob_normalizer(obs)
+        x = self.backbone(obs)
         return x
 
-    def forward(self, obs):
+    def forward(self, obs, stochastic=True):
         x = self.norm_obs_backbone(obs)
 
         # Create action distributions
         logits = self.actor(x)
         action_dists = DiscreteActionDistributions(self.action_buckets, logits=logits)
-        actions, log_probs = action_dists.sample()
+        if stochastic:
+            actions, log_probs = action_dists.sample()
+        else:
+            actions = action_dists.best()
+            log_probs = action_dists.log_probs(actions)
+
         # Value function
         value = self.critic(x)
         return actions, log_probs, value
-
-    def unnorm_obs(self, obs):
-        return self.ob_normalizer(obs, True)
 
     def update_obs_normalizer(self, obs_raw):
         return self.ob_normalizer.update(obs_raw)
