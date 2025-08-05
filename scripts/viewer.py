@@ -1224,15 +1224,16 @@ class ViewerClass:
                                 current_filename = model_data_playlist[generation_idx]['filename']
                                 
                                 # Update all data references
-                                agent_pos_log = current_gen_data['agent_pos_log']
-                                ball_pos_log = current_gen_data['ball_pos_log']
-                                hoop_pos = current_gen_data['hoop_pos']
-                                orientation_log = current_gen_data['orientation_log']
-                                ball_physics_log = current_gen_data['ball_physics_log']
-                                actions_log = current_gen_data['actions_log']
-                                done_log = current_gen_data['done_log']
-                                game_state_log = current_gen_data['game_state_log']
-                                rewards_log = current_gen_data['rewards_log']
+                                agent_pos_log = current_gen_data['log_data'].get('agent_pos')
+                                ball_pos_log = current_gen_data['log_data'].get('ball_pos')
+                                hoop_pos = current_gen_data['log_data'].get('hoop_pos')
+                                orientation_log = current_gen_data['log_data'].get('orientation')
+                                ball_physics_log = current_gen_data['log_data'].get('ball_physics')
+                                actions_log = current_gen_data['log_data'].get('actions')
+                                done_log = current_gen_data['log_data'].get('done')
+                                game_state_log = current_gen_data['log_data'].get('game_state')
+                                rewards_log = current_gen_data['log_data'].get('rewards')
+
                                 episode_breaks = current_gen_data['episode_breaks']
                                 parsed_events = current_gen_data['parsed_events']
                                 episodes_completed_log = current_gen_data['episodes_completed_log']
@@ -1424,7 +1425,7 @@ class ViewerClass:
                 if is_multi_gen_mode:
                     status_text = f"Model: {current_filename} | Gen: {generation_idx}/{len(model_data_playlist)-1} | Ep: {current_playback_episode}/{total_episodes_in_log-1} | Step: {episode_step}"
                 else:
-                    status_text = f"Viewing Episode: {current_playback_episode}/{total_episodes_in_log} | step: {episode_step}"
+                    status_text = f"Viewing Episode: {current_playback_episode}/{total_episodes_in_log-1} | step: {episode_step}"
                     
                 if is_paused_for_next_episode:
                     status_text += f" | Press 'N' for Next Episode || max episode length is: {max(episode_lengths) if episode_lengths else 0}"
