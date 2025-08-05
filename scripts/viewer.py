@@ -942,7 +942,8 @@ class ViewerClass:
                            fading_trails=False, 
                            current_step=0, 
                            max_episode_length=1, 
-                           rewards_frame=None):
+                           rewards_frame=None,
+                           show_rewards=True):
         """
         Draws dynamic elements (agents and balls) during trajectory playback,
         but only for worlds that have not yet completed the current target episode number.
@@ -987,7 +988,7 @@ class ViewerClass:
                     self.screen.blit(world_num_surface, world_num_rect)
 
                     # Draw agent reward above the agent
-                    if rewards_frame is not None:
+                    if show_rewards and rewards_frame is not None:
                         # Handle different reward data structures
                         reward_value = None
                         if hasattr(rewards_frame, '__len__') and len(rewards_frame) > agent_idx:
@@ -1199,6 +1200,7 @@ class ViewerClass:
         paused = False
         running = True
         show_trails = False
+        show_rewards = False
         event_display_modes = ['Off', 'Current Episode', 'All Episodes']
         event_display_mode_idx = 0
         
@@ -1320,6 +1322,9 @@ class ViewerClass:
                                     print(f"Playing Episode {current_playback_episode}")
                         elif event.key == pygame.K_t:
                             show_trails = not show_trails
+                        elif event.key == pygame.K_r:
+                            show_rewards = not show_rewards
+                            print(f"Rewards display: {'On' if show_rewards else 'Off'}")
                         elif event.key == pygame.K_c:
                             keys = pygame.key.get_pressed()
                             if keys[pygame.K_LSHIFT or pygame.K_RSHIFT]:
@@ -1327,8 +1332,6 @@ class ViewerClass:
                             else:
                                 event_display_mode_idx = 1 if event_display_mode_idx != 1 else 0
                             print(f"Event chart mode: {event_display_modes[event_display_mode_idx]}")
-                        elif event.key == pygame.K_r:
-                            episode_step = 0
                         elif event.key == pygame.K_PERIOD:
                             episode_step += 1 if episode_step < max(episode_lengths) else 0
                         elif event.key == pygame.K_COMMA:
@@ -1399,7 +1402,7 @@ class ViewerClass:
                         rewards_frame = rewards_log[step_index][world_num]
 
                     episodes_completed_at_this_step = episodes_completed_log[step_index]
-                    self.draw_scene_dynamic(agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step[world_num], current_playback_episode, trail_surface, world_num, fading_trails, 0, max(episode_lengths) if episode_lengths else 1, rewards_frame)
+                    self.draw_scene_dynamic(agent_pos_frame, ball_pos_frame, orientation_frame, episodes_completed_at_this_step[world_num], current_playback_episode, trail_surface, world_num, fading_trails, 0, max(episode_lengths) if episode_lengths else 1, rewards_frame, show_rewards)
 
                 if num_worlds > 0:
                     step_index = episode_breaks[0][current_playback_episode]['start'] + episode_step
@@ -1432,14 +1435,15 @@ class ViewerClass:
                 elif paused:
                     status_text += " | Paused"
                 status_text += f" | Trails: {'On' if show_trails else 'Off'}"
+                status_text += f" | Rewards: {'On' if show_rewards else 'Off'}"
                 status_text += f" | Events: {current_display_mode}"
                 text_surface = self.font.render(status_text, True, (255, 255, 0))
                 self.screen.blit(text_surface, (10, 10))
                 
                 if is_multi_gen_mode:
-                    controls_text = f"Pause: Space | FF: shift + right | Trails: T | Events: C/ShiftC | Gen: Shift+B/N | frame: , or ."
+                    controls_text = f"Pause: Space | FF: shift + right | Trails: T | Rewards: R | Events: C/ShiftC | Gen: Shift+B/N | frame: , or ."
                 else:
-                    controls_text = f"Pause: Space | FF: shift + right | Trails: T | Events: C/ShiftC | frame by frame: , or ."
+                    controls_text = f"Pause: Space | FF: shift + right | Trails: T | Rewards: R | Events: C/ShiftC | frame by frame: , or ."
                 controls_surface = self.font.render(controls_text, True, (255, 255, 255))
                 self.screen.blit(controls_surface, (10, WINDOW_HEIGHT-30))
 
