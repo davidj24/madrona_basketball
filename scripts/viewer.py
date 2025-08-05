@@ -1540,8 +1540,14 @@ class ViewerClass:
                 print(sorted_model_files)
 
                 print(f"The code at least made it this far")
-                model_data_playlist = [self.load_and_parse_log(file, event_to_track=args.track_event) for file in sorted_model_files]
-                model_data_playlist = [_ for _ in model_data_playlist if _ is not None]
+                model_data_playlist = []
+                for filepath in sorted_model_files:
+                    loaded_data = self.load_and_parse_log(filepath, event_to_track=args.track_event)
+                    if loaded_data is not None:
+                        model_data_playlist.append({
+                            'filename' : os.path.basename(filepath),
+                            'data' : loaded_data
+                        })
                 if not model_data_playlist: 
                     print(f"No model multi-gen-inference logs were found. Exiting.")
                     return
@@ -1561,14 +1567,15 @@ class ViewerClass:
             event_display_modes = ['Off', 'Current Episode', 'All Episodes']
             event_display_mode_idx = 0
             event_def = EVENT_DEFINITIONS.get(args.track_event)
-            current_gen_data = model_data_playlist[generation_idx]
+            current_gen_data = model_data_playlist[generation_idx]['data']
+            current_filename = model_data_playlist[generation_idx]['filename']
 
             episode_lengths = [
                 world_info[current_playback_episode]['end'] - world_info[current_playback_episode]['start'] 
-                for world_info in model_data_playlist[generation_idx]['episode_breaks']
+                for world_info in current_gen_data['episode_breaks']
                 if len(world_info) > current_playback_episode and current_playback_episode < len(world_info)
             ]
-            background = self.draw_scene_static(model_data_playlist[generation_idx]['hoop_pos'])
+            background = self.draw_scene_static(current_gen_data['hoop_pos'])
             trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
 
 
@@ -1584,10 +1591,11 @@ class ViewerClass:
                             print("Paused" if paused else "Playing")
                         elif event.key == pygame.K_b:
                             keys = pygame.key.get_pressed()
-                            if (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) and generation_idx >= 0:
+                            if (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) and generation_idx > 0:
                                 generation_idx -= 1
                                 episode_step = 0
-                                current_gen_data = model_data_playlist[generation_idx]
+                                current_gen_data = model_data_playlist[generation_idx]['data']
+                                current_filename = model_data_playlist[generation_idx]['filename']
                                 if not fading_trails:
                                     trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
                                 print(f"Shift and episode changer was detected. Changing generation to {generation_idx}")
@@ -1612,7 +1620,8 @@ class ViewerClass:
                             if (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) and generation_idx < len(model_data_playlist) - 1:
                                 generation_idx += 1
                                 episode_step = 0
-                                current_gen_data = model_data_playlist[generation_idx]
+                                current_gen_data = model_data_playlist[generation_idx]['data']
+                                current_filename = model_data_playlist[generation_idx]['filename']
                                 if not fading_trails:
                                     trail_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
                                 print(f"Shift and episode changer was detected. Changing generation to {generation_idx}")
@@ -1743,7 +1752,7 @@ class ViewerClass:
                 
 
                 # Draw status text
-                status_text = f"Viewing Episode: {current_playback_episode}/{current_gen_data['total_episodes']-1} | step: {episode_step}"
+                status_text = f"Model: {current_filename} | Gen: {generation_idx}/{len(model_data_playlist)} | Ep: {current_playback_episode}/{current_gen_data['total_episodes']} | Step: {episode_step}"
                 if is_paused_for_next_episode:
                     status_text += f" | Press 'N' for Next Episode || max episode length is: {max(episode_lengths)}"
                 elif paused:
