@@ -25,7 +25,7 @@ class Args:
     use_gpu: bool = True
     full_viewer: bool = False
     viewer: bool = True
-    log_every_n_iterations: int = 200
+    log_every_n_iterations: int = 100
     save_model_every_n_iterations: int = 500
 
     trainee_idx: Optional[int] = 1

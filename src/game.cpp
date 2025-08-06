@@ -1258,7 +1258,8 @@ inline void fillObservationsSystem(Engine &ctx,
     fill_quat(agent_orientation.orientation);                                                                                                   // 4
     Vector3 agent_orient_as_vec = (agent_orientation.orientation).rotateVec(AGENT_BASE_FORWARD);                                    
     fill_vec3(agent_orient_as_vec);                                                                                                             // 3
-    fill_vec3(agent_vel.velocity);                                                                                                              // 3
+    if (agent_vel.velocity.length2() > 1e-6f) {fill_vec3(agent_vel.velocity.normalize());}                                                      // 3
+    else {fill_vec3(Vector3::zero());}
     obs[idx++] = agent_vel.velocity.length();                                                                                                   // 1
     float dot_between_orient_and_vel = 0.f;
     if (agent_vel.velocity.length2() > 1e-6f) {dot_between_orient_and_vel = agent_vel.velocity.normalize().dot(agent_orient_as_vec);}
@@ -1295,18 +1296,19 @@ inline void fillObservationsSystem(Engine &ctx,
     for (int i = 0; i < agent_idx; i++) {
         if (all_agents[i].id == agent_entity.id) continue;
 
-        Vector3 vec_to_agent = agent_pos.position - all_agents[i].pos.position;
+        Vector3 vec_to_agent = all_agents[i].pos.position - agent_pos.position;
         if (all_agents[i].teamID == agent_team.teamIndex)
         {
             if (teammate_count < max_teammates)
             {
                 fill_vec3(all_agents[i].pos.position);
-                fill_vec3(vec_to_agent);
+                fill_vec3(vec_to_agent.normalize());
                 obs[idx++] = vec_to_agent.length();
                 fill_quat(all_agents[i].orient.orientation);
                 Vector3 teammate_orient_as_vec = all_agents[i].orient.orientation.rotateVec(AGENT_BASE_FORWARD);
                 fill_vec3(teammate_orient_as_vec);
-                fill_vec3(all_agents[i].velocity.velocity);
+                if (all_agents[i].velocity.velocity.length2() > 1e-6f) {fill_vec3(all_agents[i].velocity.velocity.normalize());}
+                else {fill_vec3(Vector3::zero());}
                 obs[idx++] = all_agents[i].velocity.velocity.length(); // Speed
                 float teammate_dot_between_orient_and_vel = 0.f;
                 if (all_agents[i].velocity.velocity.length2() > 1e-6f) {teammate_dot_between_orient_and_vel = all_agents[i].velocity.velocity.normalize().dot(teammate_orient_as_vec);}
@@ -1340,12 +1342,13 @@ inline void fillObservationsSystem(Engine &ctx,
             if (opponent_count < max_opponents)
             {                
                 fill_vec3(all_agents[i].pos.position);
-                fill_vec3(vec_to_agent);
+                fill_vec3(vec_to_agent.normalize());
                 obs[idx++] = vec_to_agent.length();
                 fill_quat(all_agents[i].orient.orientation);
                 Vector3 opponent_orient_as_vec = all_agents[i].orient.orientation.rotateVec(AGENT_BASE_FORWARD);
                 fill_vec3(opponent_orient_as_vec);
-                fill_vec3(all_agents[i].velocity.velocity);
+                if (all_agents[i].velocity.velocity.length2() > 1e-6f) {fill_vec3(all_agents[i].velocity.velocity.normalize());}
+                else {fill_vec3(Vector3::zero());}
                 obs[idx++] = all_agents[i].velocity.velocity.length(); // Speed
                 float opponent_dot_between_orient_and_vel = 0.f;
                 if (all_agents[i].velocity.velocity.length2() > 1e-6f) {opponent_dot_between_orient_and_vel = all_agents[i].velocity.velocity.normalize().dot(opponent_orient_as_vec);}
