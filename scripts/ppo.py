@@ -51,7 +51,6 @@ class Args:
     ent_coef: float = 0.001
     vf_coef: float = 4.0
     max_grad_norm: float = 1.0
-    target_kl: float = None
 
 
     # to be filled in runtime
@@ -175,7 +174,6 @@ if __name__ == "__main__":
         # ======================================== Start Training ========================================
         stats = PPOStats()
         ppo_timer = PPOTimer()
-        global_step = 0
         start_time = time.time()
         update_timer_start = time.perf_counter()
         next_obs, _, _ = envs.reset()
@@ -188,7 +186,7 @@ if __name__ == "__main__":
             # Begin rollouts
             ppo_timer.start_rollout()
             for step in range(0, args.num_rollout_steps):
-                global_step += args.num_envs
+                ppo_timer.update_step(args.num_envs)
                 obs[step] = next_obs
                 dones[step] = next_done
 
