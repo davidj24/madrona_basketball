@@ -1251,7 +1251,7 @@ class ViewerClass:
                                 ]
                                 is_paused_for_next_episode = False
                                 paused = False
-                                print(f"Changed to generation {generation_idx}")
+                                print(f"Changed to version {generation_idx}")
                             else:
                                 # Regular episode navigation
                                 if current_playback_episode > 0:
@@ -1524,7 +1524,7 @@ if __name__ == "__main__":
     elif args.playback_log:
         viewer.run_trajectory_playback(log_path=args.playback_log, fading_trails=args.fading_trails, event_to_track=args.track_event, watching_training=False)
     elif args.watch_model:
-        viewer.run_trajectory_playback(model_name=args.watch_model, event_to_track=args.track_event, watching_training=False)
+        viewer.run_trajectory_playback(model_name=args.watch_model, event_to_track=args.track_event, watching_training=False, fading_trails=args.fading_trails)
     else:
         print("No playback log provided. To view trajectories, run with:")
         print("python viewer.py --playback-log path/to/your/log.npz")
