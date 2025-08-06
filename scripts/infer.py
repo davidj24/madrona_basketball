@@ -88,17 +88,8 @@ def infer(device, environment, policy, log_path: str = "logs/trajectories.npz", 
     # Main inference loop
     while step < max_steps:
         with torch.no_grad():
-            if stochastic:
-                actions, _, _ = policy(obs)
-            else:
-                backbone_features = policy.backbone(obs)
-                logits = policy.actor(backbone_features)
-                action_dists = DiscreteActionDistributions(environment.get_action_buckets(), logits=logits)
-                best_actions = torch.zeros(environment.num_worlds, len(environment.get_action_buckets()), dtype=torch.long, device=device)
-                action_dists.best(best_actions)
-                actions = best_actions
-                
-            
+            actions, _, _ = policy(obs, stochastic=args.stochastic)
+
             # Check if viewer exists and human control is active
             if (environment.viewer is not None and 
                 controller_manager.is_human_control_active()):
