@@ -28,6 +28,10 @@ class Args:
     log_every_n_iterations: int = 200
     save_model_every_n_iterations: int = 500
 
+    trainee_idx: Optional[int] = 1
+    trainee_checkpoint_path: Optional[str] = None
+    frozen_checkpoint_path: Optional[str] = None
+
     env_id: str = "MadronaBasketball"
     wandb_track: bool = False
     wandb_project_name: str = "MadronaBasketballPPO"
@@ -49,9 +53,6 @@ class Args:
     max_grad_norm: float = 1.0
     target_kl: float = None
 
-    trainee_idx: Optional[int] = 0
-    trainee_checkpoint_path: Optional[str] = None
-    frozen_checkpoint_path: Optional[str] = None
 
     # to be filled in runtime
     rollout_batch_size: int = 0
@@ -183,16 +184,13 @@ if __name__ == "__main__":
         static_log['hoop_pos'] = envs.worlds.hoop_pos_tensor().to_torch().cpu().numpy().copy()
         for iteration in range(1, args.num_iterations + 1):
             ppo_timer.start_iter()
-            if args.anneal_lr:
-                frac = 1.0 - (iteration - 1.0) / args.num_iterations
-                lr_now = frac * args.learning_rate
-                optimizer.param_groups[0]["lr"] = lr_now
 
-        # Begin rollouts
-        for step in range(0, args.num_rollout_steps):
-            global_step += args.num_envs
-            obs[step] = next_obs
-            dones[step] = next_done
+            # Begin rollouts
+            ppo_timer.start_rollout()
+            for step in range(0, args.num_rollout_steps):
+                global_step += args.num_envs
+                obs[step] = next_obs
+                dones[step] = next_done
 
                 # policy inference
                 with torch.no_grad():
@@ -225,6 +223,7 @@ if __name__ == "__main__":
                 dones[step] = next_done
                 actions[step] = rl_action
                 log_probs[step] = log_prob
+                rewards[step] = reward.view(-1)
 
                 # ======================================== Logging ========================================
                 if is_recording:
@@ -257,86 +256,79 @@ if __name__ == "__main__":
                     print(f"Episode of world 0 has just ended. Starting recording next step.")
                     is_recording = True
                     is_waiting_for_new_episode = False
+       
 
-                
+            # Advantages and bootstrap
+            with torch.no_grad():
+                # update observation normalizer
+                agent.update_obs_normalizer(obs)
 
+                # invert value normalizer
+                next_value = agent.get_value(next_obs).reshape(1, -1)
+                # values = agent.unnorm_value(values)
+                # next_value = agent.unnorm_value(next_value)
 
-                    
+                # bootstrap value if not done
+                advantages = torch.zeros_like(rewards).to(device)
+                last_gae_lam = 0
+                for t in reversed(range(args.num_rollout_steps)):
+                    if t == args.num_rollout_steps - 1:
+                        next_nonterminal = 1.0 - next_done
+                        next_values = next_value
+                    else:
+                        next_nonterminal = 1.0 - dones[t + 1]
+                        next_values = values[t + 1]
+                    delta = rewards[t] + args.gamma * next_values * next_nonterminal - values[t]
+                    advantages[t] = last_gae_lam = delta + args.gamma * args.gae_lambda * next_nonterminal * last_gae_lam
+                returns = advantages + values
 
+                # normalize returns and update value normalizer
+                # agent.update_value_normalizer(returns.view(-1, 1))
+                # returns = agent.normalize_value(returns)
 
-                rewards[step] = reward.view(-1)
+            ppo_timer.end_rollout()
 
-        # Advantages and bootstrap
-        with torch.no_grad():
-            # update observation normalizer
-            agent.update_obs_normalizer(obs)
+            # Flatten the batch
+            b_obs = obs.reshape((-1, obs_size))
+            b_logprobs = log_probs.reshape((-1, act_size))
+            b_actions = actions.reshape((-1, act_size))
+            b_advantages = advantages.reshape(-1)
+            b_returns = returns.reshape(-1)
+            b_values = values.reshape(-1)
 
-            # invert value normalizer
-            next_value = agent.get_value(next_obs).reshape(1, -1)
-            # values = agent.unnorm_value(values)
-            # next_value = agent.unnorm_value(next_value)
+            # Optimization steps
+            ppo_timer.start_update()
+            b_inds = np.arange(args.rollout_batch_size)
+            for epoch in range(args.update_epochs):
+                # Sample minibatches
+                np.random.shuffle(b_inds)
+                for start in range(0, args.rollout_batch_size, args.minibatch_size):
+                    end = start + args.minibatch_size
+                    mb_inds = b_inds[start:end]
 
-            # bootstrap value if not done
-            advantages = torch.zeros_like(rewards).to(device)
-            last_gae_lam = 0
-            for t in reversed(range(args.num_rollout_steps)):
-                if t == args.num_rollout_steps - 1:
-                    next_nonterminal = 1.0 - next_done
-                    next_values = next_value
-                else:
-                    next_nonterminal = 1.0 - dones[t + 1]
-                    next_values = values[t + 1]
-                delta = rewards[t] + args.gamma * next_values * next_nonterminal - values[t]
-                advantages[t] = last_gae_lam = delta + args.gamma * args.gae_lambda * next_nonterminal * last_gae_lam
-            returns = advantages + values
+                    new_log_prob, entropy, new_value = agent.get_stats(
+                        b_obs[mb_inds], b_actions[mb_inds])
+                    ratio = torch.exp(new_log_prob - b_logprobs[mb_inds])
 
-            # normalize returns and update value normalizer
-            # agent.update_value_normalizer(returns.view(-1, 1))
-            # returns = agent.normalize_value(returns)
-
-        ppo_timer.end_rollout()
-
-        # Flatten the batch
-        b_obs = obs.reshape((-1, obs_size))
-        b_logprobs = log_probs.reshape((-1, act_size))
-        b_actions = actions.reshape((-1, act_size))
-        b_advantages = advantages.reshape(-1)
-        b_returns = returns.reshape(-1)
-        b_values = values.reshape(-1)
-
-        # Optimization steps
-        ppo_timer.start_update()
-        b_inds = np.arange(args.rollout_batch_size)
-        for epoch in range(args.update_epochs):
-            # Sample minibatches
-            np.random.shuffle(b_inds)
-            for start in range(0, args.rollout_batch_size, args.minibatch_size):
-                end = start + args.minibatch_size
-                mb_inds = b_inds[start:end]
-
-                new_log_prob, entropy, new_value = agent.get_stats(
-                    b_obs[mb_inds], b_actions[mb_inds])
-                ratio = torch.exp(new_log_prob - b_logprobs[mb_inds])
-
-                mb_advantages = b_advantages[mb_inds]
-                sigma, mu = torch.std_mean(mb_advantages, dim=0, unbiased=True)
-                mb_advantages = (mb_advantages - mu) / (sigma + 1e-8)
+                    mb_advantages = b_advantages[mb_inds]
+                    sigma, mu = torch.std_mean(mb_advantages, dim=0, unbiased=True)
+                    mb_advantages = (mb_advantages - mu) / (sigma + 1e-8)
 
                     mb_advantages = mb_advantages.reshape(-1, 1)
                     pg_loss1 = -ratio * mb_advantages
                     pg_loss2 = -torch.clamp(ratio, 1 - args.clip_coef, 1 + args.clip_coef) * mb_advantages
                     pg_loss = torch.max(pg_loss1, pg_loss2).mean()
 
-                # Value loss
-                new_value = new_value.view(-1)
-                v_loss = ((new_value - b_returns[mb_inds]) ** 2).mean()
+                    # Value loss
+                    new_value = new_value.view(-1)
+                    v_loss = ((new_value - b_returns[mb_inds]) ** 2).mean()
 
-                # Entropy loss
-                entropy_loss = entropy.mean()
+                    # Entropy loss
+                    entropy_loss = entropy.mean()
 
-                loss = (pg_loss
-                        - args.ent_coef * entropy_loss
-                        + 0.5 * v_loss * args.vf_coef)
+                    loss = (pg_loss
+                            - args.ent_coef * entropy_loss
+                            + 0.5 * v_loss * args.vf_coef)
 
                     optimizer.zero_grad()
                     loss.backward()
@@ -346,35 +338,35 @@ if __name__ == "__main__":
                     returns_mean, returns_stdev = torch.var_mean(b_returns[mb_inds])
                     rewards_mean, rewards_min, rewards_max = rewards.mean(), rewards.min(), rewards.max()
                     stats.update(loss.item(), pg_loss.item(), v_loss.item(), entropy_loss.item(),
-                                returns_mean.item(), returns_stdev.item(), rewards_mean.item(),
-                                rewards_min.item(), rewards_max.item())
+                                    returns_mean.item(), returns_stdev.item(), rewards_mean.item(),
+                                    rewards_min.item(), rewards_max.item())
 
-        ppo_timer.end_update()
-        ppo_timer.end_iter()
+            ppo_timer.end_update()
+            ppo_timer.end_iter()
 
-        # TRY NOT TO MODIFY: record rewards for plotting purposes
-        fps = ppo_timer.get_iter_fps()
-        global_step = ppo_timer.global_step
-        writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
-        writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
-        writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
-        writer.add_scalar("charts/SPS", fps, global_step)
+            # TRY NOT TO MODIFY: record rewards for plotting purposes
+            fps = ppo_timer.get_iter_fps()
+            global_step = ppo_timer.global_step
+            writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
+            writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
+            writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
+            writer.add_scalar("charts/SPS", fps, global_step)
 
             if iteration % 100 == 0:
                 p_advantages = b_advantages.reshape(-1)
                 p_values = b_values.reshape(-1)
                 update_timer_end = time.perf_counter()
 
-            print(f"\nUpdate: {iteration} took {ppo_timer.t_iter:.4f} seconds. FPS: {fps}")
-            print(f"    Sim only: {ppo_timer.t_sim:.4f}s, Inference: {ppo_timer.t_inference:.4f}s, Update: {ppo_timer.t_update:.4f}s")
-            print(f"    Loss: {stats.loss: .3e}, A: {stats.action_loss: .3e}, V: {stats.value_loss: .3e}, E: {stats.entropy_loss: .3e}")
-            print()
-            print(f"    Rewards          => Avg: {stats.rewards_mean: .3f}, Min: {stats.rewards_min: .3f}, Max: {stats.rewards_max: .3f}")
-            print(f"    Values           => Avg: {p_values.mean(): .3f}, Min: {p_values.min(): .3f}, Max: {p_values.max(): .3f}")
-            print(f"    Advantages       => Avg: {p_advantages.mean(): .3f}, Min: {p_advantages.min(): .3f}, Max: {p_advantages.max(): .3f}")
-            print(f"    Returns          => Avg: {stats.returns_mean}")
-            stats.reset()
-            ppo_timer.reset()
+                print(f"\nUpdate: {iteration} took {ppo_timer.t_iter:.4f} seconds. FPS: {fps}")
+                print(f"    Sim only: {ppo_timer.t_sim:.4f}s, Inference: {ppo_timer.t_inference:.4f}s, Update: {ppo_timer.t_update:.4f}s")
+                print(f"    Loss: {stats.loss: .3e}, A: {stats.action_loss: .3e}, V: {stats.value_loss: .3e}, E: {stats.entropy_loss: .3e}")
+                print()
+                print(f"    Rewards          => Avg: {stats.rewards_mean: .3f}, Min: {stats.rewards_min: .3f}, Max: {stats.rewards_max: .3f}")
+                print(f"    Values           => Avg: {p_values.mean(): .3f}, Min: {p_values.min(): .3f}, Max: {p_values.max(): .3f}")
+                print(f"    Advantages       => Avg: {p_advantages.mean(): .3f}, Min: {p_advantages.min(): .3f}, Max: {p_advantages.max(): .3f}")
+                print(f"    Returns          => Avg: {stats.returns_mean}")
+                stats.reset()
+                ppo_timer.reset()
 
                 update_timer_start = time.perf_counter()
 
@@ -396,8 +388,7 @@ if __name__ == "__main__":
                 else:
                     torch.save(agent.state_dict(), os.path.join(folder, f"{iteration}.pth"))
                     print(f"Model saved at iteration {iteration}")
-        
-        print("Training completed successfully")
+            
         
     except KeyboardInterrupt:
         print("Training interrupted by user")
