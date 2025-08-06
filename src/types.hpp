@@ -101,7 +101,7 @@ namespace madBasketball {
         // General Actions
         int32_t move;  // 0/1 - move action
         int32_t moveAngle;  // [0, 7] - which direction (8 directions)
-        int32_t rotate;     // [-1, 0, 1] - turning
+        int32_t rotate;     // [0, 1, 2] - turning
         int32_t grab;       // 0/1 - grab action
 
         // Offensive Actions

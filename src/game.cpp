@@ -420,7 +420,7 @@ inline void moveAgentSystem(Engine &ctx,
     const GridState *grid = ctx.data().grid;
     if (action.rotate != 0)
     {
-        float turn_angle = (pi/180.f) * action.rotate * 6;
+        float turn_angle = (action.rotate == 1) ? (pi/180.f) * 6 : (pi/180.f) * -6; // rotate can only be 1 or 2 (hopefully)
         Quat turn = Quat::angleAxis(turn_angle, Vector3{0, 0, 1});
         agent_orientation.orientation = turn * agent_orientation.orientation;
     }
