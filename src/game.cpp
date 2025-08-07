@@ -437,7 +437,8 @@ inline void moveAgentSystem(Engine &ctx,
     
     float maximum_speed = attributes.maxSpeed;
     Vector3 agent_orientation_as_vec = agent_orientation.orientation.rotateVec(AGENT_BASE_FORWARD);
-    float dot_between_orientation_and_velocity = agent_vel.velocity.normalize().dot(agent_orientation_as_vec);
+    float dot_between_orientation_and_velocity = 0.0f;
+    if (agent_vel.velocity.length2() > 1e-6f) {dot_between_orientation_and_velocity = agent_vel.velocity.normalize().dot(agent_orientation_as_vec);}
 
     if (dot_between_orientation_and_velocity < -0.1f) // moving backwards
     {
@@ -671,8 +672,13 @@ inline void hardCodeDefenseSystem(Engine &ctx,
                 for (CountT j = 0; j < NUM_HOOPS; j++) {
                     Entity hoop = ctx.data().hoops[j];
                     if (defender_team.defendingHoopID == hoop.id) {
-                        Position &hoop_pos = ctx.get<Position>(hoop);
-                    guarding_pos = offender_pos.position + GUARDING_DISTANCE * (hoop_pos.position - offender_pos.position).normalize();
+                    Position &hoop_pos = ctx.get<Position>(hoop);
+                    Vector3 hoop_direction = hoop_pos.position - offender_pos.position;
+                    if (hoop_direction.length2() > 1e-6f) {
+                        guarding_pos = offender_pos.position + GUARDING_DISTANCE * hoop_direction.normalize();
+                    } else {
+                        guarding_pos = offender_pos.position;
+                    }
                     found_offender = 1;
                 }
             }
@@ -1302,7 +1308,8 @@ inline void fillObservationsSystem(Engine &ctx,
             if (teammate_count < max_teammates)
             {
                 fill_vec3(all_agents[i].pos.position);
-                fill_vec3(vec_to_agent.normalize());
+                if (vec_to_agent.length2() > 1e-6f) {fill_vec3(vec_to_agent.normalize());} 
+                else {fill_vec3(Vector3{0.f, 0.f, 0.f});}
                 obs[idx++] = vec_to_agent.length();
                 fill_quat(all_agents[i].orient.orientation);
                 Vector3 teammate_orient_as_vec = all_agents[i].orient.orientation.rotateVec(AGENT_BASE_FORWARD);
@@ -1342,7 +1349,8 @@ inline void fillObservationsSystem(Engine &ctx,
             if (opponent_count < max_opponents)
             {                
                 fill_vec3(all_agents[i].pos.position);
-                fill_vec3(vec_to_agent.normalize());
+                if (vec_to_agent.length2() > 1e-6f) {fill_vec3(vec_to_agent.normalize());} 
+                else {fill_vec3(Vector3{0.f, 0.f, 0.f});}
                 obs[idx++] = vec_to_agent.length();
                 fill_quat(all_agents[i].orient.orientation);
                 Vector3 opponent_orient_as_vec = all_agents[i].orient.orientation.rotateVec(AGENT_BASE_FORWARD);
