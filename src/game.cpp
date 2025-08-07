@@ -626,6 +626,7 @@ inline void agentCollisionSystem(Engine &ctx,
             {
                 reward.r -= 10;
                 entity_b_reward.r += 10;
+                ctx.singleton<WorldClock>().resetNow = 1.0f;
             }
 
             // --- Collision Response ---
@@ -855,10 +856,12 @@ inline void rewardSystem(Engine &ctx,
 
 
         // ======================== FOR TAG ==========================
-        reward.r += (1-exp(-0.4f * dist_to_other_agent)) * in_possession.hasBall;
+        reward.r += in_possession.hasBall;
+        reward.r -= (exp(-0.4f * dist_to_other_agent));
     }
     else
     {
+        reward.r -= 1.f;
         reward.r += exp(-0.4f * dist_to_other_agent);
     }
 }
