@@ -198,7 +198,7 @@ if __name__ == "__main__":
 
     if args.model_name is None:
         # Single model inference
-        environment = EnvWrapper(args.num_envs, args.gpu_sim, frozen_path=args.frozen_checkpoint, gpu_id=args.gpu_id, viewer=args.viewer)
+        environment = EnvWrapper(args.num_envs, args.gpu_sim, frozen_path=args.frozen_checkpoint, gpu_id=args.gpu_id, viewer=args.viewer, trainee_agent_idx=args.trainee_idx)
         input_dimensions = environment.get_input_dim()
         action_buckets = environment.get_action_buckets()
 
