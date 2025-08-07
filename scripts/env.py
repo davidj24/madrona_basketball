@@ -104,7 +104,7 @@ class EnvWrapper:
         # Self Play
         if frozen_path is not None:
             device = torch.device("cuda" if torch.cuda.is_available() and use_gpu else "cpu")
-            self.frozen_policy = Agent(self.get_input_dim(), num_channels=64, num_layers=3, action_buckets=self.get_action_buckets())
+            self.frozen_policy = Agent(self.get_input_dim(), num_channels=256, num_layers=2, action_buckets=self.get_action_buckets())
             self.frozen_policy.load(frozen_path)
             self.frozen_policy.to(device)
             self.frozen_policy.eval()  # Set to evaluation mode

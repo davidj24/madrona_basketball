@@ -182,7 +182,7 @@ def multi_gen_infer(device):
         random.seed(args.test_seed)
 
         environment = EnvWrapper(num_worlds=args.num_envs, frozen_path=args.frozen_checkpoint, viewer=False, trainee_agent_idx=args.trainee_idx)
-        evaluated_agent = Agent(environment.get_input_dim(), num_channels=64, num_layers=3, action_buckets=environment.get_action_buckets()).to(device)
+        evaluated_agent = Agent(environment.get_input_dim(), num_channels=256, num_layers=2, action_buckets=environment.get_action_buckets()).to(device)
         evaluated_agent.load(checkpoint_path)
 
         infer(device, environment, evaluated_agent, log_path, args.num_episodes, args.max_steps, args.stochastic)
@@ -203,7 +203,7 @@ if __name__ == "__main__":
         action_buckets = environment.get_action_buckets()
 
         # Load policy
-        policy = Agent(input_dimensions, num_channels=64, num_layers=3, action_buckets=action_buckets).to(device)
+        policy = Agent(input_dimensions, num_channels=256, num_layers=2, action_buckets=action_buckets).to(device)
         policy.load(args.trainee_checkpoint)
 
         # Print interactive inference instructions if viewer is enabled

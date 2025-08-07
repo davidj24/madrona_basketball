@@ -1193,7 +1193,7 @@ class ViewerClass:
         is_paused_for_next_episode = False
         paused = False
         running = True
-        show_trails = False
+        show_trails = True
         show_rewards = True
         event_display_modes = ['Off', 'Current Episode', 'All Episodes']
         event_display_mode_idx = 0

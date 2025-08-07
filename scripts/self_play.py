@@ -73,7 +73,7 @@ if __name__ == '__main__':
             print(f"Creating model0 policy at {model_0_path}")
             obs_size = 128
             action_buckets = [2, 8, 3, 2, 2, 2]
-            model_0 = Agent(obs_size,num_channels=64, num_layers=3, action_buckets=action_buckets)
+            model_0 = Agent(obs_size,num_channels=256, num_layers=2, action_buckets=action_buckets)
             os.makedirs(CHECKPOINT_DIR, exist_ok=True)
             torch.save(model_0.state_dict(), model_0_path)
     else: 
@@ -85,7 +85,7 @@ if __name__ == '__main__':
             print(f"Creating model0 policy at {model_1_path}")
             obs_size = 128
             action_buckets = [2, 8, 3, 2, 2, 2]
-            model_1 = Agent(obs_size,num_channels=64, num_layers=3, action_buckets=action_buckets)
+            model_1 = Agent(obs_size,num_channels=256, num_layers=2, action_buckets=action_buckets)
             os.makedirs(CHECKPOINT_DIR, exist_ok=True)
             torch.save(model_1.state_dict(), model_1_path)
     else: 
