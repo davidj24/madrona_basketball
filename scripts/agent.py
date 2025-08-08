@@ -2,6 +2,19 @@ import torch
 import torch.nn as nn
 
 from action import DiscreteActionDistributions
+from moving_avg import EMANormalizer
+
+
+class NoNormalize(nn.Module):
+    def __init__(self, dim: int):
+        super().__init__()
+
+    def forward(self, x, unnorm=False):
+        return x
+
+    @torch.no_grad()
+    def update(self, x):
+        pass
 
 class RunningMeanStd(nn.Module):
     def __init__(self, dim: int, clamp: float=0):
@@ -116,8 +129,10 @@ class Agent(nn.Module):
 
         # Observation and value normalization
         self.ob_normalizer = RunningMeanStd(input_dim)
+        # self.value_normalizer = EMANormalizer(0.999)
+        # self.value_normalizer = RunningMeanStd(1)
         # self.value_normalizer = DiagonalPopArt(1, self.critic.weight, self.critic.bias)
-        self.value_normalizer = RunningMeanStd(1)
+        self.value_normalizer = NoNormalize(1)
 
     def norm_obs_backbone(self, obs):
         # normalize observations and run through backbone MLP
@@ -139,7 +154,7 @@ class Agent(nn.Module):
 
         # Value function
         value = self.critic(x)
-        return actions, log_probs, value
+        return actions, log_probs.sum(dim=-1), value
 
     def update_obs_normalizer(self, obs_raw):
         return self.ob_normalizer.update(obs_raw)
@@ -163,7 +178,7 @@ class Agent(nn.Module):
         action_dists = DiscreteActionDistributions(self.action_buckets, logits=self.actor(x))
         log_probs, entropies = action_dists.action_stats(actions)
         value = self.critic(x)
-        return log_probs, entropies, value
+        return log_probs.sum(dim=-1), entropies.sum(dim=-1), value
 
     def load(self, path):
         state_dict = torch.load(path, weights_only=True, map_location="cpu")

@@ -11,7 +11,6 @@ import madrona_basketball as mba
 from pathlib import Path
 from env import EnvWrapper
 from agent import Agent
-from action import DiscreteActionDistributions
 from controllers import SimpleControllerManager
 from dataclasses import dataclass
 from typing import Optional
@@ -132,12 +131,12 @@ def infer(device, environment, policy, log_path: str = "logs/trajectories.npz", 
             trajectory_log.append(log_entry)
 
         # Update episode counts when an episode is done
-        if num_episodes > 0:
-            episode_counts += done.cpu().long()
-            # Check if all environments have completed the required number of episodes
-            if torch.all(episode_counts >= num_episodes):
-                print(f"All environments have completed {num_episodes} episodes.")
-                break
+        # if num_episodes > 0:
+        #     episode_counts += done.cpu().long()
+        #     # Check if all environments have completed the required number of episodes
+        #     if torch.all(episode_counts >= num_episodes):
+        #         print(f"All environments have completed {num_episodes} episodes.")
+        #         break
         
         step += 1
         
@@ -182,7 +181,7 @@ def multi_gen_infer(device):
         random.seed(args.test_seed)
 
         environment = EnvWrapper(num_worlds=args.num_envs, frozen_path=args.frozen_checkpoint, viewer=False, trainee_agent_idx=args.trainee_idx)
-        evaluated_agent = Agent(environment.get_input_dim(), num_channels=256, num_layers=2, action_buckets=environment.get_action_buckets()).to(device)
+        evaluated_agent = Agent(environment.get_input_dim(), num_channels=32, num_layers=2, action_buckets=environment.get_action_buckets()).to(device)
         evaluated_agent.load(checkpoint_path)
 
         infer(device, environment, evaluated_agent, log_path, args.num_episodes, args.max_steps, args.stochastic)
@@ -203,7 +202,7 @@ if __name__ == "__main__":
         action_buckets = environment.get_action_buckets()
 
         # Load policy
-        policy = Agent(input_dimensions, num_channels=256, num_layers=2, action_buckets=action_buckets).to(device)
+        policy = Agent(input_dimensions, num_channels=32, num_layers=2, action_buckets=action_buckets).to(device)
         policy.load(args.trainee_checkpoint)
 
         # Print interactive inference instructions if viewer is enabled
