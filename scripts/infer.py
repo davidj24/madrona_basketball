@@ -131,12 +131,12 @@ def infer(device, environment, policy, log_path: str = "logs/trajectories.npz", 
             trajectory_log.append(log_entry)
 
         # Update episode counts when an episode is done
-        # if num_episodes > 0:
-        #     episode_counts += done.cpu().long()
-        #     # Check if all environments have completed the required number of episodes
-        #     if torch.all(episode_counts >= num_episodes):
-        #         print(f"All environments have completed {num_episodes} episodes.")
-        #         break
+        if num_episodes > 0:
+            episode_counts += done.cpu().long()
+            # Check if all environments have completed the required number of episodes
+            if torch.all(episode_counts >= num_episodes):
+                print(f"All environments have completed {num_episodes} episodes.")
+                break
         
         step += 1
         
