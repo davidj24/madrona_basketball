@@ -525,6 +525,7 @@ inline void actionMaskSystem(Engine &ctx,
     // ======================== FOR TAG ==========================
     action_mask.can_pass = 0;
     action_mask.can_shoot = 0;
+    action_mask.can_grab = 0;
     // if (gameState.teamInPossession == team.teamIndex) 
     // {
     //     action_mask.can_move = 0;
@@ -1002,11 +1003,23 @@ inline void clockSystem(Engine &ctx, WorldClock &world_clock)
     {
         gameState.inboundClock -= TIMESTEPS_TO_SECONDS_FACTOR;
     }
-
+    
     if (gameState.gameClock <= 0.f && gameState.liveBall > 0.5f)
     {
+        // ======================== FOR TAG ==========================
+        Entity off_agent = ctx.data().agents[0];
+        Entity cur_agent;
+        for (CountT i = 1; i < NUM_AGENTS; i++)
+        {
+            cur_agent = ctx.data().agents[i];
+            if (ctx.get<Team>(cur_agent).teamIndex == gameState.teamInPossession) {off_agent = cur_agent;}
+        }
+        ctx.get<Reward>(off_agent).r += 10.f;
         world_clock.resetNow = 1.0f;
     }
+
+    
+
 
     if (gameState.shotClock < 0.f)
     {
@@ -1051,7 +1064,18 @@ inline void outOfBoundsSystem(Engine &ctx,
         ball_pos.position.y < COURT_MIN_Y || ball_pos.position.y > COURT_MAX_Y) &&
         gameState.inboundingInProgress == 0.f)
     {
-        if (gameState.isOneOnOne == 1.f) {
+        if (gameState.isOneOnOne == 1.f) 
+        {
+            // ======================== FOR TAG ==========================
+            Entity off_agent = ctx.data().agents[0];
+            Entity cur_agent;
+            for (CountT i = 1; i < NUM_AGENTS; i++)
+            {
+                cur_agent = ctx.data().agents[i];
+                if (ctx.get<Team>(cur_agent).teamIndex == gameState.teamInPossession) {off_agent = cur_agent;}
+            }
+            ctx.get<Reward>(off_agent).r -= 10.f;
+            
             ctx.singleton<WorldClock>().resetNow = 1.0f;
         }
         else

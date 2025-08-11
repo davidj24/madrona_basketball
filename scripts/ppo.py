@@ -24,13 +24,13 @@ class Args:
     torch_deterministic: bool = True
     use_gpu: bool = True
     full_viewer: bool = False
-    viewer: bool = False
+    viewer: bool = True
     log_every_n_iterations: int = 100
     save_model_every_n_iterations: int = 100
 
     trainee_idx: Optional[int] = 1
-    trainee_checkpoint_path: Optional[str] = None
-    frozen_checkpoint_path: Optional[str] = None
+    trainee_checkpoint: Optional[str] = None
+    frozen_checkpoint: Optional[str] = None
 
     env_id: str = "MadronaBasketball"
     wandb_track: bool = False
@@ -97,16 +97,16 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = args.torch_deterministic
     device = torch.device("cuda" if torch.cuda.is_available() and args.use_gpu else "cpu")
 
-    envs = EnvWrapper(args.num_envs, use_gpu=args.use_gpu, frozen_path=args.frozen_checkpoint_path, gpu_id=0, viewer=args.full_viewer, trainee_agent_idx=args.trainee_idx)
+    envs = EnvWrapper(args.num_envs, use_gpu=args.use_gpu, frozen_path=args.frozen_checkpoint, gpu_id=0, viewer=args.full_viewer, trainee_agent_idx=args.trainee_idx)
     obs_size = envs.get_input_dim()
     act_size = envs.get_action_space_size()
     action_buckets = envs.get_action_buckets()
 
     print(f"\n🎯 TRAINING CONFIGURATION:")
     print(f"   Trainee Agent Index: {args.trainee_idx} ({'Offensive Player (with ball)' if args.trainee_idx == 0 else 'Defensive Player (without ball)'})")
-    if args.frozen_checkpoint_path:
+    if args.frozen_checkpoint:
         print(f"   Frozen Agent: {1-args.trainee_idx} ({'Offensive Player (with ball)' if 1-args.trainee_idx == 0 else 'Defensive Player (without ball)'})")
-        print(f"   Frozen Checkpoint: {args.frozen_checkpoint_path}")
+        print(f"   Frozen Checkpoint: {args.frozen_checkpoint}")
     else:
         print(f"   No frozen agent (single agent training)")
     print(f"   Model Name: {args.model_name}")
@@ -116,8 +116,8 @@ if __name__ == "__main__":
 
     agent = Agent(obs_size, num_channels=32, num_layers=2,
                   action_buckets=action_buckets).to(device)
-    if (args.trainee_checkpoint_path is not None):
-        agent.load(args.trainee_checkpoint_path)
+    if (args.trainee_checkpoint is not None):
+        agent.load(args.trainee_checkpoint)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate)
 
     controller_manager = SimpleControllerManager(agent, device)
