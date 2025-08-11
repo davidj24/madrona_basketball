@@ -1,55 +1,53 @@
-from time import perf_counter
-
 import torch
+import torch.nn as nn
 from dataclasses import dataclass
+from time import perf_counter
 
 
 @dataclass
 class PPOStats:
-    loss: float = 0
-    action_loss: float = 0
-    value_loss: float = 0
-    entropy_loss: float = 0
-    returns_mean: float = 0
-    returns_stddev: float = 0
-    rewards_mean: float = 0
-    rewards_min: float = float('inf')
-    rewards_max: float = float('-inf')
-    num_stats: int = 0
+    def __init__(self, n_envs: int, device: torch.device):
+        self.curr_rewards = torch.zeros(n_envs, device=device)
+        self.episode_lengths = torch.zeros(n_envs, device=device)
 
-    def update(self,
-               loss: float,
-               action_loss: float,
-               value_loss: float,
-               entropy_loss: float,
-               returns_mean: float,
-               returns_stddev: float,
-               rewards_mean: float,
-               rewards_min: float,
-               rewards_max: float):
-        self.num_stats += 1
-        self.loss += (loss - self.loss) / self.num_stats
-        self.action_loss += (action_loss - self.action_loss) / self.num_stats
-        self.value_loss += (value_loss - self.value_loss) / self.num_stats
-        self.entropy_loss += (entropy_loss - self.entropy_loss) / self.num_stats
-        self.returns_mean += (returns_mean - self.returns_mean) / self.num_stats
-        self.returns_stddev += (returns_stddev - self.returns_stddev) / self.num_stats
-        self.rewards_mean += (rewards_mean - self.rewards_mean) / self.num_stats
-        self.rewards_min = min(self.rewards_min, rewards_min) if self.num_stats > 1 else rewards_min
-        self.rewards_max = max(self.rewards_max, rewards_max) if self.num_stats > 1 else rewards_max
+        self.mean_reward = AverageMeter(1, 100).to(device)
+        self.mean_episode_length = AverageMeter(1, 100).to(device)
+
+        self.a_loss = 0.0
+        self.c_loss = 0.0
+        self.e_loss = 0.0
+        self.b_loss = 0.0
+
+    def update(self, rew: torch.Tensor, dones: torch.Tensor):
+        self.curr_rewards += rew
+        self.episode_lengths += 1
+
+        # Check for any worlds that finished
+        if dones.any():
+            ind_done = dones.nonzero(as_tuple=False).squeeze(-1)
+            rewards_done = self.curr_rewards[ind_done]
+            lengths_done = self.episode_lengths[ind_done]
+            # Update trackers
+            self.mean_reward.update(rewards_done.unsqueeze(-1))
+            self.mean_episode_length.update(lengths_done.unsqueeze(-1))
+
+        # Reset where done
+        self.curr_rewards = self.curr_rewards * (1 - dones)
+        self.episode_lengths = self.episode_lengths * (1 - dones)
+
+    def set_losses(self, a_loss, c_loss, e_loss, b_loss):
+        self.a_loss = a_loss
+        self.c_loss = c_loss
+        self.e_loss = e_loss
+        self.b_loss = b_loss
 
     def reset(self):
-        self.num_stats = 0
+        pass
 
-        self.loss = 0
-        self.action_loss = 0
-        self.value_loss = 0
-        self.entropy_loss = 0
-        self.returns_mean = 0
-        self.returns_stddev = 0
-        self.rewards_mean = 0
-        self.rewards_min = float('inf')
-        self.rewards_max = float('-inf')
+    def print(self):
+        print(f"Mean reward: {self.mean_reward.get_mean():.2f}. "
+              f"Mean episode length: {self.mean_episode_length.get_mean():.2f}")
+        pass
 
 
 class PPOTimer:
@@ -133,11 +131,42 @@ class PPOTimer:
         return int(self.iter_step / self.t_sim) if self.t_sim > 0 else 0
 
     def get_inference_fps(self):
-        return int(self.iter_step / self.t_inference) if self.t_inference > 0 else 0
+        return int(
+            self.iter_step / self.t_inference) if self.t_inference > 0 else 0
 
     def get_update_fps(self):
         return int(self.iter_step / self.t_update) if self.t_update > 0 else 0
 
-    def update_step(self, steps: int):
+    def add_steps(self, steps: int):
         self.iter_step += steps
         self.global_step += steps
+
+    def print(self):
+        fps = self.get_iter_fps()
+        print(f"Took {self.t_iter:.2f} seconds. "
+              f"FPS: {fps}. Global {self.global_step:_}")
+        print(f"Sim only: {self.t_sim:.2f}s, "
+              f"Inference: {self.t_inference:.2f}s, "
+              f"Update: {self.t_update:.2f}s")
+
+
+class AverageMeter(nn.Module):
+    def __init__(self, in_shape: int, max_size: int) -> None:
+        super(AverageMeter, self).__init__()
+        self.max_size = max_size
+        self.current_size = 0
+        self.register_buffer("mean", torch.zeros(in_shape, dtype=torch.float32))
+
+    def update(self, values: torch.Tensor) -> None:
+        size = values.size()[0]
+        new_mean = torch.mean(values.float(), dim=0)
+        size = min(size, self.max_size)
+        old_size = min(self.max_size - size, self.current_size)
+        size_sum = old_size + size
+        self.current_size = size_sum
+        self.mean = (self.mean * old_size + new_mean * size) / size_sum
+
+    def get_mean(self):
+        if self.current_size == 0:
+            return 0.0
+        return self.mean.squeeze(0).cpu().numpy()
