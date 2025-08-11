@@ -187,7 +187,7 @@ def main():
         "cuda" if torch.cuda.is_available() and args.use_gpu else "cpu")
 
     envs = EnvWrapper(args.num_envs, use_gpu=args.use_gpu,
-                      frozen_path=args.frozen_checkpoint_path, gpu_id=0,
+                      frozen_path=args.frozen_checkpoint, gpu_id=0,
                       viewer=args.full_viewer,
                       trainee_agent_idx=args.trainee_idx)
     obs_size = envs.get_input_dim()
@@ -197,10 +197,10 @@ def main():
     print(f"\n🎯 TRAINING CONFIGURATION:")
     print(
         f"   Trainee Agent Index: {args.trainee_idx} ({'Offensive Player (with ball)' if args.trainee_idx == 0 else 'Defensive Player (without ball)'})")
-    if args.frozen_checkpoint_path:
+    if args.frozen_checkpoint:
         print(
             f"   Frozen Agent: {1 - args.trainee_idx} ({'Offensive Player (with ball)' if 1 - args.trainee_idx == 0 else 'Defensive Player (without ball)'})")
-        print(f"   Frozen Checkpoint: {args.frozen_checkpoint_path}")
+        print(f"   Frozen Checkpoint: {args.frozen_checkpoint}")
     else:
         print(f"   No frozen agent (single agent training)")
     print(f"   Model Name: {args.model_name}")
