@@ -58,7 +58,9 @@ class Args:
 
 
 @torch.no_grad()
-def rollout(agent, env, buffer, stats, timer, controller_manager):
+def rollout(agent, env, buffer: RolloutBuffer, stats, timer, controller_manager, 
+           is_recording: bool, is_waiting_for_new_episode: bool, recorded_trajectory: list, 
+           static_log: dict, iteration: int, log_folder: str):
     obs, _, _ = env.reset()
     for step in range(0, args.num_rollout_steps):
         timer.start_inference()
@@ -87,6 +89,40 @@ def rollout(agent, env, buffer, stats, timer, controller_manager):
         not_dones = 1.0 - dones
         timer.end_sim()
 
+        # ======================================== LOGGING ========================================
+        if is_recording and recorded_trajectory is not None:
+            log_entry = {
+                "agent_pos": env.worlds.agent_pos_tensor().to_torch()[:1].cpu().numpy().copy(),
+                "ball_pos": env.worlds.basketball_pos_tensor().to_torch()[:1].cpu().numpy().copy(),
+                "ball_vel": env.worlds.ball_velocity_tensor().to_torch()[:1].cpu().numpy().copy(),
+                "orientation": env.worlds.orientation_tensor().to_torch()[:1].cpu().numpy().copy(),
+                "ball_physics": env.worlds.ball_physics_tensor().to_torch()[:1].cpu().numpy().copy(),
+                "agent_possession": env.worlds.agent_possession_tensor().to_torch()[:1].cpu().numpy().copy(),
+                "game_state": env.worlds.game_state_tensor().to_torch()[:1].cpu().numpy().copy(),
+                "rewards": env.worlds.reward_tensor().to_torch()[:1].cpu().numpy().copy(),
+                "actions": env.worlds.action_tensor().to_torch()[:1].cpu().numpy().copy(),
+                "done": dones[:1].cpu().numpy().copy()
+            }
+            recorded_trajectory.append(log_entry)
+
+        if is_recording and dones[0].item() > 0 and recorded_trajectory is not None and log_folder is not None:
+            print(f"Recorded episode has finished.")
+            log_path = os.path.join(log_folder, f"iter_{iteration}_episode.npz")
+            episode_log = {}
+            for key in recorded_trajectory[0].keys():
+                episode_log[key] = np.array([step[key] for step in recorded_trajectory])
+            
+            # Save static data separately from episode data
+            episode_log['hoop_pos'] = static_log['hoop_pos']
+            np.savez_compressed(log_path, **episode_log)
+            print(f"Episode trajectory saved to {log_path}")
+            recorded_trajectory.clear()
+            return False, False
+
+        if is_waiting_for_new_episode and dones[0].item() > 0:
+            print(f"Episode of world 0 has just ended. Starting recording next step.")
+            return True, False
+
         # Store
         buffer.obs[step] = obs
         buffer.actions[step] = actions
@@ -99,6 +135,8 @@ def rollout(agent, env, buffer, stats, timer, controller_manager):
             buffer.next_value[:] = agent.evaluate(obs_)
 
         obs = obs_
+    
+    return is_recording, is_waiting_for_new_episode
 
 
 @torch.no_grad()
@@ -238,6 +276,7 @@ def main():
     # ======================================== Start Training ========================================
     stats = PPOStats(n_envs=args.num_envs, device=device)
     timer = PPOTimer()
+    writer = SummaryWriter(f"runs/{model_name}")
 
     # Allocate storage
     buffer = RolloutBuffer(
@@ -248,7 +287,13 @@ def main():
         device=device
     )
 
+    static_log = {}
     static_log['hoop_pos'] = envs.worlds.hoop_pos_tensor().to_torch().cpu().numpy().copy()
+
+    # Initialize logging variables
+    is_recording = False
+    is_waiting_for_new_episode = False
+    recorded_trajectory = []
 
     agent = agent.to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-8)
@@ -259,11 +304,12 @@ def main():
         # Collect rollouts
         timer.start_rollout()
         agent.eval()
-        rollout(agent, envs, buffer, stats, timer, controller_manager)
+        is_recording, is_waiting_for_new_episode = rollout(agent, envs, buffer, stats, timer, controller_manager, is_recording, is_waiting_for_new_episode, recorded_trajectory, static_log, iteration, log_folder)
         timer.end_rollout()
 
         # Advantages
         compute_advantages(buffer, agent, args.gamma, args.gae_lambda)
+        
 
         # Optimization steps
         timer.start_update()
@@ -328,10 +374,5 @@ if __name__ == "__main__":
     args.rollout_batch_size = int(args.num_envs * args.num_rollout_steps)
     args.minibatch_size = int(args.rollout_batch_size // args.num_minibatches)
     model_name = args.model_name if args.model_name else f"{args.env_id}__{args.seed}__{int(time.time())}"
-
-    is_recording = False
-    is_waiting_for_new_episode = False
-    recorded_trajectory = []
-    static_log = {}
 
     main()
