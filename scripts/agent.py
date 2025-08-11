@@ -128,15 +128,12 @@ class Agent(nn.Module):
         self.critic = head_layer_init(nn.Linear(num_channels, 1))
 
         # Observation and value normalization
-        self.ob_normalizer = RunningMeanStd(input_dim)
-        # self.value_normalizer = EMANormalizer(0.999)
-        # self.value_normalizer = RunningMeanStd(1)
-        # self.value_normalizer = DiagonalPopArt(1, self.critic.weight, self.critic.bias)
-        self.value_normalizer = NoNormalize(1)
+        self.obs_norm = RunningMeanStd(input_dim, clamp=5.0)
+        self.value_norm = RunningMeanStd(1, clamp=5.0)
 
     def norm_obs_backbone(self, obs):
         # normalize observations and run through backbone MLP
-        obs = self.ob_normalizer(obs)
+        obs = self.obs_norm(obs)
         x = self.backbone(obs)
         return x
 
@@ -153,31 +150,31 @@ class Agent(nn.Module):
             log_probs = action_dists.log_probs(actions)
 
         # Value function
-        value = self.critic(x)
+        value = self.critic(x).squeeze(-1)
         return actions, log_probs.sum(dim=-1), value
 
     def update_obs_normalizer(self, obs_raw):
-        return self.ob_normalizer.update(obs_raw)
+        return self.obs_norm.update(obs_raw)
 
     def update_value_normalizer(self, returns):
-        return self.value_normalizer.update(returns)
+        return self.value_norm.update(returns)
 
     def normalize_value(self, returns):
-        return self.value_normalizer(returns)
+        return self.value_norm(returns)
 
     def unnorm_value(self, values):
-        return self.value_normalizer(values, unnorm=True)
+        return self.value_norm(values, unnorm=True)
 
-    def get_value(self, obs):
+    def evaluate(self, obs):
         x = self.norm_obs_backbone(obs)
-        return self.critic(x)
+        return self.critic(x).squeeze(-1)
 
     def get_stats(self, obs, actions):
         x = self.norm_obs_backbone(obs)
 
         action_dists = DiscreteActionDistributions(self.action_buckets, logits=self.actor(x))
         log_probs, entropies = action_dists.action_stats(actions)
-        value = self.critic(x)
+        value = self.critic(x).squeeze(-1)
         return log_probs.sum(dim=-1), entropies.sum(dim=-1), value
 
     def load(self, path):

@@ -1,10 +1,10 @@
+import madrona_basketball as mba
+
 import math
 import os
 import sys
 import torch
 from typing import Optional
-
-import madrona_basketball as mba
 
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.')))
