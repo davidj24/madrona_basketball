@@ -451,9 +451,9 @@ inline void moveAgentSystem(Engine &ctx,
         delta_vel *= .1f;
     }
     agent_vel.velocity += delta_vel;
-    if (agent_vel.velocity.length() > maximum_speed) {agent_vel.velocity *= maximum_speed / agent_vel.velocity.length();}
     if (inbounding.imInbounding == 1) {delta_vel.x = 0.f;}
     if (in_possession.hasBall == 1) {maximum_speed *= BALL_AGENT_SLOWDOWN;}
+    if (agent_vel.velocity.length() > maximum_speed) {agent_vel.velocity *= maximum_speed / agent_vel.velocity.length();}
     
 
     // Calculate distance to move this frame
@@ -524,7 +524,7 @@ inline void actionMaskSystem(Engine &ctx,
 
     // ======================== FOR TAG ==========================
     action_mask.can_pass = 0;
-    action_mask.can_shoot = 0;
+    // action_mask.can_shoot = 0;
     action_mask.can_grab = 0;
     // if (gameState.teamInPossession == team.teamIndex) 
     // {
@@ -826,39 +826,41 @@ inline void rewardSystem(Engine &ctx,
     if (team.teamIndex == gameState.teamInPossession)
     {
         // ================== FOR NORMAL BASKETBALL ========================
-        // // Find attacking hoop
-        // Position target_hoop_pos;
-        // for (CountT i = 0; i < NUM_HOOPS; i++)
-        // {
-        //     Entity hoop = ctx.data().hoops[i];
-        //     if (hoop.id != team.defendingHoopID)
-        //     {
-        //         target_hoop_pos = ctx.get<Position>(hoop);
-        //     }
-        // }
+        // Find attacking hoop
+        if (gameState.gameClock > 5.f)
+        {
+            Position target_hoop_pos;
+            for (CountT i = 0; i < NUM_HOOPS; i++)
+            {
+                Entity hoop = ctx.data().hoops[i];
+                if (hoop.id != team.defendingHoopID)
+                {
+                    target_hoop_pos = ctx.get<Position>(hoop);
+                }
+            }
 
-        // // Find agent who shot the ball and reward them if the shot is going in
-        // for (CountT j = 0; j < NUM_BASKETBALLS; j++)
-        // {
-        //     Entity ball = ctx.data().balls[j];
-        //     BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
-        //     if (ball_physics.shotByAgentID == agent_entity.id && ball_physics.shotIsGoingIn == 1)
-        //     {
-        //         reward.r += ball_physics.shotPointValue;
-        //     }
-        //     else if (ball_physics.shotByAgentID == agent_entity.id && ball_physics.shotIsGoingIn == 0 && ball_physics.inFlight == 1)
-        //     {
-        //         reward.r -= 1;
-        //     }
-        // }
-        
-        // reward.r += attributes.currentShotPercentage;
-
+            // Find agent who shot the ball and reward them if the shot is going in
+            for (CountT j = 0; j < NUM_BASKETBALLS; j++)
+            {
+                Entity ball = ctx.data().balls[j];
+                BallPhysics &ball_physics = ctx.get<BallPhysics>(ball);
+                if (ball_physics.shotByAgentID == agent_entity.id && ball_physics.shotIsGoingIn == 1)
+                {
+                    reward.r += ball_physics.shotPointValue;
+                }
+                else if (ball_physics.shotByAgentID == agent_entity.id && ball_physics.shotIsGoingIn == 0 && ball_physics.inFlight == 1)
+                {
+                    reward.r -= 1;
+                }
+            }
+            
+            reward.r += attributes.currentShotPercentage;
+        }
 
 
         // ======================== FOR TAG ==========================
-        reward.r += in_possession.hasBall;
-        reward.r -= (exp(-0.4f * dist_to_other_agent));
+        // reward.r += in_possession.hasBall;
+        // reward.r -= (exp(-0.4f * dist_to_other_agent));
     }
     else
     {
