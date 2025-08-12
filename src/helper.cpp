@@ -122,17 +122,24 @@ void setupAgentPositions(Engine &ctx, Entity basketball_entity, int32_t &offensi
                 // Use world ID to create deterministic but unique Y positions for each environment
                 uint32_t world_id = (uint32_t)ctx.worldID().idx;
                 
-                // Create spread across the court height using world ID
-                float court_height = grid->height - 4.f; // Leave 2m buffer on each side
+                // Simple modulo-based distribution for uniform spread
+                // Map world_id directly to Y positions across the full court
+                float court_min_y = 2.f; // Minimum Y (with buffer)
+                float court_max_y = grid->height - 2.f; // Maximum Y (with buffer)
+                float court_range = court_max_y - court_min_y;
                 
-                // Use a simple hash-like function to distribute positions evenly
-                // This ensures different world IDs get different positions
-                float hash_val = sinf((float)world_id * 12.9898f) * 43758.5453f;
-                hash_val = hash_val - floorf(hash_val); // Get fractional part (0-1)
+                float target_y;
+                if (world_id == 0) {
+                    // For world 0 (used in viewer), use random position
+                    target_y = court_min_y + sampleUniform(ctx, 0.f, 1.f) * court_range;
+                } else {
+                    // For other worlds, use deterministic positioning
+                    uint32_t position_index = world_id % 9973; // Large prime for better distribution
+                    float normalized_pos = (float)position_index / 9973.f; // 0 to 1
+                    target_y = court_min_y + (normalized_pos * court_range);
+                }
                 
-                float y_offset = (hash_val - 0.5f) * court_height; // Center around middle, spread across court
-                
-                pos.position = base_pos + Vector3{2.f, y_offset, 0.f};
+                pos.position = Vector3{base_pos.x + 2.f, target_y, 0.f};
                 pos.position.x = clamp(pos.position.x, 2.f, grid->width - 2.f);
                 pos.position.y = clamp(pos.position.y, 2.f, grid->height - 2.f);
                 

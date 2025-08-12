@@ -625,7 +625,7 @@ inline void agentCollisionSystem(Engine &ctx,
             Reward &entity_b_reward = ctx.get<Reward>(entity_b);
             if (gameState.teamInPossession == team.teamIndex)
             {
-                // reward.r -= 10;
+                reward.r -= 10;
                 entity_b_reward.r += 10;
                 // ctx.singleton<WorldClock>().resetNow = 1.0f;
             }
