@@ -229,7 +229,7 @@ def main():
     envs = EnvWrapper(args.num_envs, use_gpu=args.use_gpu,
                       frozen_path=args.frozen_checkpoint, gpu_id=0,
                       viewer=args.full_viewer,
-                      trainee_agent_idx=args.trainee_idx)
+                      trainee_agent_idx=args.trainee_idx, rand_seed=args.seed)
     obs_size = envs.get_input_dim()
     act_size = envs.get_action_space_size()
     action_buckets = envs.get_action_buckets()

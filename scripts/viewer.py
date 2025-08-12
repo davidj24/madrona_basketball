@@ -1194,7 +1194,7 @@ class ViewerClass:
         paused = False
         running = True
         show_trails = True
-        show_rewards = True
+        show_rewards = False
         event_display_modes = ['Off', 'Current Episode', 'All Episodes']
         event_display_mode_idx = 0
         

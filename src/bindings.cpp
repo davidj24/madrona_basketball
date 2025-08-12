@@ -23,7 +23,8 @@ NB_MODULE(madrona_basketball, m) {
                             int64_t max_episode_length,
                             madrona::py::PyExecMode exec_mode,
                             int64_t num_worlds,
-                            int64_t gpu_id) {
+                            int64_t gpu_id,
+                            int64_t rand_seed) {
 
             Cell *cells = setupCells(discrete_x, discrete_y);
 
@@ -34,7 +35,7 @@ NB_MODULE(madrona_basketball, m) {
             float height_meters = (float) discrete_y / (float) cells_per_meter;
 
             new (self) Manager(Manager::Config {
-                .randSeed = 0,
+                .randSeed = (uint32_t)rand_seed,
                 .maxEpisodeLength = (uint32_t)max_episode_length,
                 .execMode = exec_mode,
                 .numWorlds = (uint32_t)num_worlds,
@@ -58,7 +59,8 @@ NB_MODULE(madrona_basketball, m) {
            nb::arg("max_episode_length"),
            nb::arg("exec_mode"),
            nb::arg("num_worlds"),
-           nb::arg("gpu_id") = -1)
+           nb::arg("gpu_id") = -1,
+           nb::arg("rand_seed") = 0)
 
 
         //=================================================== General Tensors ===================================================

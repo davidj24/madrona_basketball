@@ -116,13 +116,25 @@ void setupAgentPositions(Engine &ctx, Entity basketball_entity, int32_t &offensi
         
         if (gameState.isOneOnOne == 1.f) {
             if (i == 0) {
-                // Agent 0 (offensive) - base position with random deviation
+                // Agent 0 (offensive) - use world ID to create unique Y positions across environments
                 Vector3 base_pos = { grid->startX + (i * 2.f), grid->startY, 0.f };
-                float x_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
-                float y_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
-                pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
-                pos.position.x = clamp(pos.position.x, 0.f, grid->width);
-                pos.position.y = clamp(pos.position.y, 0.f, grid->height);
+                
+                // Use world ID to create deterministic but unique Y positions for each environment
+                uint32_t world_id = (uint32_t)ctx.worldID().idx;
+                
+                // Create spread across the court height using world ID
+                float court_height = grid->height - 4.f; // Leave 2m buffer on each side
+                
+                // Use a simple hash-like function to distribute positions evenly
+                // This ensures different world IDs get different positions
+                float hash_val = sinf((float)world_id * 12.9898f) * 43758.5453f;
+                hash_val = hash_val - floorf(hash_val); // Get fractional part (0-1)
+                
+                float y_offset = (hash_val - 0.5f) * court_height; // Center around middle, spread across court
+                
+                pos.position = base_pos + Vector3{2.f, y_offset, 0.f};
+                pos.position.x = clamp(pos.position.x, 2.f, grid->width - 2.f);
+                pos.position.y = clamp(pos.position.y, 2.f, grid->height - 2.f);
                 
                 agent_pos_for_ball = pos;
                 offensive_agent_id = agent.id;
@@ -137,7 +149,10 @@ void setupAgentPositions(Engine &ctx, Entity basketball_entity, int32_t &offensi
                     0.f
                 };
                 
-                pos.position = agent_pos_for_ball.position + offset;
+                // pos.position = agent_pos_for_ball.position + offset;
+                pos.position = agent_pos_for_ball.position;
+                pos.position.x += DEFENDER_SPAWN_RADIUS;
+                pos.position.y += offset.y;
                 pos.position.x = clamp(pos.position.x, 0.f, grid->width);
                 pos.position.y = clamp(pos.position.y, 0.f, grid->height);
                 
