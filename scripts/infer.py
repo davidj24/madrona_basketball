@@ -20,7 +20,7 @@ warnings.filterwarnings("error")
 class Args:
     model_name: Optional[str]=None # This is for inferring all versions of a model
     trainee_idx: int=1
-    trainee_checkpoint: Optional[str]=None # The model you want to evaluate
+    trainee_checkpoint: Optional[str]=None # The specific model checkpoint you want to evaluate
     frozen_checkpoint: Optional[str]=None
     log_path: Optional[str]="logs/trajectories.npz"
     max_steps: int=10000

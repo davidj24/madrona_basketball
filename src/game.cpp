@@ -1074,7 +1074,7 @@ inline void outOfBoundsSystem(Engine &ctx,
                 cur_agent = ctx.data().agents[i];
                 if (ctx.get<Team>(cur_agent).teamIndex == gameState.teamInPossession) {off_agent = cur_agent;}
             }
-            ctx.get<Reward>(off_agent).r -= 10.f;
+            ctx.get<Reward>(off_agent).r -= 100.f;
             
             ctx.singleton<WorldClock>().resetNow = 1.0f;
         }
@@ -1510,12 +1510,12 @@ TaskGraphNodeID setupGameStepTasks(
     auto agentCollisionNode = builder.addToGraph<ParallelForNode<Engine, agentCollisionSystem,
         Entity, Position, Orientation, Reward, Team>>({updatePointsWorthNode});
 
-    // auto hardCodeDefenseSystemNode = builder.addToGraph<ParallelForNode<Engine, hardCodeDefenseSystem,
-    //     Team, Position, Action, Attributes, Orientation>>({agentCollisionNode});
+    auto hardCodeDefenseSystemNode = builder.addToGraph<ParallelForNode<Engine, hardCodeDefenseSystem,
+        Team, Position, Action, Attributes, Orientation>>({agentCollisionNode});
 
     auto fillObservationsNode = builder.addToGraph<ParallelForNode<Engine, fillObservationsSystem,
         Entity, Observations, Position, Orientation, InPossession,
-        Inbounding, Team, GrabCooldown, Velocity, Attributes>>({agentCollisionNode});
+        Inbounding, Team, GrabCooldown, Velocity, Attributes>>({hardCodeDefenseSystemNode});
 
     auto rewardSystemNode = builder.addToGraph<ParallelForNode<Engine, rewardSystem,
         Entity, Reward, Position, Team, InPossession, Attributes>>({fillObservationsNode});
