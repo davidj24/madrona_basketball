@@ -203,7 +203,7 @@ inline void grabSystem(Engine &ctx,
         {
             if (gameState.isOneOnOne == 1.f && team.teamIndex != gameState.teamInPossession) 
             {
-                ctx.singleton<WorldClock>().resetNow = 1.0f;
+                // ctx.singleton<WorldClock>().resetNow = 1.0f;
                 continue;
             }
             // Check if we're stealing from another agent
@@ -451,9 +451,9 @@ inline void moveAgentSystem(Engine &ctx,
         delta_vel *= .1f;
     }
     agent_vel.velocity += delta_vel;
-    if (agent_vel.velocity.length() > maximum_speed) {agent_vel.velocity *= maximum_speed / agent_vel.velocity.length();}
     if (inbounding.imInbounding == 1) {delta_vel.x = 0.f;}
     if (in_possession.hasBall == 1) {maximum_speed *= BALL_AGENT_SLOWDOWN;}
+    if (agent_vel.velocity.length() > maximum_speed) {agent_vel.velocity *= maximum_speed / agent_vel.velocity.length();}
     
 
     // Calculate distance to move this frame
@@ -498,7 +498,7 @@ inline void actionMaskSystem(Engine &ctx,
     action_mask.can_move = 1;
     action_mask.can_grab = 1;
     action_mask.can_pass = 0;
-    action_mask.can_shoot = 0;
+    // action_mask.can_shoot = 0;
 
     // Offensive actions
     if (in_possession.hasBall == 1)
@@ -509,7 +509,7 @@ inline void actionMaskSystem(Engine &ctx,
     
     if (gameState.inboundingInProgress == 1)
     {
-        action_mask.can_shoot = 0;
+        // action_mask.can_shoot = 0;
         action_mask.can_grab = 0;
         if (inbounding.imInbounding == 1 && gameState.liveBall == 0)
         {
@@ -524,8 +524,9 @@ inline void actionMaskSystem(Engine &ctx,
 
     // ======================== FOR TAG ==========================
     action_mask.can_pass = 0;
-    action_mask.can_shoot = 0;
+    // action_mask.can_shoot = 0;
     action_mask.can_grab = 0;
+    action_mask.can_move = 0;
     // if (gameState.teamInPossession == team.teamIndex) 
     // {
     //     action_mask.can_move = 0;
@@ -627,7 +628,7 @@ inline void agentCollisionSystem(Engine &ctx,
             {
                 reward.r -= 10;
                 entity_b_reward.r += 10;
-                ctx.singleton<WorldClock>().resetNow = 1.0f;
+                // ctx.singleton<WorldClock>().resetNow = 1.0f;
             }
 
             // --- Collision Response ---
@@ -826,7 +827,7 @@ inline void rewardSystem(Engine &ctx,
     if (team.teamIndex == gameState.teamInPossession)
     {
         // ================== FOR NORMAL BASKETBALL ========================
-        // // Find attacking hoop
+        // Find attacking hoop
         // Position target_hoop_pos;
         // for (CountT i = 0; i < NUM_HOOPS; i++)
         // {
@@ -848,7 +849,8 @@ inline void rewardSystem(Engine &ctx,
         //     }
         //     else if (ball_physics.shotByAgentID == agent_entity.id && ball_physics.shotIsGoingIn == 0 && ball_physics.inFlight == 1)
         //     {
-        //         reward.r -= 1;
+        //         // reward.r -= 1;
+        //         reward.r += 2;
         //     }
         // }
         
@@ -857,8 +859,8 @@ inline void rewardSystem(Engine &ctx,
 
 
         // ======================== FOR TAG ==========================
-        reward.r += in_possession.hasBall;
-        reward.r -= (exp(-0.4f * dist_to_other_agent));
+        // reward.r += in_possession.hasBall;
+        // reward.r -= (exp(-0.4f * dist_to_other_agent));
     }
     else
     {

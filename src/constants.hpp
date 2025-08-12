@@ -1,6 +1,10 @@
 #pragma once
 
 namespace madBasketball {
+
+    // ======================================== EXPERIMENTS ========================================
+    constexpr float DISTANCE_EXPERIMENT_RADIUS = 6.f;
+
     // ======================================== Entity Counts ========================================
     constexpr int32_t NUM_AGENTS = 2;
     constexpr int32_t NUM_BASKETBALLS = 1;
@@ -56,7 +60,7 @@ namespace madBasketball {
 
 
     // Shooting
-    constexpr float DIST_DEVIATION_PER_METER = .008f;
+    constexpr float DIST_DEVIATION_PER_METER = .009f;
     constexpr float DEF_DEVIATION_PER_METER = .002f;
     constexpr float VEL_DEVIATION_FACTOR = .001f;
 

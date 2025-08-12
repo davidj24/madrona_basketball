@@ -178,7 +178,7 @@ def multi_gen_infer(device):
         np.random.seed(args.test_seed)
         random.seed(args.test_seed)
 
-        environment = EnvWrapper(num_worlds=args.num_envs, frozen_path=args.frozen_checkpoint, viewer=False, trainee_agent_idx=args.trainee_idx)
+        environment = EnvWrapper(num_worlds=args.num_envs, frozen_path=args.frozen_checkpoint, viewer=False, trainee_agent_idx=args.trainee_idx, rand_seed=args.test_seed)
         evaluated_agent = Agent(environment.get_input_dim(), num_channels=32, num_layers=2, action_buckets=environment.get_action_buckets()).to(device)
         evaluated_agent.load(checkpoint_path)
 
@@ -195,7 +195,7 @@ if __name__ == "__main__":
 
     if args.model_name is None:
         # Single model inference
-        environment = EnvWrapper(args.num_envs, args.gpu_sim, frozen_path=args.frozen_checkpoint, gpu_id=args.gpu_id, viewer=args.viewer, trainee_agent_idx=args.trainee_idx)
+        environment = EnvWrapper(args.num_envs, args.gpu_sim, frozen_path=args.frozen_checkpoint, gpu_id=args.gpu_id, viewer=args.viewer, trainee_agent_idx=args.trainee_idx, rand_seed=args.test_seed)
         input_dimensions = environment.get_input_dim()
         action_buckets = environment.get_action_buckets()
 

@@ -116,30 +116,69 @@ void setupAgentPositions(Engine &ctx, Entity basketball_entity, int32_t &offensi
         
         if (gameState.isOneOnOne == 1.f) {
             if (i == 0) {
-                // Agent 0 (offensive) - base position with random deviation
-                Vector3 base_pos = { grid->startX + (i * 2.f), grid->startY, 0.f };
-                float x_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
-                float y_dev = sampleUniform(ctx, -START_POS_STDDEV, START_POS_STDDEV);
-                pos.position = base_pos + Vector3{x_dev, y_dev, 0.f};
-                pos.position.x = clamp(pos.position.x, 0.f, grid->width);
-                pos.position.y = clamp(pos.position.y, 0.f, grid->height);
+                Vector3 hoop_positions[NUM_HOOPS];
+                int32_t hoop_ids[NUM_HOOPS];
+                for (CountT j = 0; j < NUM_HOOPS; j++) {
+                    Entity hoop = ctx.data().hoops[j];
+                    hoop_positions[j] = ctx.get<Position>(hoop).position;
+                    hoop_ids[j] = hoop.id;
+                }
+                
+                Vector3 attacking_hoop_pos;
+                for (int j = 0; j < NUM_HOOPS; j++) {
+                    if (hoop_ids[j] != gameState.team0Hoop) {
+                        attacking_hoop_pos = hoop_positions[j];
+                        break;
+                    }
+                }
+                
+                // Use world ID to ensure each environment has different positioning
+                // Create a left semicircle pattern (π/2 to 3π/2) so agents spawn to the left of hoop
+                float base_angle = (float)ctx.worldID().idx * (madrona::math::pi / 100.f); // Spread across semicircle
+                float semicircle_angle = madrona::math::pi * 0.5f + base_angle; // Start from π/2 (pointing left)
+                float random_angle_offset = sampleUniform(ctx, -0.2f, 0.2f); // Small random offset for variation
+                float final_angle = semicircle_angle + random_angle_offset;
+                
+                // Ensure angle stays within left semicircle bounds
+                final_angle = clamp(final_angle, madrona::math::pi * 0.5f, madrona::math::pi * 1.5f);
+                
+                Vector3 offset = {
+                    DISTANCE_EXPERIMENT_RADIUS * cosf(final_angle),
+                    DISTANCE_EXPERIMENT_RADIUS * sinf(final_angle),
+                    0.f
+                };
+                
+                pos.position = attacking_hoop_pos + offset;
+                
+                // Clamp to court boundaries with buffer
+                pos.position.x = clamp(pos.position.x, COURT_MIN_X + IN_COURT_OFFSET, COURT_MAX_X - IN_COURT_OFFSET);
+                pos.position.y = clamp(pos.position.y, COURT_MIN_Y + IN_COURT_OFFSET, COURT_MAX_Y - IN_COURT_OFFSET);
                 
                 agent_pos_for_ball = pos;
                 offensive_agent_id = agent.id;
                 in_pos = {1, basketball_entity.id, 2};
-            } else {
-                // Agent 1 (defensive) - spawn at radius away from agent 0
-                float random_angle = sampleUniform(ctx, 0.f, 2.f * madrona::math::pi);
+            } 
+            else 
+            {
+                // // Agent 1 (defensive) - spawn at radius away from agent 0
+                // // Use world ID offset for consistent defensive positioning relative to offensive agent
+                // float base_angle = (float)ctx.worldID().idx * (2.f * madrona::math::pi / 100.f) + madrona::math::pi; // Opposite side + world offset
+                // float random_angle_offset = sampleUniform(ctx, -0.3f, 0.3f); // Small random offset for variation
+                // float final_angle = base_angle + random_angle_offset;
                 
-                Vector3 offset = {
-                    DEFENDER_SPAWN_RADIUS * cosf(random_angle),
-                    DEFENDER_SPAWN_RADIUS * sinf(random_angle),
-                    0.f
-                };
+                // Vector3 offset = {
+                //     DEFENDER_SPAWN_RADIUS * cosf(final_angle),
+                //     DEFENDER_SPAWN_RADIUS * sinf(final_angle),
+                //     0.f
+                // };
                 
-                pos.position = agent_pos_for_ball.position + offset;
-                pos.position.x = clamp(pos.position.x, 0.f, grid->width);
-                pos.position.y = clamp(pos.position.y, 0.f, grid->height);
+                // pos.position = agent_pos_for_ball.position + offset;
+                pos.position = agent_pos_for_ball.position;
+                pos.position.x -= DEFENDER_SPAWN_RADIUS;
+                
+                // Clamp to court boundaries with buffer
+                pos.position.x = clamp(pos.position.x, COURT_MIN_X + IN_COURT_OFFSET, COURT_MAX_X - IN_COURT_OFFSET);
+                pos.position.y = clamp(pos.position.y, COURT_MIN_Y + IN_COURT_OFFSET, COURT_MAX_Y - IN_COURT_OFFSET);
                 
                 in_pos = {0, ENTITY_ID_PLACEHOLDER, 2};
             }

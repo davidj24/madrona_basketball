@@ -14,7 +14,7 @@ from agent import Agent
 
 
 class EnvWrapper:
-    def __init__(self, num_worlds: int, use_gpu: bool=False, frozen_path: Optional[str]=None, gpu_id: int = 0, viewer: bool = True, trainee_agent_idx: int = 0):
+    def __init__(self, num_worlds: int, use_gpu: bool=False, frozen_path: Optional[str]=None, gpu_id: int = 0, viewer: bool = True, trainee_agent_idx: int = 0, rand_seed: int = 0):
         self.world_width_meters = WORLD_WIDTH_M
         self.world_height_meters = WORLD_HEIGHT_M
         self.num_worlds = num_worlds
@@ -31,7 +31,8 @@ class EnvWrapper:
             exec_mode=mba.madrona.ExecMode.CUDA if use_gpu
             else mba.madrona.ExecMode.CPU,
             num_worlds=num_worlds,
-            gpu_id=gpu_id
+            gpu_id=gpu_id,
+            rand_seed=rand_seed
         )
         
         print("✓ Simulation created and compiled successfully!")

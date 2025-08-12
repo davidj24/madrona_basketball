@@ -112,8 +112,9 @@ def rollout(agent, env, buffer: RolloutBuffer, stats, timer, controller_manager,
             for key in recorded_trajectory[0].keys():
                 episode_log[key] = np.array([step[key] for step in recorded_trajectory])
             
-            # Save static data separately from episode data
-            episode_log['hoop_pos'] = static_log['hoop_pos']
+            corrected_static_log = static_log.copy()
+            corrected_static_log['hoop_pos'] = np.array([[[3.25, 8.5, 0.0], [28.75, 8.5, 0.0]]])
+            episode_log['hoop_pos'] = corrected_static_log['hoop_pos']
             np.savez_compressed(log_path, **episode_log)
             print(f"Episode trajectory saved to {log_path}")
             recorded_trajectory.clear()
