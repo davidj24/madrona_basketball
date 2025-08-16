@@ -11,7 +11,6 @@ import torch.nn as nn
 import torch.optim as optim
 import tyro
 from dataclasses import dataclass
-from torch.utils.tensorboard import SummaryWriter
 from typing import Optional
 
 from agent import Agent
@@ -59,7 +58,8 @@ class Args:
 
 @torch.no_grad()
 def rollout(agent, env, buffer, stats, timer, controller_manager):
-    obs, _, _ = env.reset()
+    obs = env.get_obs()
+    dones = torch.zeros_like(buffer.next_dones)
     for step in range(0, args.num_rollout_steps):
         timer.start_inference()
         actions, log_probs, values = agent(obs)
@@ -74,31 +74,33 @@ def rollout(agent, env, buffer, stats, timer, controller_manager):
                 selected_agent_idx = env.viewer.get_selected_agent_index()
                 human_action_world_0 = controller_manager.get_action(
                     obs[0], env.viewer)
-                obs_, rews, dones = env.step_with_world_actions(
+                obs_, rews, dones_ = env.step_with_world_actions(
                     actions, human_action_world_0, selected_agent_idx)
 
             except Exception as e:
                 print(f"Warning: Human control error in step: {e}")
-                obs_, rews, dones = env.step(actions)
+                obs_, rews, dones_ = env.step(actions)
         else:
-            obs_, rews, dones = env.step(actions)
+            obs_, rews, dones_ = env.step(actions)
 
-        stats.update(rews, dones)
-        not_dones = 1.0 - dones
+        stats.update(rews, dones_)
         timer.end_sim()
 
         # Store
         buffer.obs[step] = obs
+        buffer.dones[step] = dones
         buffer.actions[step] = actions
         buffer.values[step] = values
         buffer.log_probs[step] = log_probs
-        buffer.not_dones[step] = not_dones
         buffer.rewards[step] = rews
 
         if step == buffer.horizon - 1:
             buffer.next_value[:] = agent.evaluate(obs_)
+            buffer.next_dones[:] = dones_
 
         obs = obs_
+        dones = dones_
+    return
 
 
 @torch.no_grad()
@@ -110,20 +112,18 @@ def compute_advantages(buffer, agent, gamma, gae_lambda):
     next_value = agent.unnorm_value(buffer.next_value)
 
     # Bootstrap
-    advantages[:] = 0.0
     last_gae_lam = 0.0
     for t in reversed(range(buffer.horizon)):
         if t == buffer.horizon - 1:
-            next_non_terminal = buffer.not_dones[t]
+            next_non_terminal = 1.0 - buffer.next_dones
             next_values = next_value
         else:
-            next_non_terminal = buffer.not_dones[t + 1]
+            next_non_terminal = 1.0 - buffer.dones[t + 1]
             next_values = values[t + 1]
         delta = rewards[t] + gamma * next_values * next_non_terminal - values[t]
-        advantages[
-            t] = last_gae_lam = delta + gamma * gae_lambda * next_non_terminal * last_gae_lam
-
+        advantages[t] = last_gae_lam = delta + gamma * gae_lambda * next_non_terminal * last_gae_lam
     returns[:] = advantages + values
+
     # Update normalizers
     agent.obs_norm.update(buffer.obs.view(-1, buffer.obs.shape[-1]))
     agent.value_norm.update(values.view(-1, 1))
@@ -190,6 +190,7 @@ def main():
                       frozen_path=args.frozen_checkpoint_path, gpu_id=0,
                       viewer=args.full_viewer,
                       trainee_agent_idx=args.trainee_idx)
+    envs.reset()
     obs_size = envs.get_input_dim()
     act_size = envs.get_action_space_size()
     action_buckets = envs.get_action_buckets()

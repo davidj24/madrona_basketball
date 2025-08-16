@@ -8,11 +8,12 @@ class RolloutBuffer:
         self.values = torch.zeros((n_steps, n_envs), device=device)
         self.log_probs = torch.zeros((n_steps, n_envs), device=device)
         self.rewards = torch.zeros((n_steps, n_envs), device=device)
-        self.not_dones = torch.zeros((n_steps, n_envs), device=device)
+        self.dones = torch.zeros((n_steps, n_envs), device=device)
         self.terminated = torch.zeros((n_steps, n_envs), device=device)
 
         # Computed after rollout
         self.next_value = torch.zeros((n_envs,), device=device)
+        self.next_dones = torch.zeros((n_envs,), device=device)
         self.advantages = torch.zeros((n_steps, n_envs), device=device)
         self.returns = torch.zeros((n_steps, n_envs), device=device)
 
