@@ -26,7 +26,7 @@ class Args:
     max_steps: int=10000
     num_episodes: int=5
     stochastic: bool=True
-    viewer: bool=False
+    full_viewer: bool=False
     test_seed: int=0
 
     discrete_x: int=20
@@ -195,7 +195,7 @@ if __name__ == "__main__":
 
     if args.model_name is None:
         # Single model inference
-        environment = EnvWrapper(args.num_envs, args.gpu_sim, frozen_path=args.frozen_checkpoint, gpu_id=args.gpu_id, viewer=args.viewer, trainee_agent_idx=args.trainee_idx)
+        environment = EnvWrapper(args.num_envs, args.gpu_sim, frozen_path=args.frozen_checkpoint, gpu_id=args.gpu_id, viewer=args.full_viewer, trainee_agent_idx=args.trainee_idx)
         input_dimensions = environment.get_input_dim()
         action_buckets = environment.get_action_buckets()
 
@@ -204,7 +204,7 @@ if __name__ == "__main__":
         policy.load(args.trainee_checkpoint)
 
         # Print interactive inference instructions if viewer is enabled
-        if args.viewer:
+        if args.full_viewer:
             print("🎮 Interactive mode: Press 'H' to toggle human control for selected agent in World 0")
 
         infer(device, environment, policy, "logs/inference_trajectories.npz", stochastic=args.stochastic)

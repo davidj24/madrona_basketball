@@ -335,7 +335,7 @@ def main():
             is_waiting_for_new_episode = True
 
         if iteration % args.save_model_every_n_iterations == 0:
-            folder = "checkpoints"
+            folder = f"checkpoints/{args.model_name}"
             if not os.path.exists(folder):
                 os.makedirs(folder)
 
